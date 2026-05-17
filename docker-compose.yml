@@ -1,0 +1,82 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: engram
+      POSTGRES_USER: engram
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_INITDB_ARGS: ${POSTGRES_INITDB_ARGS:-}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./api/db/schema.sql:/docker-entrypoint-initdb.d/01_schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U engram -d engram"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    ports:
+      - "5432:5432"
+
+  api:
+    build: ./api
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: postgresql://engram:${POSTGRES_PASSWORD}@postgres:5432/engram
+      EXTRACTION_PROVIDER: ${EXTRACTION_PROVIDER:-openai}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-https://api.openai.com/v1}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      ANTHROPIC_BASE_URL: ${ANTHROPIC_BASE_URL:-https://api.anthropic.com/v1}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GEMINI_BASE_URL: ${GEMINI_BASE_URL:-https://generativelanguage.googleapis.com/v1beta/openai}
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen2.5:3b}
+      EXTRACTION_MODEL: ${EXTRACTION_MODEL:-gpt-4o-mini}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-all-MiniLM-L6-v2}
+      MAX_MEMORIES_INJECTED: ${MAX_MEMORIES_INJECTED:-5}
+      RETRIEVAL_THRESHOLD: ${RETRIEVAL_THRESHOLD:-0.5}
+      DEDUP_THRESHOLD: ${DEDUP_THRESHOLD:-0.95}
+      MEMORY_REFINEMENT_THRESHOLD: ${MEMORY_REFINEMENT_THRESHOLD:-0.8}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3001}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=5)\""]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  mcp:
+    build: ./mcp
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      ENGRAM_API_URL: http://api:8000
+      ENGRAM_API_KEY: ${MCP_SERVICE_KEY}
+      MCP_PORT: 3000
+      MCP_TRANSPORT: sse
+    depends_on:
+      api:
+        condition: service_healthy
+
+  dashboard:
+    build: ./dashboard
+    restart: unless-stopped
+    ports:
+      - "3001:3001"
+    environment:
+      NEXT_PUBLIC_API_URL: ${API_PUBLIC_URL:-http://localhost:8000}
+      PORT: 3001
+      HOSTNAME: 0.0.0.0
+    depends_on:
+      api:
+        condition: service_healthy
+
+volumes:
+  pgdata:

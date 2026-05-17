@@ -77,24 +77,27 @@ export function SettingsPanel() {
   }
 
   return (
-    <section className="space-y-6">
+    <section className="space-y-12">
       <div>
-        <p className="font-mono text-xs uppercase text-signal">local dashboard key</p>
-        <h1 className="mt-2 text-3xl font-semibold tracking-tight">Settings</h1>
+        <p className="font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-muted">§ III — Local key</p>
+        <h1 className="mt-2 font-serif text-5xl font-semibold leading-tight text-ink">Settings</h1>
+        <p className="mt-4 max-w-2xl font-serif text-lg leading-8 text-muted">
+          The dashboard stores one Engram key in this browser. Provider keys stay on the server.
+        </p>
       </div>
 
       <div className="grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
-        <form onSubmit={saveApiKey} className="rounded border border-line bg-panel p-5 shadow-grid">
+        <form onSubmit={saveApiKey} className="border-y border-line py-6">
           <div className="mb-4 flex items-center gap-3">
-            <span className="flex h-10 w-10 items-center justify-center rounded border border-line bg-ink text-signal">
+            <span className="flex h-10 w-10 items-center justify-center rounded bg-tag text-signal">
               <KeyRound size={18} aria-hidden="true" />
             </span>
             <div>
-              <h2 className="font-semibold">API Key</h2>
-              <p className="text-sm text-zinc-500">Stored in this browser as `engram_api_key`.</p>
+              <h2 className="font-serif text-2xl font-semibold">API Key</h2>
+              <p className="font-sans text-[11px] uppercase tracking-[0.12em] text-muted">Stored as engram_api_key</p>
             </div>
           </div>
-          <div className="flex flex-col gap-2 sm:flex-row">
+          <div className="flex flex-col gap-3 sm:flex-row">
             <input
               value={draftApiKey}
               onChange={(event) => {
@@ -103,65 +106,65 @@ export function SettingsPanel() {
                 setKeyError("");
               }}
               placeholder="ek_..."
-              className="min-h-11 min-w-0 flex-1 rounded border border-line bg-ink px-3 font-mono text-sm text-zinc-100 outline-none focus:border-signal"
+              className="min-h-12 min-w-0 flex-1 rounded-full border border-line bg-paper px-4 font-serif text-base text-ink outline-none focus:border-signal"
               type="password"
             />
             <button
               type="button"
               onClick={copyApiKey}
               title="Copy saved key"
-              className="inline-flex min-h-11 items-center justify-center gap-2 rounded border border-line px-3 text-sm text-zinc-300 hover:border-signal/40 hover:text-white"
+              className="inline-flex min-h-12 items-center justify-center gap-2 border border-line px-4 font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-muted hover:border-signal hover:text-signal"
             >
               <Copy size={16} aria-hidden="true" />
               Copy
             </button>
             <button
               type="submit"
-              className="inline-flex min-h-11 items-center justify-center gap-2 rounded border border-signal/40 bg-signal/10 px-4 text-sm font-medium text-signal hover:bg-signal/15"
+              className="inline-flex min-h-12 items-center justify-center gap-2 border border-ink px-5 font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-ink hover:border-signal hover:text-signal"
             >
               <Check size={16} aria-hidden="true" />
               Save
             </button>
           </div>
-          {keyError && <p className="mt-3 text-sm text-fault">{keyError}</p>}
-          {saved && <p className="mt-3 text-sm text-signal">Saved.</p>}
+          {keyError && <p className="mt-3 font-serif text-base text-fault">{keyError}</p>}
+          {saved && <p className="mt-3 font-serif text-base text-signal">Saved.</p>}
         </form>
 
-        <div className="rounded border border-line bg-panel p-5 shadow-grid">
-          <h2 className="font-semibold">Current User</h2>
+        <div className="border-y border-line py-6">
+          <h2 className="font-serif text-2xl font-semibold">Current User</h2>
           {apiKey ? (
             malformedApiKey ? (
-              <p className="mt-4 text-sm text-fault">Use an Engram key that starts with ek_.</p>
+              <p className="mt-4 font-serif text-base text-fault">Use an Engram key that starts with ek_.</p>
             ) : userQuery.isLoading ? (
-              <p className="mt-4 text-sm text-zinc-500">Loading user...</p>
+              <p className="mt-4 font-serif text-base text-muted">Loading user...</p>
             ) : userQuery.isError ? (
-              <p className="mt-4 text-sm text-fault">Unable to authenticate this key.</p>
+              <p className="mt-4 font-serif text-base text-fault">Unable to authenticate this key.</p>
             ) : (
-              <dl className="mt-4 space-y-3 text-sm">
+              <dl className="mt-4 space-y-5 text-sm">
                 <div>
-                  <dt className="font-mono text-xs uppercase text-zinc-500">External ID</dt>
-                  <dd className="mt-1 text-zinc-100">{userQuery.data?.external_id}</dd>
+                  <dt className="font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-muted">External ID</dt>
+                  <dd className="mt-1 font-serif text-lg text-ink">{userQuery.data?.external_id}</dd>
                 </div>
                 <div>
-                  <dt className="font-mono text-xs uppercase text-zinc-500">Created</dt>
-                  <dd className="mt-1 text-zinc-100">{userQuery.data ? formatDate(userQuery.data.created_at) : ""}</dd>
+                  <dt className="font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-muted">Created</dt>
+                  <dd className="mt-1 font-serif text-lg text-ink">{userQuery.data ? formatDate(userQuery.data.created_at) : ""}</dd>
                 </div>
               </dl>
             )
           ) : (
-            <p className="mt-4 text-sm text-zinc-500">No key saved.</p>
+            <p className="mt-4 font-serif text-base text-muted">No key saved.</p>
           )}
         </div>
       </div>
 
-      <div className="rounded border border-fault/30 bg-fault/5 p-5">
-        <h2 className="font-semibold text-fault">Danger Zone</h2>
-        <div className="mt-4 flex flex-col gap-2 sm:flex-row">
+      <div className="border-y border-fault/30 bg-fault/5 py-6">
+        <h2 className="px-0 font-serif text-2xl font-semibold text-fault">Danger Zone</h2>
+        <div className="mt-4 flex flex-col gap-3 sm:flex-row">
           <button
             type="button"
             onClick={deleteMemories}
             disabled={!apiKey || deleteMemoriesMutation.isPending}
-            className="inline-flex items-center justify-center gap-2 rounded border border-fault/40 px-4 py-2 text-sm text-fault hover:bg-fault/10 disabled:cursor-not-allowed disabled:opacity-50"
+            className="inline-flex items-center justify-center gap-2 border border-fault/40 px-4 py-2 font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-fault hover:bg-fault/10 disabled:cursor-not-allowed disabled:opacity-50"
           >
             <Trash2 size={16} aria-hidden="true" />
             Delete Memories
@@ -170,7 +173,7 @@ export function SettingsPanel() {
             type="button"
             onClick={deleteAccount}
             disabled={!apiKey || deleteAccountMutation.isPending}
-            className="inline-flex items-center justify-center gap-2 rounded border border-fault/40 bg-fault/10 px-4 py-2 text-sm font-medium text-fault hover:bg-fault/15 disabled:cursor-not-allowed disabled:opacity-50"
+            className="inline-flex items-center justify-center gap-2 border border-fault/40 bg-fault/10 px-4 py-2 font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-fault hover:bg-fault/15 disabled:cursor-not-allowed disabled:opacity-50"
           >
             <Trash2 size={16} aria-hidden="true" />
             Delete Account

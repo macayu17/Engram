@@ -10,29 +10,29 @@ import { ScoreBadge } from "./ScoreBadge";
 export function LogEntry({ log }: { log: RetrievalLog }) {
   const [isOpen, setIsOpen] = useState(false);
   return (
-    <div className="rounded border border-line bg-panel shadow-grid">
+    <div className="border-b border-line">
       <button
         type="button"
         onClick={() => setIsOpen((value) => !value)}
-        className="grid w-full gap-3 px-4 py-3 text-left text-sm hover:bg-ink/60 md:grid-cols-[160px_1fr_130px_220px]"
+        className="grid w-full gap-3 py-5 text-left text-sm hover:bg-tag md:grid-cols-[160px_1fr_130px_220px]"
       >
-        <span className="font-mono text-xs text-zinc-500">{formatDate(log.created_at)}</span>
-        <span className="truncate text-zinc-100">{log.query}</span>
-        <span className="font-mono text-xs text-zinc-400">{log.retrieved_memories.length} memories</span>
-        <span className="flex items-center justify-between gap-2 font-mono text-xs text-zinc-600">
+        <span className="font-sans text-[11px] uppercase tracking-[0.12em] text-muted">{formatDate(log.created_at)}</span>
+        <span className="truncate font-serif text-lg text-ink">{log.query}</span>
+        <span className="font-sans text-[11px] uppercase tracking-[0.12em] text-muted">{log.retrieved_memories.length} memories</span>
+        <span className="flex items-center justify-between gap-2 font-sans text-[11px] uppercase tracking-[0.12em] text-muted">
           <span className="truncate">{log.conversation_id ?? "no conversation"}</span>
           {isOpen ? <ChevronDown size={16} aria-hidden="true" /> : <ChevronRight size={16} aria-hidden="true" />}
         </span>
       </button>
       {isOpen && (
-        <div className="border-t border-line p-4">
+        <div className="border-t border-line py-4">
           {log.retrieved_memories.length ? (
-            <div className="space-y-3">
+            <div className="space-y-0">
               {log.retrieved_memories.map((memory) => (
-                <div key={memory.memory_id} className="grid gap-3 rounded border border-line bg-ink p-3 text-sm md:grid-cols-[1fr_80px]">
+                <div key={memory.memory_id} className="grid gap-3 border-b border-line py-4 text-sm last:border-b-0 md:grid-cols-[1fr_80px]">
                   <div>
-                    <p className="text-zinc-100">{memory.content ?? "Deleted memory"}</p>
-                    <p className="mt-2 font-mono text-xs text-zinc-600">{memory.memory_id}</p>
+                    <p className="font-serif text-lg leading-8 text-ink">{memory.content ?? "Deleted memory"}</p>
+                    <p className="mt-2 font-sans text-[11px] uppercase tracking-[0.12em] text-muted">{memory.memory_id}</p>
                   </div>
                   <div className="md:text-right">
                     <ScoreBadge score={memory.score} />
@@ -41,7 +41,7 @@ export function LogEntry({ log }: { log: RetrievalLog }) {
               ))}
             </div>
           ) : (
-            <p className="text-sm text-zinc-500">No memories crossed the retrieval threshold.</p>
+            <p className="font-serif text-base text-muted">No memories crossed the retrieval threshold.</p>
           )}
         </div>
       )}

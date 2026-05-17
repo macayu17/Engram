@@ -35,55 +35,58 @@ export function LogsWorkspace() {
   const hasNextPage = (page + 1) * PAGE_SIZE < total;
 
   return (
-    <section className="space-y-6">
-      <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+    <section className="space-y-12">
+      <div className="flex flex-col gap-4 border-b border-line pb-5 md:flex-row md:items-end md:justify-between">
         <div>
-          <p className="font-mono text-xs uppercase text-signal">retrieval trace</p>
-          <h1 className="mt-2 text-3xl font-semibold tracking-tight">Logs</h1>
+          <p className="font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-muted">§ II — Retrieval trace</p>
+          <h1 className="mt-2 font-serif text-5xl font-semibold leading-tight text-ink">Logs</h1>
+          <p className="mt-4 max-w-2xl font-serif text-lg leading-8 text-muted">
+            Every retrieval event is kept as an editorial trail: the query, the memories surfaced, and the conversation that caused it.
+          </p>
         </div>
         <button
           type="button"
           onClick={() => logsQuery.refetch()}
-          className="inline-flex items-center gap-2 rounded border border-line px-3 py-2 text-sm text-zinc-300 hover:border-signal/40 hover:text-white"
+          className="inline-flex items-center gap-2 border border-line px-4 py-2 font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-muted hover:border-signal hover:text-signal"
         >
           <RefreshCw size={16} aria-hidden="true" />
           Refresh
         </button>
       </div>
 
-      <form onSubmit={submitFilter} className="flex flex-col gap-2 rounded border border-line bg-panel p-4 sm:flex-row">
-        <label className="flex min-h-11 flex-1 items-center gap-2 rounded border border-line bg-ink px-3 text-sm text-zinc-200 focus-within:border-signal">
-          <Filter size={16} aria-hidden="true" className="text-zinc-500" />
+      <form onSubmit={submitFilter} className="flex flex-col gap-3 sm:flex-row">
+        <label className="flex min-h-12 flex-1 items-center gap-3 rounded-full border border-line bg-paper px-4 text-sm text-ink focus-within:border-signal">
+          <Filter size={16} aria-hidden="true" className="text-muted" />
           <input
             value={draftConversationId}
             onChange={(event) => setDraftConversationId(event.target.value)}
             placeholder="Conversation ID"
-            className="min-w-0 flex-1 bg-transparent font-mono outline-none placeholder:text-zinc-600"
+            className="min-w-0 flex-1 bg-transparent font-serif text-base outline-none placeholder:text-muted"
           />
         </label>
         <button
           type="submit"
-          className="inline-flex min-h-11 items-center justify-center rounded border border-signal/40 bg-signal/10 px-4 text-sm font-medium text-signal hover:bg-signal/15"
+          className="inline-flex min-h-12 items-center justify-center border border-ink px-5 font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-ink hover:border-signal hover:text-signal"
         >
           Filter
         </button>
       </form>
 
       {logsQuery.isError && (
-        <div className="rounded border border-fault/40 bg-fault/10 p-4 text-sm text-fault">
+        <div className="border-y border-fault/30 bg-fault/5 py-5 font-serif text-base text-fault">
           Unable to load retrieval logs.
         </div>
       )}
 
       {logsQuery.isLoading ? (
-        <div className="rounded border border-line bg-panel p-8 text-sm text-zinc-500">Loading logs...</div>
+        <div className="border-y border-line py-12 font-serif text-lg text-muted">Loading logs...</div>
       ) : (
-        <div className="space-y-3">
+        <div className="border-y border-line">
           {logs.length ? logs.map((log) => <LogEntry key={log.id} log={log} />) : <EmptyLogs />}
         </div>
       )}
 
-      <div className="flex items-center justify-between text-sm text-zinc-500">
+      <div className="flex items-center justify-between font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-muted">
         <span>
           Showing {logs.length} of {total}
         </span>
@@ -92,17 +95,17 @@ export function LogsWorkspace() {
             type="button"
             disabled={page === 0}
             onClick={() => setPage((value) => Math.max(0, value - 1))}
-            className="rounded border border-line px-3 py-2 disabled:cursor-not-allowed disabled:opacity-40"
+            className="px-3 py-2 hover:text-signal disabled:cursor-not-allowed disabled:opacity-40"
           >
-            Previous
+            ← Previous
           </button>
           <button
             type="button"
             disabled={!hasNextPage}
             onClick={() => setPage((value) => value + 1)}
-            className="rounded border border-line px-3 py-2 disabled:cursor-not-allowed disabled:opacity-40"
+            className="px-3 py-2 hover:text-signal disabled:cursor-not-allowed disabled:opacity-40"
           >
-            Next
+            Next →
           </button>
         </div>
       </div>
@@ -112,5 +115,5 @@ export function LogsWorkspace() {
 
 
 function EmptyLogs() {
-  return <div className="rounded border border-line bg-panel p-8 text-center text-sm text-zinc-500">No retrieval logs found.</div>;
+  return <div className="py-12 text-center font-serif text-lg text-muted">No retrieval logs found.</div>;
 }

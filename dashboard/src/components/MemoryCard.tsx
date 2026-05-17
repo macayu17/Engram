@@ -4,13 +4,13 @@ import { ScoreBadge } from "./ScoreBadge";
 
 export function MemoryCard({ memory, score }: { memory: Memory; score: number }) {
   return (
-    <article className="rounded border border-line bg-panel p-4 shadow-grid">
+    <article className="border-t border-line py-5">
       <div className="mb-3 flex items-center justify-between gap-3">
-        <span className="font-mono text-xs uppercase text-zinc-500">semantic match</span>
+        <span className="font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-muted">Semantic match</span>
         <ScoreBadge score={score} />
       </div>
-      <p className="text-sm leading-6 text-zinc-100">{memory.content}</p>
-      <div className="mt-4 grid grid-cols-2 gap-2 border-t border-line pt-3 text-xs text-zinc-500">
+      <p className="font-serif text-lg leading-8 text-ink">{memory.content}</p>
+      <div className="mt-4 grid grid-cols-2 gap-2 font-sans text-[11px] uppercase tracking-[0.12em] text-muted">
         <span>access {memory.access_count}</span>
         <span className="text-right">{formatDate(memory.created_at)}</span>
       </div>

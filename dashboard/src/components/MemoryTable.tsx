@@ -39,45 +39,45 @@ export function MemoryTable({ memories, onUpdate, onDelete, isBusy }: MemoryTabl
 
   if (!memories.length) {
     return (
-      <div className="rounded border border-line bg-panel p-8 text-center text-sm text-zinc-500">
+      <div className="border-y border-line py-12 text-center font-serif text-lg text-muted">
         No memories found for this API key.
       </div>
     );
   }
 
   return (
-    <div className="overflow-x-auto rounded border border-line bg-panel shadow-grid">
+    <div className="overflow-x-auto border-y border-line">
       <table className="min-w-full divide-y divide-line text-sm">
-        <thead className="bg-ink/70 text-left text-xs uppercase text-zinc-500">
+        <thead className="text-left font-sans text-[11px] uppercase tracking-[0.12em] text-muted">
           <tr>
-            <th className="px-4 py-3 font-medium">Memory</th>
-            <th className="px-4 py-3 font-medium">Confidence</th>
-            <th className="px-4 py-3 font-medium">Access</th>
-            <th className="px-4 py-3 font-medium">Last Accessed</th>
-            <th className="px-4 py-3 font-medium">Created</th>
-            <th className="px-4 py-3 text-right font-medium">Actions</th>
+            <th className="py-4 pr-4 font-medium">Memory</th>
+            <th className="px-4 py-4 font-medium">Confidence</th>
+            <th className="px-4 py-4 font-medium">Access</th>
+            <th className="px-4 py-4 font-medium">Last Accessed</th>
+            <th className="px-4 py-4 font-medium">Created</th>
+            <th className="py-4 pl-4 text-right font-medium">Actions</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-line">
           {memories.map((memory) => (
             <tr key={memory.id} className="align-top">
-              <td className="max-w-xl px-4 py-3">
+              <td className="max-w-xl py-5 pr-4">
                 {editingId === memory.id ? (
                   <textarea
                     value={draft}
                     onChange={(event) => setDraft(event.target.value)}
-                    className="min-h-24 w-full rounded border border-line bg-ink p-3 text-sm text-zinc-100 outline-none focus:border-signal"
+                    className="min-h-24 w-full border border-line bg-paper p-3 font-serif text-base text-ink outline-none focus:border-signal"
                   />
                 ) : (
-                  <p className="leading-6 text-zinc-100">{memory.content}</p>
+                  <p className="font-serif text-lg leading-8 text-ink">{memory.content}</p>
                 )}
-                <p className="mt-2 font-mono text-xs text-zinc-600">{memory.id}</p>
+                <p className="mt-2 font-sans text-[11px] uppercase tracking-[0.12em] text-muted">{memory.id}</p>
               </td>
-              <td className="px-4 py-3 font-mono text-zinc-300">{memory.confidence.toFixed(2)}</td>
-              <td className="px-4 py-3 font-mono text-zinc-300">{memory.access_count}</td>
-              <td className="px-4 py-3 text-zinc-400">{formatOptionalDate(memory.last_accessed)}</td>
-              <td className="px-4 py-3 text-zinc-400">{formatOptionalDate(memory.created_at)}</td>
-              <td className="px-4 py-3">
+              <td className="px-4 py-5 font-sans text-[11px] uppercase tracking-[0.12em] text-muted">{memory.confidence.toFixed(2)}</td>
+              <td className="px-4 py-5 font-sans text-[11px] uppercase tracking-[0.12em] text-muted">{memory.access_count}</td>
+              <td className="px-4 py-5 font-sans text-[11px] uppercase tracking-[0.12em] text-muted">{formatOptionalDate(memory.last_accessed)}</td>
+              <td className="px-4 py-5 font-sans text-[11px] uppercase tracking-[0.12em] text-muted">{formatOptionalDate(memory.created_at)}</td>
+              <td className="py-5 pl-4">
                 <div className="flex justify-end gap-2">
                   {editingId === memory.id ? (
                     <>
@@ -86,7 +86,7 @@ export function MemoryTable({ memories, onUpdate, onDelete, isBusy }: MemoryTabl
                         title="Save memory"
                         onClick={() => saveEditing(memory.id)}
                         disabled={isBusy}
-                        className="rounded border border-signal/40 p-2 text-signal hover:bg-signal/10 disabled:opacity-50"
+                        className="rounded bg-tag p-2 text-signal hover:text-ink disabled:opacity-50"
                       >
                         <Check size={16} aria-hidden="true" />
                       </button>
@@ -94,7 +94,7 @@ export function MemoryTable({ memories, onUpdate, onDelete, isBusy }: MemoryTabl
                         type="button"
                         title="Cancel edit"
                         onClick={() => setEditingId(null)}
-                        className="rounded border border-line p-2 text-zinc-400 hover:text-white"
+                        className="rounded bg-tag p-2 text-muted hover:text-ink"
                       >
                         <X size={16} aria-hidden="true" />
                       </button>
@@ -105,7 +105,7 @@ export function MemoryTable({ memories, onUpdate, onDelete, isBusy }: MemoryTabl
                         type="button"
                         title="Edit memory"
                         onClick={() => startEditing(memory)}
-                        className="rounded border border-line p-2 text-zinc-400 hover:border-signal/40 hover:text-signal"
+                        className="rounded bg-tag p-2 text-muted hover:text-signal"
                       >
                         <Pencil size={16} aria-hidden="true" />
                       </button>
@@ -114,7 +114,7 @@ export function MemoryTable({ memories, onUpdate, onDelete, isBusy }: MemoryTabl
                         title="Delete memory"
                         onClick={() => confirmDelete(memory.id)}
                         disabled={isBusy}
-                        className="rounded border border-line p-2 text-zinc-400 hover:border-fault/40 hover:text-fault disabled:opacity-50"
+                        className="rounded bg-tag p-2 text-muted hover:text-fault disabled:opacity-50"
                       >
                         <Trash2 size={16} aria-hidden="true" />
                       </button>

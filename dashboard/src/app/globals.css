@@ -38,8 +38,13 @@
   color-scheme: dark;
 }
 
+html {
+  overflow-x: hidden;
+}
+
 body {
   background: rgb(var(--color-paper));
+  overflow-x: hidden;
   transition: background-color 180ms ease, color 180ms ease;
 }
 
@@ -94,6 +99,164 @@ body {
 
 .memory-hero-frame {
   background: rgb(var(--color-paper));
+}
+
+.memory-hero-orbit {
+  height: min(27rem, 52vw);
+  pointer-events: none;
+  position: absolute;
+  right: max(3rem, calc((100vw - 78rem) / 2));
+  top: 5.5rem;
+  width: min(27rem, 52vw);
+  z-index: 1;
+}
+
+.memory-hero-orbit__halo {
+  animation: memory-orbit-turn 28s linear infinite;
+  border: 1px solid rgb(var(--color-signal) / 0.24);
+  border-radius: 9999px;
+  inset: 0;
+  position: absolute;
+}
+
+.memory-hero-orbit__halo::before,
+.memory-hero-orbit__halo::after {
+  border: 1px solid rgb(var(--color-line) / 0.42);
+  border-radius: inherit;
+  content: "";
+  position: absolute;
+}
+
+.memory-hero-orbit__halo::before {
+  inset: 16%;
+}
+
+.memory-hero-orbit__halo::after {
+  border-color: rgb(var(--color-signal) / 0.18);
+  inset: 32%;
+}
+
+.memory-hero-orbit__halo--inner {
+  animation-direction: reverse;
+  animation-duration: 18s;
+  border-color: rgb(var(--color-muted) / 0.16);
+  inset: 11%;
+}
+
+.memory-hero-orbit__cross {
+  background: linear-gradient(90deg, transparent, rgb(var(--color-line) / 0.38), transparent);
+  left: 6%;
+  position: absolute;
+  top: 50%;
+  transform-origin: center;
+  width: 88%;
+}
+
+.memory-hero-orbit__cross--x {
+  height: 1px;
+}
+
+.memory-hero-orbit__cross--y {
+  height: 1px;
+  transform: rotate(90deg);
+}
+
+.memory-hero-orbit__beacon {
+  animation: memory-orbit-beacon 3.4s ease-in-out infinite;
+  background: rgb(var(--color-signal));
+  border-radius: 9999px;
+  box-shadow:
+    0 0 1.4rem rgb(var(--color-signal) / 0.7),
+    0 0 4.2rem rgb(var(--color-signal) / 0.3);
+  height: 0.75rem;
+  position: absolute;
+  right: 6%;
+  top: 48.5%;
+  width: 0.75rem;
+}
+
+.memory-hero-orbit__needle {
+  background: linear-gradient(90deg, transparent, rgb(var(--color-signal) / 0.36), rgb(var(--color-signal) / 0.06));
+  height: 1px;
+  left: 7%;
+  position: absolute;
+  top: 50%;
+  transform-origin: right center;
+  width: 84%;
+}
+
+.memory-hero-orbit__needle--one {
+  transform: rotate(-22deg);
+}
+
+.memory-hero-orbit__needle--two {
+  opacity: 0.72;
+  transform: rotate(0deg);
+}
+
+.memory-hero-orbit__needle--three {
+  opacity: 0.56;
+  transform: rotate(22deg);
+}
+
+.memory-hero-orbit__chip {
+  align-items: center;
+  animation: memory-chip-float 7s ease-in-out infinite alternate;
+  color: rgb(var(--color-muted));
+  display: flex;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  gap: 0.55rem;
+  letter-spacing: 0.1em;
+  position: absolute;
+  text-transform: uppercase;
+}
+
+.memory-hero-orbit__chip span {
+  border-bottom: 1px solid rgb(var(--color-line) / 0.6);
+  font-size: 0.58rem;
+  padding-bottom: 0.15rem;
+}
+
+.memory-hero-orbit__chip strong {
+  color: rgb(var(--color-signal));
+  font-size: 0.64rem;
+  font-weight: 700;
+}
+
+.memory-hero-orbit__chip--one {
+  right: 18%;
+  top: 13%;
+}
+
+.memory-hero-orbit__chip--two {
+  animation-delay: 1.2s;
+  left: 2%;
+  top: 43%;
+}
+
+.memory-hero-orbit__chip--three {
+  animation-delay: 2.4s;
+  bottom: 14%;
+  right: 9%;
+}
+
+.memory-hero-orbit__rail {
+  bottom: 5%;
+  color: rgb(var(--color-muted));
+  display: grid;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: 0.58rem;
+  gap: 0.45rem;
+  letter-spacing: 0.1em;
+  opacity: 0.58;
+  position: absolute;
+  right: 50%;
+  text-transform: uppercase;
+}
+
+.memory-hero-orbit__rail span {
+  border-left: 1px solid rgb(var(--color-signal) / 0.48);
+  padding-left: 0.55rem;
 }
 
 .memory-constellation__ledger {
@@ -382,7 +545,54 @@ body {
   }
 }
 
+@keyframes memory-orbit-turn {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes memory-orbit-beacon {
+  0%,
+  100% {
+    opacity: 0.74;
+    transform: scale(0.86);
+  }
+
+  50% {
+    opacity: 1;
+    transform: scale(1.65);
+  }
+}
+
+@keyframes memory-chip-float {
+  from {
+    opacity: 0.45;
+    transform: translateY(-0.35rem);
+  }
+
+  to {
+    opacity: 0.86;
+    transform: translateY(0.35rem);
+  }
+}
+
 @media (max-width: 768px) {
+  .memory-hero-orbit {
+    opacity: 0.5;
+    right: -10rem;
+    top: 12rem;
+    width: 23rem;
+  }
+
+  .memory-hero-orbit__chip,
+  .memory-hero-orbit__rail {
+    display: none;
+  }
+
   .memory-constellation__scan {
     left: -6%;
     opacity: 0.26;
@@ -424,7 +634,10 @@ body {
   .memory-constellation__core circle,
   .memory-constellation__flow path,
   .memory-constellation__beacons circle,
-  .memory-constellation__label {
+  .memory-constellation__label,
+  .memory-hero-orbit__halo,
+  .memory-hero-orbit__beacon,
+  .memory-hero-orbit__chip {
     animation: none;
   }
 }

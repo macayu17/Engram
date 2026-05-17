@@ -3,14 +3,111 @@
 @tailwind utilities;
 
 :root {
+  color-scheme: dark;
+  --color-paper: 11 10 9;
+  --color-ink: 244 239 229;
+  --color-panel: 18 17 15;
+  --color-muted: 166 160 148;
+  --color-line: 55 51 44;
+  --color-tag: 35 32 27;
+  --color-signal: 217 132 48;
+  --color-caution: 210 175 88;
+  --color-fault: 255 107 94;
+  --theme-wave-x: 100vw;
+  --theme-wave-y: 0px;
+  --theme-wave-radius: 150vmax;
+  --theme-fallback-left: 0px;
+  --theme-fallback-top: 0px;
+  --theme-fallback-size: 0px;
+}
+
+[data-theme="light"] {
   color-scheme: light;
+  --color-paper: 251 251 249;
+  --color-ink: 26 26 24;
+  --color-panel: 255 255 255;
+  --color-muted: 107 107 99;
+  --color-line: 229 229 223;
+  --color-tag: 240 240 234;
+  --color-signal: 201 106 26;
+  --color-caution: 139 111 45;
+  --color-fault: 180 35 24;
+}
+
+[data-theme="dark"] {
+  color-scheme: dark;
 }
 
 body {
-  background: #FBFBF9;
+  background: rgb(var(--color-paper));
+  transition: background-color 180ms ease, color 180ms ease;
 }
 
 ::selection {
-  background: #F0F0EA;
-  color: #1A1A18;
+  background: rgb(var(--color-tag));
+  color: rgb(var(--color-ink));
+}
+
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+
+::view-transition-new(root) {
+  animation: theme-wave 720ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  clip-path: circle(0 at var(--theme-wave-x) var(--theme-wave-y));
+}
+
+@keyframes theme-wave {
+  from {
+    clip-path: circle(0 at var(--theme-wave-x) var(--theme-wave-y));
+  }
+
+  to {
+    clip-path: circle(var(--theme-wave-radius) at var(--theme-wave-x) var(--theme-wave-y));
+  }
+}
+
+.theme-fallback-wave {
+  animation: theme-fallback-wave 820ms cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+  height: var(--theme-fallback-size);
+  left: var(--theme-fallback-left);
+  top: var(--theme-fallback-top);
+  transform: scale(0);
+  transform-origin: center;
+  width: var(--theme-fallback-size);
+}
+
+.theme-fallback-wave-light {
+  background: rgb(251 251 249);
+}
+
+.theme-fallback-wave-dark {
+  background: rgb(11 10 9);
+}
+
+@keyframes theme-fallback-wave {
+  from {
+    transform: scale(0);
+  }
+
+  to {
+    transform: scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body {
+    transition: none;
+  }
+
+  ::view-transition-new(root) {
+    animation: none;
+  }
+
+  .theme-fallback-wave {
+    animation: none;
+    transform: scale(1);
+  }
 }

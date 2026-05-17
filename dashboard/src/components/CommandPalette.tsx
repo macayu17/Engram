@@ -103,7 +103,7 @@ export function CommandPalette() {
 
       {isOpen && (
         <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 px-4 py-20">
-          <div className="w-full max-w-xl rounded-lg border border-line bg-white text-ink">
+          <div className="w-full max-w-xl rounded-lg border border-line bg-panel text-ink">
             <form onSubmit={submitSearch} className="flex min-h-16 items-center gap-3 border-b border-line px-4">
               <Search size={18} aria-hidden="true" className="text-muted" />
               <input

@@ -31,6 +31,26 @@ def get_last_user_message(body: Mapping[str, object]) -> str:
     return ""
 
 
+def get_retrieval_query(body: Mapping[str, object], max_user_messages: int = 6) -> str:
+    messages = body.get("messages")
+    if not isinstance(messages, list):
+        return ""
+    user_messages: list[str] = []
+    for message in messages:
+        if not isinstance(message, dict):
+            continue
+        if message.get("role") != "user":
+            continue
+        content = message.get("content")
+        if isinstance(content, str):
+            user_messages.append(content)
+        elif isinstance(content, list):
+            extracted = extract_text_from_content_parts(content)
+            if extracted:
+                user_messages.append(extracted)
+    return "\n".join(user_messages[-max_user_messages:])
+
+
 def extract_text_from_content_parts(parts: Sequence[object]) -> str:
     text_parts: list[str] = []
     for part in parts:

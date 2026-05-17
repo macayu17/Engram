@@ -2,7 +2,7 @@
 
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { MessageSquare, Send } from "lucide-react";
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, KeyboardEvent, useMemo, useState } from "react";
 
 import { api, type ChatMessage } from "@/lib/api";
 import { cn } from "@/lib/cn";
@@ -67,8 +67,7 @@ export function ChatWorkspace() {
     },
   });
 
-  function submitMessage(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  function sendDraftMessage() {
     const content = draft.trim();
     if (!content || chatMutation.isPending) {
       return;
@@ -84,6 +83,18 @@ export function ChatWorkspace() {
       },
     ]);
     chatMutation.mutate(content);
+  }
+
+  function submitMessage(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    sendDraftMessage();
+  }
+
+  function handleDraftKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
+    if (event.key === "Enter" && !event.shiftKey) {
+      event.preventDefault();
+      sendDraftMessage();
+    }
   }
 
   function clearChat() {
@@ -137,6 +148,7 @@ export function ChatWorkspace() {
             <textarea
               value={draft}
               onChange={(event) => setDraft(event.target.value)}
+              onKeyDown={handleDraftKeyDown}
               placeholder="Ask through Engram..."
               className="min-h-28 min-w-0 flex-1 border border-line bg-paper p-4 font-serif text-base leading-7 text-ink outline-none focus:border-signal"
             />

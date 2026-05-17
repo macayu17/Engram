@@ -153,6 +153,12 @@ def sanitize_passthrough_headers(incoming_headers: Mapping[str, str]) -> dict[st
     blocked = {
         "host",
         "content-length",
+        "accept-encoding",
+        "connection",
+        "te",
+        "trailer",
+        "transfer-encoding",
+        "upgrade",
         "authorization",
         "x-api-key",
         "x-engram-key",

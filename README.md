@@ -216,6 +216,29 @@ npm run build
 node dist/index.js --transport stdio
 ```
 
+## Production Deployment
+
+For a production setup, deploy the services separately:
+
+- `dashboard` on Vercel
+- `api` on a container backend
+- PostgreSQL on Supabase
+- `mcp` on the same backend as the API, or run it locally where your AI client can reach it
+
+When creating the Vercel project, set the project Root Directory to `dashboard`. The repository root is not a Next.js app, so Vercel will fail with `No Next.js version detected` if it builds from the root.
+
+Set these Vercel environment variables for the dashboard:
+
+```bash
+NEXT_PUBLIC_API_URL=https://your-api-host.example.com
+NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_...
+CLERK_SECRET_KEY=sk_...
+```
+
+The API must be reachable from the browser and must allow the dashboard origin through `CORS_ORIGINS`.
+
+Supabase replaces only the Postgres service. It does not replace the FastAPI service, because Engram still needs `/users`, `/memories`, `/logs`, and `/v1/chat`. Host `api/` on a container-capable platform such as Azure Container Apps, Render, Railway, Fly.io, or another Docker host. Point its `DATABASE_URL` at Supabase and set provider keys such as `OPENAI_API_KEY`.
+
 ## Development Checks
 
 Backend syntax:

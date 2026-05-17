@@ -157,7 +157,7 @@ export function MemoryWorkspace() {
 
       {isAddOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
-          <form onSubmit={submitNewMemory} className="w-full max-w-lg rounded-lg border border-line bg-white p-6">
+          <form onSubmit={submitNewMemory} className="w-full max-w-lg rounded-lg border border-line bg-panel p-6">
             <div className="flex items-start justify-between gap-4">
               <div>
                 <p className="font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-muted">Manual entry</p>

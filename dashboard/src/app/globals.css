@@ -92,6 +92,10 @@ body {
   opacity: 0.92;
 }
 
+.memory-hero-frame {
+  background: rgb(var(--color-paper));
+}
+
 .memory-constellation__ledger {
   background-image:
     linear-gradient(rgb(var(--color-line) / 0.28) 1px, transparent 1px),
@@ -132,12 +136,12 @@ body {
 
 .memory-constellation__network {
   animation: memory-field-drift 18s ease-in-out infinite alternate;
-  bottom: -7rem;
+  bottom: -4.5rem;
   height: min(42rem, 78vw);
-  left: 50%;
+  left: 56%;
   position: absolute;
   transform: translateX(-50%);
-  width: min(82rem, 132vw);
+  width: min(82rem, 118vw);
 }
 
 .memory-constellation__mesh path,
@@ -277,6 +281,101 @@ body {
   transform: rotate(12deg);
 }
 
+.memory-engine-stage {
+  align-items: center;
+  display: flex;
+  justify-content: center;
+  min-height: 30rem;
+  position: relative;
+}
+
+.memory-engine-ring {
+  animation: memory-ring-turn 26s linear infinite;
+  aspect-ratio: 1;
+  border: 1px solid rgb(var(--color-signal) / 0.22);
+  border-radius: 9999px;
+  position: absolute;
+  width: min(30rem, 80vw);
+}
+
+.memory-engine-ring::before,
+.memory-engine-ring::after {
+  border: 1px solid rgb(var(--color-line) / 0.45);
+  border-radius: inherit;
+  content: "";
+  inset: 11%;
+  position: absolute;
+}
+
+.memory-engine-ring::after {
+  border-color: rgb(var(--color-signal) / 0.16);
+  inset: 23%;
+}
+
+.memory-engine-axis {
+  background: rgb(var(--color-line) / 0.42);
+  position: absolute;
+}
+
+.memory-engine-axis--vertical {
+  height: min(28rem, 76vw);
+  width: 1px;
+}
+
+.memory-engine-axis--horizontal {
+  height: 1px;
+  width: min(32rem, 84vw);
+}
+
+.memory-engine-panel {
+  background: rgb(var(--color-paper) / 0.78);
+  border: 1px solid rgb(var(--color-line) / 0.82);
+  max-width: 28rem;
+  padding: 1.55rem;
+  position: relative;
+  width: min(28rem, 100%);
+}
+
+.memory-engine-panel::before {
+  border: 1px solid rgb(var(--color-signal) / 0.22);
+  content: "";
+  inset: -0.75rem;
+  position: absolute;
+}
+
+.memory-engine-source {
+  align-items: center;
+  animation: memory-source-drift 8s ease-in-out infinite alternate;
+  background: rgb(var(--color-tag));
+  border: 1px solid rgb(var(--color-line));
+  color: rgb(var(--color-signal));
+  display: flex;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: 0.66rem;
+  font-weight: 700;
+  height: 2.5rem;
+  justify-content: center;
+  letter-spacing: 0.08em;
+  position: absolute;
+  text-transform: uppercase;
+  width: 2.5rem;
+}
+
+.memory-engine-source--one {
+  left: 8%;
+  top: 13%;
+}
+
+.memory-engine-source--two {
+  right: 9%;
+  top: 24%;
+}
+
+.memory-engine-source--three {
+  bottom: 12%;
+  left: 18%;
+}
+
 @keyframes theme-fallback-wave {
   from {
     transform: scale(0);
@@ -378,6 +477,26 @@ body {
   }
 }
 
+@keyframes memory-ring-turn {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes memory-source-drift {
+  from {
+    transform: translateY(-0.35rem);
+  }
+
+  to {
+    transform: translateY(0.35rem);
+  }
+}
+
 @media (max-width: 768px) {
   .memory-constellation__scan {
     left: -6%;
@@ -389,12 +508,20 @@ body {
   .memory-constellation__network {
     bottom: -4rem;
     height: 31rem;
-    left: 47%;
+    left: 50%;
     width: 58rem;
   }
 
   .memory-constellation__label--three {
     display: none;
+  }
+
+  .memory-engine-stage {
+    min-height: 27rem;
+  }
+
+  .memory-engine-panel {
+    padding: 1.25rem;
   }
 }
 
@@ -420,6 +547,11 @@ body {
   .memory-constellation__flow path,
   .memory-constellation__beacons circle,
   .memory-constellation__label {
+    animation: none;
+  }
+
+  .memory-engine-ring,
+  .memory-engine-source {
     animation: none;
   }
 }

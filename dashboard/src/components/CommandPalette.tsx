@@ -98,7 +98,7 @@ export function CommandPalette() {
           <Search size={15} aria-hidden="true" />
           <span className="truncate">Search memories and retrieval context</span>
         </span>
-        <span className="rounded border border-line px-2 py-0.5 font-sans text-[10px] uppercase tracking-[0.12em] text-muted">Ctrl K</span>
+        <span className="rounded border border-line px-2 py-0.5 font-sans text-[10px] uppercase tracking-[0.12em] text-muted">⌘ K</span>
       </button>
 
       {isOpen && (

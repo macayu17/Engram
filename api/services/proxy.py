@@ -9,7 +9,7 @@ import httpx
 from api.config import settings
 from api.services.extraction import run_extraction_task
 from api.services.providers.base import build_chat_completions_url
-from api.services.retrieval import get_last_user_message, log_retrieval, retrieve_memories
+from api.services.retrieval import get_retrieval_query, log_retrieval, retrieve_memories
 
 
 logger = logging.getLogger(__name__)
@@ -46,7 +46,7 @@ async def build_proxy_result(
     conversation_id = uuid4()
     body = copy.deepcopy(request_body)
     injected_count = 0
-    query = get_last_user_message(body)
+    query = get_retrieval_query(body)
     if not disable_injection:
         try:
             memories = await retrieve_memories(user_id, query, db)

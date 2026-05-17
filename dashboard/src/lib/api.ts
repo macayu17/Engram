@@ -46,6 +46,10 @@ export type User = {
   created_at: string;
 };
 
+export type UserCreateResponse = User & {
+  api_key: string;
+};
+
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
 function getApiKey(): string {
@@ -99,6 +103,7 @@ export const api = {
       request<LogListResponse>("GET", `/logs${toQuery(params)}`),
   },
   users: {
+    create: (externalId: string) => request<UserCreateResponse>("POST", "/users", { external_id: externalId }),
     me: () => request<User>("GET", "/users/me"),
     deleteMe: () => request<void>("DELETE", "/users/me"),
   },

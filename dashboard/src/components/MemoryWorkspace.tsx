@@ -58,8 +58,8 @@ export function MemoryWorkspace() {
     <section className="space-y-16">
       <div className="memory-hero-frame relative -mx-4 -mt-10 min-h-[35rem] overflow-hidden border-b border-line px-4 py-16 sm:-mx-6 sm:px-6 md:-mt-16 md:min-h-[38rem] md:py-20">
         <MemoryConstellation />
-        <div className="relative z-10 mx-auto grid max-w-7xl items-center gap-12 lg:grid-cols-[0.9fr_1.1fr]">
-          <div className="max-w-2xl">
+        <div className="relative z-10 mx-auto flex max-w-7xl items-center">
+          <div className="max-w-3xl">
             <p className="font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-muted">The Engram memory ledger · Vol. 01</p>
             <h1 className="mt-6 font-serif text-5xl font-bold leading-tight text-ink md:text-7xl">
               Every durable <span className="italic text-signal">memory.</span>
@@ -90,55 +90,6 @@ export function MemoryWorkspace() {
               <span>{total} memories</span>
               <span>pgvector</span>
               <span>async extract</span>
-            </div>
-          </div>
-
-          <div className="memory-engine-stage" aria-hidden="true">
-            <div className="memory-engine-ring" />
-            <div className="memory-engine-axis memory-engine-axis--vertical" />
-            <div className="memory-engine-axis memory-engine-axis--horizontal" />
-            <div className="memory-engine-source memory-engine-source--one">EK</div>
-            <div className="memory-engine-source memory-engine-source--two">LLM</div>
-            <div className="memory-engine-source memory-engine-source--three">DB</div>
-            <div className="memory-engine-panel">
-              <div className="flex items-start justify-between gap-6">
-                <div>
-                  <p className="font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-muted">Live Memory Engine</p>
-                  <h2 className="mt-2 font-serif text-3xl font-semibold leading-tight text-ink">Retrieval in motion</h2>
-                </div>
-                <span className="flex h-10 w-10 items-center justify-center border border-line bg-tag font-serif text-base font-bold text-signal">E</span>
-              </div>
-              <div className="mt-6 space-y-0 border-y border-line">
-                <div className="grid grid-cols-[2.5rem_1fr_auto] gap-3 border-b border-line py-3">
-                  <span className="flex h-8 w-8 items-center justify-center border border-line bg-tag font-serif text-xs font-bold text-signal">01</span>
-                  <span>
-                    <span className="block font-serif text-lg leading-none text-ink">Project memory</span>
-                    <span className="mt-1 block font-sans text-[10px] uppercase tracking-[0.12em] text-muted">source conversation</span>
-                  </span>
-                  <span className="font-sans text-[10px] uppercase tracking-[0.12em] text-signal">0.84</span>
-                </div>
-                <div className="grid grid-cols-[2.5rem_1fr_auto] gap-3 border-b border-line py-3">
-                  <span className="flex h-8 w-8 items-center justify-center border border-line bg-tag font-serif text-xs font-bold text-signal">02</span>
-                  <span>
-                    <span className="block font-serif text-lg leading-none text-ink">Semantic query</span>
-                    <span className="mt-1 block font-sans text-[10px] uppercase tracking-[0.12em] text-muted">vector search</span>
-                  </span>
-                  <span className="font-sans text-[10px] uppercase tracking-[0.12em] text-signal">live</span>
-                </div>
-                <div className="grid grid-cols-[2.5rem_1fr_auto] gap-3 py-3">
-                  <span className="flex h-8 w-8 items-center justify-center border border-line bg-tag font-serif text-xs font-bold text-signal">03</span>
-                  <span>
-                    <span className="block font-serif text-lg leading-none text-ink">Prompt injection</span>
-                    <span className="mt-1 block font-sans text-[10px] uppercase tracking-[0.12em] text-muted">system context</span>
-                  </span>
-                  <span className="font-sans text-[10px] uppercase tracking-[0.12em] text-signal">ready</span>
-                </div>
-              </div>
-              <div className="mt-5 flex items-center justify-between font-sans text-[10px] uppercase tracking-[0.12em] text-muted">
-                <span>retrieve</span>
-                <span className="h-px flex-1 bg-line mx-4" />
-                <span>inject</span>
-              </div>
             </div>
           </div>
         </div>

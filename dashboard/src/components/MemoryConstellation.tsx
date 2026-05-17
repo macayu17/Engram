@@ -5,14 +5,28 @@ const leftNodes = [
   { cx: 128, cy: 96, r: 2 },
   { cx: 48, cy: 142, r: 2 },
   { cx: 172, cy: 158, r: 3 },
+  { cx: 252, cy: 176, r: 2 },
   { cx: 96, cy: 210, r: 4 },
   { cx: 214, cy: 238, r: 2 },
+  { cx: 306, cy: 268, r: 3 },
   { cx: 52, cy: 292, r: 2 },
   { cx: 158, cy: 318, r: 3 },
   { cx: 246, cy: 342, r: 2 },
+  { cx: 336, cy: 356, r: 2 },
   { cx: 112, cy: 392, r: 2 },
   { cx: 288, cy: 426, r: 3 },
   { cx: 196, cy: 468, r: 2 },
+  { cx: 82, cy: 484, r: 2 },
+];
+
+const signalPaths = [
+  "M74 72C220 18 390 94 524 166C638 228 732 235 900 246",
+  "M128 96C288 112 362 136 512 198C652 256 720 238 900 246",
+  "M172 158C280 150 448 168 574 222C684 270 770 252 900 246",
+  "M96 210C270 206 400 230 548 254C682 276 760 256 900 246",
+  "M158 318C306 318 432 300 568 286C704 272 800 254 900 246",
+  "M112 392C282 388 412 348 552 316C704 280 776 260 900 246",
+  "M196 468C324 426 440 382 572 338C710 292 800 262 900 246",
 ];
 
 const memoryRows = [
@@ -56,9 +70,15 @@ export function MemoryConstellation() {
           </filter>
         </defs>
         <g className="memory-constellation__mesh">
-          <path d="M74 72L128 96L48 142L96 210L172 158L214 238L158 318L52 292L112 392L196 468L288 426L246 342L158 318L96 210" />
-          <path d="M128 96L172 158L96 210L52 292L158 318L246 342L288 426" />
-          <path d="M48 142L172 158L246 342L112 392" />
+          <path d="M74 72L128 96L48 142L96 210L172 158L252 176L214 238L306 268L246 342L336 356L288 426L196 468L82 484L112 392L52 292L158 318L96 210" />
+          <path d="M128 96L172 158L96 210L52 292L158 318L246 342L288 426L336 356L306 268L214 238" />
+          <path d="M48 142L172 158L306 268L158 318L112 392L196 468L246 342" />
+          <path d="M74 72L252 176L336 356L196 468" />
+        </g>
+        <g className="memory-constellation__core">
+          <circle cx="172" cy="258" r="88" />
+          <circle cx="172" cy="258" r="138" />
+          <circle cx="172" cy="258" r="190" />
         </g>
         <g className="memory-constellation__nodes">
           {leftNodes.map((node) => (
@@ -66,14 +86,14 @@ export function MemoryConstellation() {
           ))}
         </g>
         <g className="memory-constellation__paths">
-          <path d="M284 268C430 212 526 184 628 214C726 243 776 247 900 246" />
-          <path d="M236 420C364 354 472 356 572 392C688 434 758 302 900 246" />
-          <path d="M312 126C470 98 548 126 620 168C710 220 770 244 900 246" />
+          {signalPaths.map((path) => (
+            <path key={path} d={path} />
+          ))}
         </g>
         <g className="memory-constellation__flow">
-          <path d="M284 268C430 212 526 184 628 214C726 243 776 247 900 246" />
-          <path d="M236 420C364 354 472 356 572 392C688 434 758 302 900 246" />
-          <path d="M312 126C470 98 548 126 620 168C710 220 770 244 900 246" />
+          {signalPaths.map((path) => (
+            <path key={path} d={path} />
+          ))}
         </g>
         <g className="memory-constellation__beacons" filter="url(#memory-signal-glow)">
           <circle cx="900" cy="246" r="5" />

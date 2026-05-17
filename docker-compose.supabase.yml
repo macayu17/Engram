@@ -1,32 +1,13 @@
 services:
-  postgres:
-    image: pgvector/pgvector:pg16
-    restart: unless-stopped
-    environment:
-      POSTGRES_DB: engram
-      POSTGRES_USER: engram
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_INITDB_ARGS: ${POSTGRES_INITDB_ARGS:-}
-    volumes:
-      - pgdata:/var/lib/postgresql/data
-      - ./api/db/schema.sql:/docker-entrypoint-initdb.d/01_schema.sql:ro
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U engram -d engram"]
-      interval: 5s
-      timeout: 5s
-      retries: 10
-    ports:
-      - "5432:5432"
-
   api:
     build: ./api
     restart: unless-stopped
     ports:
       - "8000:8000"
     environment:
-      DATABASE_URL: ${DATABASE_URL:-postgresql://engram:${POSTGRES_PASSWORD}@postgres:5432/engram}
-      DATABASE_MIN_POOL_SIZE: ${DATABASE_MIN_POOL_SIZE:-2}
-      DATABASE_MAX_POOL_SIZE: ${DATABASE_MAX_POOL_SIZE:-10}
+      DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL to your Supabase Postgres connection string}
+      DATABASE_MIN_POOL_SIZE: ${DATABASE_MIN_POOL_SIZE:-1}
+      DATABASE_MAX_POOL_SIZE: ${DATABASE_MAX_POOL_SIZE:-5}
       DATABASE_STATEMENT_CACHE_SIZE: ${DATABASE_STATEMENT_CACHE_SIZE:-100}
       EXTRACTION_PROVIDER: ${EXTRACTION_PROVIDER:-openai}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
@@ -45,9 +26,6 @@ services:
       MEMORY_REFINEMENT_THRESHOLD: ${MEMORY_REFINEMENT_THRESHOLD:-0.8}
       LOG_LEVEL: ${LOG_LEVEL:-info}
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3001}
-    depends_on:
-      postgres:
-        condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=5)\""]
       interval: 10s
@@ -80,6 +58,3 @@ services:
     depends_on:
       api:
         condition: service_healthy
-
-volumes:
-  pgdata:

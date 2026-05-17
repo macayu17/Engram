@@ -67,6 +67,55 @@ curl http://localhost:8000/memories \
 
 7. Open the dashboard at `http://localhost:3001` and save the same API key in Settings.
 
+## Supabase Postgres
+
+Engram can use Supabase as its PostgreSQL and pgvector database. Local Docker Postgres remains the default for development.
+
+1. Create a Supabase project.
+
+2. In the Supabase dashboard, enable the `vector` extension from Database -> Extensions. Engram stores embeddings in a `vector(384)` column.
+
+3. Copy a Postgres connection string from the Supabase Connect panel. For this Docker API, prefer the Session pooler if your network needs IPv4. The Direct connection is also fine where IPv6 works. Avoid the Transaction pooler unless you set `DATABASE_STATEMENT_CACHE_SIZE=0`.
+
+4. Put the connection string in `.env`.
+
+```bash
+DATABASE_URL=postgresql://postgres.<project-ref>:<password>@aws-0-<region>.pooler.supabase.com:5432/postgres
+DATABASE_MIN_POOL_SIZE=1
+DATABASE_MAX_POOL_SIZE=5
+DATABASE_STATEMENT_CACHE_SIZE=100
+```
+
+If you use Supabase Transaction pooler on port `6543`, use:
+
+```bash
+DATABASE_STATEMENT_CACHE_SIZE=0
+```
+
+5. Apply the Engram schema to Supabase.
+
+```bash
+docker compose -f docker-compose.supabase.yml run --rm api python -m api.apply_schema
+```
+
+You can also paste `api/db/schema.sql` into the Supabase SQL editor.
+
+6. Start the API, MCP server, and dashboard without local Postgres.
+
+```bash
+docker compose -f docker-compose.supabase.yml up -d --build
+```
+
+7. Create an Engram user as usual.
+
+```bash
+curl -X POST http://localhost:8000/users \
+  -H "Content-Type: application/json" \
+  -d '{"external_id": "test_user_1"}'
+```
+
+Save the returned `ek_...` API key and use it in the dashboard or API calls.
+
 ## Architecture
 
 The hot path is designed to stay simple:

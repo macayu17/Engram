@@ -1,0 +1,16 @@
+services:
+  api:
+    volumes:
+      - ./api:/app/api
+    command: ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+
+  mcp:
+    volumes:
+      - ./mcp/src:/app/src
+    command: ["npm", "run", "dev"]
+
+  dashboard:
+    volumes:
+      - ./dashboard/src:/app/src
+      - ./dashboard/public:/app/public
+    command: ["npm", "run", "dev"]

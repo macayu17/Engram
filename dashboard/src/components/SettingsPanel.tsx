@@ -2,22 +2,15 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, Copy, KeyRound, Plus, Trash2 } from "lucide-react";
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 
-import { api } from "@/lib/api";
-
-
-function readStoredApiKey(): string {
-  if (typeof window === "undefined") {
-    return "";
-  }
-  return localStorage.getItem("engram_api_key") ?? "";
-}
+import { api, clearActiveApiKey, readActiveApiKey, setActiveApiKey } from "@/lib/api";
+import { useActiveApiKey } from "@/lib/useActiveApiKey";
 
 export function SettingsPanel() {
   const queryClient = useQueryClient();
-  const [apiKey, setApiKey] = useState(readStoredApiKey);
-  const [draftApiKey, setDraftApiKey] = useState(readStoredApiKey);
+  const apiKey = useActiveApiKey();
+  const [draftApiKey, setDraftApiKey] = useState(readActiveApiKey);
   const [saved, setSaved] = useState(false);
   const [keyError, setKeyError] = useState("");
   const [externalId, setExternalId] = useState(() => `dashboard_user_${Date.now()}`);
@@ -33,8 +26,7 @@ export function SettingsPanel() {
   const deleteAccountMutation = useMutation({
     mutationFn: () => api.users.deleteMe(),
     onSuccess: () => {
-      localStorage.removeItem("engram_api_key");
-      setApiKey("");
+      clearActiveApiKey();
       setDraftApiKey("");
       void queryClient.clear();
     },
@@ -50,8 +42,7 @@ export function SettingsPanel() {
   const createUserMutation = useMutation({
     mutationFn: (nextExternalId: string) => api.users.create(nextExternalId),
     onSuccess: (response) => {
-      localStorage.setItem("engram_api_key", response.api_key);
-      setApiKey(response.api_key);
+      setActiveApiKey(response.api_key);
       setDraftApiKey(response.api_key);
       setGeneratedKey(response.api_key);
       setGeneratedExternalId(response.external_id);
@@ -65,6 +56,10 @@ export function SettingsPanel() {
     },
   });
 
+  useEffect(() => {
+    setDraftApiKey(apiKey);
+  }, [apiKey]);
+
   function saveApiKey(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const trimmedApiKey = draftApiKey.trim();
@@ -73,8 +68,11 @@ export function SettingsPanel() {
       setSaved(false);
       return;
     }
-    localStorage.setItem("engram_api_key", trimmedApiKey);
-    setApiKey(trimmedApiKey);
+    if (trimmedApiKey) {
+      setActiveApiKey(trimmedApiKey);
+    } else {
+      clearActiveApiKey();
+    }
     setKeyError("");
     setSaved(true);
   }

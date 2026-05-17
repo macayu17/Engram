@@ -16,6 +16,9 @@ const packageJson = JSON.parse(read("package.json"));
 const proxyPath = existsSync(join(root, "src", "proxy.ts")) ? "src/proxy.ts" : "proxy.ts";
 const proxySource = existsSync(join(root, proxyPath)) ? read(proxyPath) : "";
 const layoutSource = read("src/app/layout.tsx");
+const apiSource = read("src/lib/api.ts");
+const bridgePath = "src/components/ClerkEngramBridge.tsx";
+const bridgeSource = existsSync(join(root, bridgePath)) ? read(bridgePath) : "";
 
 assertCheck("depends on @clerk/nextjs", Boolean(packageJson.dependencies?.["@clerk/nextjs"]));
 assertCheck("has proxy.ts", Boolean(proxySource));
@@ -29,6 +32,12 @@ assertCheck("places ClerkProvider inside body", layoutSource.indexOf("<body") !=
 assertCheck("guards missing publishable key", layoutSource.includes("NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY") && layoutSource.includes("Auth Not Configured"));
 assertCheck("uses Show components", layoutSource.includes("<Show when=\"signed-out\">") && layoutSource.includes("<Show when=\"signed-in\">"));
 assertCheck("does not use deprecated signed components", !layoutSource.includes("SignedIn") && !layoutSource.includes("SignedOut"));
+assertCheck("renders Clerk Engram bridge", layoutSource.includes("ClerkEngramBridge"));
+assertCheck("has Clerk Engram bridge component", Boolean(bridgeSource));
+assertCheck("bridge reads Clerk user", bridgeSource.includes("useUser") && bridgeSource.includes("from \"@clerk/nextjs\""));
+assertCheck("bridge creates Engram user", bridgeSource.includes("api.users.create"));
+assertCheck("bridge scopes API key by Clerk user", bridgeSource.includes("readClerkApiKey") && bridgeSource.includes("setClerkApiKey") && apiSource.includes("engram_api_key:clerk:"));
+assertCheck("bridge clears active key when signed out", bridgeSource.includes("clearActiveApiKey"));
 
 const failedChecks = checks.filter((check) => !check.passed);
 

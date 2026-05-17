@@ -10,5 +10,6 @@ dist/
 coverage/
 htmlcov/
 *.pyc
+*.tsbuildinfo
 *.log
 pgdata/

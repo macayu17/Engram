@@ -24,6 +24,8 @@ POSTGRES_PASSWORD=replace_with_a_strong_password
 EXTRACTION_PROVIDER=openai
 OPENAI_API_KEY=your_key_here
 MCP_SERVICE_KEY=
+NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=your_clerk_publishable_key
+CLERK_SECRET_KEY=your_clerk_secret_key
 ```
 
 3. Start the stack.
@@ -66,6 +68,27 @@ curl http://localhost:8000/memories \
 ```
 
 7. Open the dashboard at `http://localhost:3001` and save the same API key in Settings.
+
+## Dashboard Login
+
+The dashboard uses Clerk for sign-in and account management.
+
+1. Create a Clerk application from the Clerk dashboard.
+
+2. Copy the keys into `.env`.
+
+```bash
+NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_...
+CLERK_SECRET_KEY=sk_test_...
+```
+
+3. Rebuild the dashboard if you are running through Docker.
+
+```bash
+docker compose up -d --build dashboard
+```
+
+4. Open `http://localhost:3001`, use Create Account in the top nav, and sign up as the first dashboard user.
 
 ## Supabase Postgres
 
@@ -247,4 +270,4 @@ python -m api.test_proxy_flow
 
 ## Scope
 
-Engram v1 intentionally avoids OAuth, JWT, rate limiting, streaming proxy support, external vector stores, Redis, Celery, LangChain, and LlamaIndex. The focus is the inspectable memory loop: retrieve, inject, forward, extract, deduplicate, store, and expose through REST, MCP, and dashboard surfaces.
+Engram v1 intentionally avoids API JWT auth, rate limiting, streaming proxy support, external vector stores, Redis, Celery, LangChain, and LlamaIndex. The focus is the inspectable memory loop: retrieve, inject, forward, extract, deduplicate, store, and expose through REST, MCP, and dashboard surfaces. Dashboard sign-in is handled separately through Clerk.

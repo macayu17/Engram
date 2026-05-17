@@ -62,12 +62,80 @@ export type ChatResponse = {
 };
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+const ACTIVE_API_KEY_STORAGE_KEY = "engram_api_key";
+export const CLERK_API_KEY_STORAGE_PREFIX = "engram_api_key:clerk:";
+export const ACTIVE_API_KEY_CHANGED_EVENT = "engram-api-key-changed";
+
+function storageAvailable(): boolean {
+  return typeof window !== "undefined";
+}
+
+export function readActiveApiKey(): string {
+  if (!storageAvailable()) {
+    return "";
+  }
+  return localStorage.getItem(ACTIVE_API_KEY_STORAGE_KEY) ?? "";
+}
+
+export function setActiveApiKey(apiKey: string): void {
+  if (!storageAvailable()) {
+    return;
+  }
+  localStorage.setItem(ACTIVE_API_KEY_STORAGE_KEY, apiKey);
+  window.dispatchEvent(new Event(ACTIVE_API_KEY_CHANGED_EVENT));
+}
+
+export function clearActiveApiKey(): void {
+  if (!storageAvailable()) {
+    return;
+  }
+  localStorage.removeItem(ACTIVE_API_KEY_STORAGE_KEY);
+  window.dispatchEvent(new Event(ACTIVE_API_KEY_CHANGED_EVENT));
+}
+
+export function readClerkApiKey(clerkUserId: string): string {
+  if (!storageAvailable()) {
+    return "";
+  }
+  return localStorage.getItem(`${CLERK_API_KEY_STORAGE_PREFIX}${clerkUserId}`) ?? "";
+}
+
+export function setClerkApiKey(clerkUserId: string, apiKey: string): void {
+  if (!storageAvailable()) {
+    return;
+  }
+  localStorage.setItem(`${CLERK_API_KEY_STORAGE_PREFIX}${clerkUserId}`, apiKey);
+}
+
+export function clearClerkApiKey(clerkUserId: string): void {
+  if (!storageAvailable()) {
+    return;
+  }
+  localStorage.removeItem(`${CLERK_API_KEY_STORAGE_PREFIX}${clerkUserId}`);
+}
+
+export function subscribeActiveApiKey(listener: () => void): () => void {
+  if (!storageAvailable()) {
+    return () => undefined;
+  }
+  const storageListener = (event: StorageEvent) => {
+    if (event.key === ACTIVE_API_KEY_STORAGE_KEY || event.key?.startsWith(CLERK_API_KEY_STORAGE_PREFIX)) {
+      listener();
+    }
+  };
+  window.addEventListener(ACTIVE_API_KEY_CHANGED_EVENT, listener);
+  window.addEventListener("storage", storageListener);
+  return () => {
+    window.removeEventListener(ACTIVE_API_KEY_CHANGED_EVENT, listener);
+    window.removeEventListener("storage", storageListener);
+  };
+}
 
 function getApiKey(): string {
   if (typeof window === "undefined") {
     return "";
   }
-  return localStorage.getItem("engram_api_key") ?? "";
+  return readActiveApiKey();
 }
 
 function toQuery(params?: Record<string, string | number | undefined>): string {

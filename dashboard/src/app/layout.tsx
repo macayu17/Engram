@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import Script from "next/script";
 
+import { ClerkEngramBridge } from "@/components/ClerkEngramBridge";
 import { CommandPalette } from "@/components/CommandPalette";
 import { Providers } from "@/components/Providers";
 import { ThemeToggle } from "@/components/ThemeToggle";
@@ -42,6 +43,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 function DashboardShell({ authEnabled, children }: { authEnabled: boolean; children: React.ReactNode }) {
   return (
     <Providers>
+      {authEnabled && <ClerkEngramBridge />}
       <div className="min-h-screen">
         <header className="sticky top-0 z-40 border-b border-line bg-paper/95 backdrop-blur">
           <div className="mx-auto grid min-h-14 max-w-7xl grid-cols-[1fr_auto] items-center gap-4 px-4 py-3 md:grid-cols-[220px_1fr_340px] md:px-6">

@@ -6,6 +6,7 @@ import { FormEvent, KeyboardEvent, useMemo, useState } from "react";
 
 import { api, type ChatMessage } from "@/lib/api";
 import { cn } from "@/lib/cn";
+import { useActiveApiKey } from "@/lib/useActiveApiKey";
 
 type VisualMessage = {
   id: string;
@@ -15,19 +16,12 @@ type VisualMessage = {
   conversationId?: string;
 };
 
-function readStoredApiKey(): string {
-  if (typeof window === "undefined") {
-    return "";
-  }
-  return localStorage.getItem("engram_api_key") ?? "";
-}
-
 export function ChatWorkspace() {
   const [draft, setDraft] = useState("");
   const [provider, setProvider] = useState("openai");
   const [model, setModel] = useState("gpt-4o-mini");
   const [messages, setMessages] = useState<VisualMessage[]>([]);
-  const [apiKey] = useState(readStoredApiKey);
+  const apiKey = useActiveApiKey();
   const [error, setError] = useState("");
   const userQuery = useQuery({
     queryKey: ["current-user", apiKey],

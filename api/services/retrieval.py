@@ -7,9 +7,21 @@ from api.services.embedding import embed, format_embedding_for_pgvector
 
 
 QUERY_EXPANSIONS = {
+    "building": (
+        "user current project name what building",
+        "user is currently working on a project",
+    ),
+    "project": (
+        "user current project name what building",
+        "user is currently working on a project",
+    ),
     "tech stack": (
         "backend development framework preferences FastAPI Flask Python",
         "frontend work programming language preferences TypeScript JavaScript",
+    ),
+    "working on": (
+        "user current project name what building",
+        "user is currently working on a project",
     ),
 }
 

@@ -119,7 +119,7 @@ export function ChatWorkspace() {
           onClick={clearChat}
           className="inline-flex items-center gap-2 border border-line px-4 py-2 font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-muted hover:border-signal hover:text-signal"
         >
-          Clear
+          Clear View
         </button>
       </div>
 

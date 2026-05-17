@@ -5,6 +5,7 @@ import { Plus, RefreshCw } from "lucide-react";
 import { FormEvent, useState } from "react";
 
 import { api, type SearchResponse } from "@/lib/api";
+import { MemoryConstellation } from "./MemoryConstellation";
 import { MemoryCard } from "./MemoryCard";
 import { MemoryTable } from "./MemoryTable";
 import { SearchBar } from "./SearchBar";
@@ -54,18 +55,21 @@ export function MemoryWorkspace() {
 
   return (
     <section className="space-y-16">
-      <div className="mx-auto max-w-3xl text-center">
-        <p className="font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-muted">The Engram memory ledger · Vol. 01</p>
-        <h1 className="mt-6 font-serif text-5xl font-bold leading-tight text-ink md:text-7xl">
-          Every durable <span className="italic text-signal">memory.</span>
-          <br />
-          Inspectable.
-        </h1>
-        <p className="mx-auto mt-6 max-w-xl font-serif text-lg leading-8 text-muted">
-          A quiet archive of the facts Engram has learned, the searches that surfaced them, and the user key that owns them.
-        </p>
-        <div className="mt-8 font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-muted">
-          {total} memories · pgvector retrieval · async extraction
+      <div className="relative -mx-4 -mt-10 min-h-[30rem] overflow-hidden border-b border-line px-4 py-16 sm:-mx-6 sm:px-6 md:-mt-16 md:min-h-[34rem] md:py-20">
+        <MemoryConstellation />
+        <div className="relative z-10 mx-auto max-w-3xl text-center">
+          <p className="font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-muted">The Engram memory ledger · Vol. 01</p>
+          <h1 className="mt-6 font-serif text-5xl font-bold leading-tight text-ink md:text-7xl">
+            Every durable <span className="italic text-signal">memory.</span>
+            <br />
+            Inspectable.
+          </h1>
+          <p className="mx-auto mt-6 max-w-xl font-serif text-lg leading-8 text-muted">
+            A quiet archive of the facts Engram has learned, the searches that surfaced them, and the user key that owns them.
+          </p>
+          <div className="mt-8 font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-muted">
+            {total} memories · pgvector retrieval · async extraction
+          </div>
         </div>
       </div>
 

@@ -87,6 +87,160 @@ body {
   background: rgb(11 10 9);
 }
 
+.memory-constellation {
+  color: rgb(var(--color-ink));
+  opacity: 0.92;
+}
+
+.memory-constellation__ledger {
+  background-image:
+    linear-gradient(rgb(var(--color-line) / 0.28) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(var(--color-line) / 0.22) 1px, transparent 1px);
+  background-size: 72px 72px;
+  inset: -18% -12%;
+  opacity: 0.16;
+  position: absolute;
+  transform: rotate(-6deg);
+}
+
+.memory-constellation__scan {
+  animation: memory-scan-drift 20s ease-in-out infinite alternate;
+  display: grid;
+  gap: 0.42rem;
+  left: 8%;
+  opacity: 0.36;
+  position: absolute;
+  top: 3%;
+  transform: rotate(-9deg);
+  width: min(22rem, 42vw);
+}
+
+.memory-constellation__scan span {
+  animation: memory-row-fade 6s ease-in-out infinite;
+  animation-delay: calc(var(--row-index) * 220ms);
+  border-bottom: 1px solid rgb(var(--color-line) / 0.35);
+  color: rgb(var(--color-muted));
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: 0.56rem;
+  letter-spacing: 0.08em;
+  line-height: 1;
+  overflow: hidden;
+  padding-bottom: 0.18rem;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.memory-constellation__network {
+  animation: memory-field-drift 18s ease-in-out infinite alternate;
+  bottom: -7rem;
+  height: min(42rem, 78vw);
+  left: 50%;
+  position: absolute;
+  transform: translateX(-50%);
+  width: min(82rem, 132vw);
+}
+
+.memory-constellation__mesh path,
+.memory-constellation__paths path {
+  fill: none;
+  stroke: rgb(var(--color-muted));
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.memory-constellation__mesh path {
+  opacity: 0.24;
+  stroke-width: 1;
+}
+
+.memory-constellation__paths path {
+  opacity: 0.38;
+  stroke-width: 1.35;
+}
+
+.memory-constellation__nodes circle {
+  animation: memory-node-pulse 5.5s ease-in-out infinite;
+  fill: rgb(var(--color-muted));
+  opacity: 0.7;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+.memory-constellation__nodes circle:nth-child(3n) {
+  animation-delay: 0.8s;
+  fill: rgb(var(--color-signal));
+}
+
+.memory-constellation__nodes circle:nth-child(4n) {
+  animation-delay: 1.4s;
+}
+
+.memory-constellation__flow path {
+  animation: memory-line-flow 7.5s linear infinite;
+  fill: none;
+  opacity: 0.85;
+  stroke: rgb(var(--color-signal));
+  stroke-dasharray: 0.1 24;
+  stroke-linecap: round;
+  stroke-width: 2.1;
+}
+
+.memory-constellation__flow path:nth-child(2) {
+  animation-delay: 1.4s;
+}
+
+.memory-constellation__flow path:nth-child(3) {
+  animation-delay: 2.8s;
+}
+
+.memory-constellation__beacons circle {
+  animation: memory-beacon-pulse 3.2s ease-in-out infinite;
+  fill: rgb(var(--color-signal));
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+.memory-constellation__beacons circle:nth-child(2) {
+  animation-delay: 1s;
+}
+
+.memory-constellation__beacons circle:nth-child(3) {
+  animation-delay: 1.8s;
+}
+
+.memory-constellation__labels {
+  inset: 0;
+  position: absolute;
+}
+
+.memory-constellation__label {
+  animation: memory-label-float 8s ease-in-out infinite alternate;
+  color: rgb(var(--color-muted));
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: 0.55rem;
+  letter-spacing: 0.08em;
+  opacity: 0.55;
+  position: absolute;
+  text-transform: uppercase;
+}
+
+.memory-constellation__label--one {
+  left: 15%;
+  top: 17%;
+  transform: rotate(-16deg);
+}
+
+.memory-constellation__label--two {
+  bottom: 18%;
+  left: 31%;
+}
+
+.memory-constellation__label--three {
+  right: 12%;
+  top: 39%;
+  transform: rotate(12deg);
+}
+
 @keyframes theme-fallback-wave {
   from {
     transform: scale(0);
@@ -94,6 +248,104 @@ body {
 
   to {
     transform: scale(1);
+  }
+}
+
+@keyframes memory-field-drift {
+  from {
+    transform: translateX(-51%) translateY(0) scale(1);
+  }
+
+  to {
+    transform: translateX(-49%) translateY(-0.75rem) scale(1.015);
+  }
+}
+
+@keyframes memory-scan-drift {
+  from {
+    transform: translateY(0) rotate(-9deg);
+  }
+
+  to {
+    transform: translateY(1rem) rotate(-8deg);
+  }
+}
+
+@keyframes memory-row-fade {
+  0%,
+  100% {
+    opacity: 0.22;
+  }
+
+  48%,
+  62% {
+    opacity: 0.72;
+  }
+}
+
+@keyframes memory-line-flow {
+  from {
+    stroke-dashoffset: 0;
+  }
+
+  to {
+    stroke-dashoffset: -240;
+  }
+}
+
+@keyframes memory-node-pulse {
+  0%,
+  100% {
+    opacity: 0.38;
+    transform: scale(0.9);
+  }
+
+  50% {
+    opacity: 0.82;
+    transform: scale(1.15);
+  }
+}
+
+@keyframes memory-beacon-pulse {
+  0%,
+  100% {
+    opacity: 0.58;
+    transform: scale(0.86);
+  }
+
+  50% {
+    opacity: 1;
+    transform: scale(1.7);
+  }
+}
+
+@keyframes memory-label-float {
+  from {
+    opacity: 0.35;
+  }
+
+  to {
+    opacity: 0.68;
+  }
+}
+
+@media (max-width: 768px) {
+  .memory-constellation__scan {
+    left: -6%;
+    opacity: 0.26;
+    top: 2%;
+    width: 18rem;
+  }
+
+  .memory-constellation__network {
+    bottom: -4rem;
+    height: 31rem;
+    left: 47%;
+    width: 58rem;
+  }
+
+  .memory-constellation__label--three {
+    display: none;
   }
 }
 
@@ -109,5 +361,15 @@ body {
   .theme-fallback-wave {
     animation: none;
     transform: scale(1);
+  }
+
+  .memory-constellation__network,
+  .memory-constellation__scan,
+  .memory-constellation__scan span,
+  .memory-constellation__nodes circle,
+  .memory-constellation__flow path,
+  .memory-constellation__beacons circle,
+  .memory-constellation__label {
+    animation: none;
   }
 }

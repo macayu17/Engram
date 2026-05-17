@@ -58,15 +58,42 @@ export function MemoryWorkspace() {
     <section className="space-y-16">
       <div className="memory-hero-frame relative -mx-4 -mt-10 min-h-[35rem] overflow-hidden border-b border-line px-4 py-16 sm:-mx-6 sm:px-6 md:-mt-16 md:min-h-[38rem] md:py-20">
         <MemoryConstellation />
+        <div className="memory-hero-orbit" aria-hidden="true">
+          <div className="memory-hero-orbit__halo" />
+          <div className="memory-hero-orbit__halo memory-hero-orbit__halo--inner" />
+          <div className="memory-hero-orbit__cross memory-hero-orbit__cross--x" />
+          <div className="memory-hero-orbit__cross memory-hero-orbit__cross--y" />
+          <div className="memory-hero-orbit__beacon" />
+          <div className="memory-hero-orbit__needle memory-hero-orbit__needle--one" />
+          <div className="memory-hero-orbit__needle memory-hero-orbit__needle--two" />
+          <div className="memory-hero-orbit__needle memory-hero-orbit__needle--three" />
+          <div className="memory-hero-orbit__chip memory-hero-orbit__chip--one">
+            <span>fact</span>
+            <strong>0.84</strong>
+          </div>
+          <div className="memory-hero-orbit__chip memory-hero-orbit__chip--two">
+            <span>rank</span>
+            <strong>pgv</strong>
+          </div>
+          <div className="memory-hero-orbit__chip memory-hero-orbit__chip--three">
+            <span>inject</span>
+            <strong>ctx</strong>
+          </div>
+          <div className="memory-hero-orbit__rail">
+            <span>embed</span>
+            <span>search</span>
+            <span>merge</span>
+          </div>
+        </div>
         <div className="relative z-10 mx-auto flex max-w-7xl items-center">
-          <div className="max-w-3xl">
+          <div className="w-full min-w-0 max-w-3xl">
             <p className="font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-muted">The Engram memory ledger · Vol. 01</p>
-            <h1 className="mt-6 font-serif text-5xl font-bold leading-tight text-ink md:text-7xl">
+            <h1 className="mt-6 max-w-full font-serif text-[2.8rem] font-bold leading-tight text-ink sm:text-5xl md:text-7xl">
               Every durable <span className="italic text-signal">memory.</span>
               <br />
               Inspectable.
             </h1>
-            <p className="mt-6 max-w-xl font-serif text-lg leading-8 text-muted">
+            <p className="mt-6 max-w-[20rem] font-serif text-lg leading-8 text-muted sm:max-w-[min(36rem,100%)]">
               Watch user facts move from conversation to vector retrieval, then inspect exactly what Engram injected.
             </p>
             <div className="mt-8 flex flex-wrap gap-3">
@@ -86,7 +113,7 @@ export function MemoryWorkspace() {
                 Test Chat
               </Link>
             </div>
-            <div className="mt-8 grid max-w-lg grid-cols-3 border-y border-line py-4 font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-muted">
+            <div className="mt-8 grid w-full max-w-lg grid-cols-1 gap-3 border-y border-line py-4 font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-muted sm:grid-cols-3 sm:gap-0">
               <span>{total} memories</span>
               <span>pgvector</span>
               <span>async extract</span>

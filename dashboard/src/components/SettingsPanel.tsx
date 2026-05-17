@@ -19,10 +19,12 @@ export function SettingsPanel() {
   const [apiKey, setApiKey] = useState(readStoredApiKey);
   const [draftApiKey, setDraftApiKey] = useState(readStoredApiKey);
   const [saved, setSaved] = useState(false);
+  const [keyError, setKeyError] = useState("");
+  const malformedApiKey = Boolean(apiKey) && !apiKey.startsWith("ek_");
   const userQuery = useQuery({
     queryKey: ["current-user", apiKey],
     queryFn: () => api.users.me(),
-    enabled: Boolean(apiKey),
+    enabled: Boolean(apiKey) && !malformedApiKey,
   });
   const deleteAccountMutation = useMutation({
     mutationFn: () => api.users.deleteMe(),
@@ -44,8 +46,15 @@ export function SettingsPanel() {
 
   function saveApiKey(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    localStorage.setItem("engram_api_key", draftApiKey.trim());
-    setApiKey(draftApiKey.trim());
+    const trimmedApiKey = draftApiKey.trim();
+    if (trimmedApiKey && !trimmedApiKey.startsWith("ek_")) {
+      setKeyError("Use an Engram key that starts with ek_. OpenAI keys belong in the server .env file.");
+      setSaved(false);
+      return;
+    }
+    localStorage.setItem("engram_api_key", trimmedApiKey);
+    setApiKey(trimmedApiKey);
+    setKeyError("");
     setSaved(true);
   }
 
@@ -91,6 +100,7 @@ export function SettingsPanel() {
               onChange={(event) => {
                 setDraftApiKey(event.target.value);
                 setSaved(false);
+                setKeyError("");
               }}
               placeholder="ek_..."
               className="min-h-11 min-w-0 flex-1 rounded border border-line bg-ink px-3 font-mono text-sm text-zinc-100 outline-none focus:border-signal"
@@ -113,13 +123,16 @@ export function SettingsPanel() {
               Save
             </button>
           </div>
+          {keyError && <p className="mt-3 text-sm text-fault">{keyError}</p>}
           {saved && <p className="mt-3 text-sm text-signal">Saved.</p>}
         </form>
 
         <div className="rounded border border-line bg-panel p-5 shadow-grid">
           <h2 className="font-semibold">Current User</h2>
           {apiKey ? (
-            userQuery.isLoading ? (
+            malformedApiKey ? (
+              <p className="mt-4 text-sm text-fault">Use an Engram key that starts with ek_.</p>
+            ) : userQuery.isLoading ? (
               <p className="mt-4 text-sm text-zinc-500">Loading user...</p>
             ) : userQuery.isError ? (
               <p className="mt-4 text-sm text-fault">Unable to authenticate this key.</p>

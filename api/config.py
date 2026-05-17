@@ -3,6 +3,9 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
     database_url: str = "postgresql://engram:engram@localhost:5432/engram"
+    database_min_pool_size: int = 2
+    database_max_pool_size: int = 10
+    database_statement_cache_size: int = 100
     extraction_provider: str = "openai"
     openai_api_key: str = ""
     openai_base_url: str = "https://api.openai.com/v1"

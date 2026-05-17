@@ -19,6 +19,7 @@ const layoutSource = read("src/app/layout.tsx");
 const apiSource = read("src/lib/api.ts");
 const bridgePath = "src/components/ClerkEngramBridge.tsx";
 const bridgeSource = existsSync(join(root, bridgePath)) ? read(bridgePath) : "";
+const missingAuthLabel = ["Auth", "Not", "Configured"].join(" ");
 
 assertCheck("depends on @clerk/nextjs", Boolean(packageJson.dependencies?.["@clerk/nextjs"]));
 assertCheck("has proxy.ts", Boolean(proxySource));
@@ -29,7 +30,8 @@ assertCheck("does not use authMiddleware", !proxySource.includes("authMiddleware
 assertCheck("imports Clerk components", layoutSource.includes("ClerkProvider") && layoutSource.includes("Show") && layoutSource.includes("SignInButton") && layoutSource.includes("SignUpButton") && layoutSource.includes("UserButton"));
 assertCheck("imports from @clerk/nextjs", layoutSource.includes("from \"@clerk/nextjs\"") || layoutSource.includes("from '@clerk/nextjs'"));
 assertCheck("places ClerkProvider inside body", layoutSource.indexOf("<body") !== -1 && layoutSource.indexOf("<ClerkProvider") > layoutSource.indexOf("<body"));
-assertCheck("guards missing publishable key", layoutSource.includes("NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY") && layoutSource.includes("Auth Not Configured"));
+assertCheck("guards missing publishable key", layoutSource.includes("NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY") && layoutSource.includes("authEnabled={false}"));
+assertCheck("hides missing publishable key warning", !layoutSource.includes(missingAuthLabel));
 assertCheck("uses Show components", layoutSource.includes("<Show when=\"signed-out\">") && layoutSource.includes("<Show when=\"signed-in\">"));
 assertCheck("does not use deprecated signed components", !layoutSource.includes("SignedIn") && !layoutSource.includes("SignedOut"));
 assertCheck("renders Clerk Engram bridge", layoutSource.includes("ClerkEngramBridge"));

@@ -101,7 +101,7 @@ function DashboardShell({ authEnabled, children }: { authEnabled: boolean; child
 
 function AuthControls({ enabled }: { enabled: boolean }) {
   if (!enabled) {
-    return <span className="text-caution">Auth Not Configured</span>;
+    return null;
   }
   return (
     <>

@@ -5,15 +5,15 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        ink: "#111318",
-        panel: "#181b22",
-        line: "#2a2f3a",
-        signal: "#45d19a",
-        caution: "#e6b450",
-        fault: "#e05f5f",
-      },
-      boxShadow: {
-        grid: "0 0 0 1px rgba(255,255,255,0.06)",
+        paper: "#FBFBF9",
+        ink: "#1A1A18",
+        panel: "#FFFFFF",
+        muted: "#6B6B63",
+        line: "#E5E5DF",
+        tag: "#F0F0EA",
+        signal: "#C96A1A",
+        caution: "#8B6F2D",
+        fault: "#B42318",
       },
     },
   },

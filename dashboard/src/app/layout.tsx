@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { Database, History, Settings } from "lucide-react";
 
+import { CommandPalette } from "@/components/CommandPalette";
 import { Providers } from "@/components/Providers";
 import "./globals.css";
 
@@ -13,37 +13,35 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body className="min-h-screen bg-ink text-zinc-100 antialiased">
+      <body className="min-h-screen bg-paper text-ink antialiased">
         <Providers>
           <div className="min-h-screen">
-            <header className="border-b border-line bg-panel/80">
-              <div className="mx-auto flex max-w-7xl flex-col gap-4 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+            <header className="sticky top-0 z-40 border-b border-line bg-paper/95 backdrop-blur">
+              <div className="mx-auto grid min-h-14 max-w-7xl grid-cols-[1fr_auto] items-center gap-4 px-4 py-3 md:grid-cols-[220px_1fr_220px] md:px-6">
                 <Link href="/" className="flex items-center gap-3">
-                  <span className="flex h-9 w-9 items-center justify-center rounded border border-signal/40 bg-signal/10 text-signal">
-                    <Database size={18} aria-hidden="true" />
-                  </span>
-                  <span>
-                    <span className="block text-base font-semibold tracking-wide">Engram</span>
-                    <span className="block text-xs uppercase text-zinc-500">Memory Control Plane</span>
+                  <span className="flex h-8 w-8 items-center justify-center rounded bg-tag font-serif text-sm font-bold text-signal">E</span>
+                  <span className="font-serif text-lg leading-none">
+                    <span className="text-ink">En</span>
+                    <span className="italic text-signal">gram</span>
                   </span>
                 </Link>
-                <nav className="flex gap-2 text-sm">
-                  <Link className="flex items-center gap-2 rounded border border-line px-3 py-2 text-zinc-300 hover:border-signal/50 hover:text-white" href="/">
-                    <Database size={16} aria-hidden="true" />
+                <div className="col-span-2 row-start-2 flex justify-center md:col-span-1 md:row-start-auto">
+                  <CommandPalette />
+                </div>
+                <nav className="flex justify-end gap-5 font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-muted">
+                  <Link className="hover:text-signal" href="/">
                     Memories
                   </Link>
-                  <Link className="flex items-center gap-2 rounded border border-line px-3 py-2 text-zinc-300 hover:border-signal/50 hover:text-white" href="/logs">
-                    <History size={16} aria-hidden="true" />
+                  <Link className="hover:text-signal" href="/logs">
                     Logs
                   </Link>
-                  <Link className="flex items-center gap-2 rounded border border-line px-3 py-2 text-zinc-300 hover:border-signal/50 hover:text-white" href="/settings">
-                    <Settings size={16} aria-hidden="true" />
+                  <Link className="hover:text-signal" href="/settings">
                     Settings
                   </Link>
                 </nav>
               </div>
             </header>
-            <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6">{children}</main>
+            <main className="mx-auto max-w-7xl px-4 py-10 sm:px-6 md:py-16">{children}</main>
           </div>
         </Providers>
       </body>

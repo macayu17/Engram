@@ -32,19 +32,19 @@ export function SearchBar({ onResults }: { onResults: (results: SearchResponse["
   }
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-2 sm:flex-row">
-      <label className="flex min-h-11 flex-1 items-center gap-2 rounded border border-line bg-ink px-3 text-sm text-zinc-200 focus-within:border-signal">
-        <Search size={16} aria-hidden="true" className="text-zinc-500" />
+    <form onSubmit={handleSubmit} className="flex flex-col gap-3 sm:flex-row">
+      <label className="flex min-h-12 flex-1 items-center gap-3 rounded-full border border-line bg-paper px-4 text-sm text-ink focus-within:border-signal">
+        <Search size={16} aria-hidden="true" className="text-muted" />
         <input
           value={query}
           onChange={(event) => setQuery(event.target.value)}
           placeholder="Search memories semantically"
-          className="min-w-0 flex-1 bg-transparent outline-none placeholder:text-zinc-600"
+          className="min-w-0 flex-1 bg-transparent font-serif text-base outline-none placeholder:text-muted"
         />
       </label>
       <button
         type="submit"
-        className="inline-flex min-h-11 items-center justify-center rounded border border-signal/40 bg-signal/10 px-4 text-sm font-medium text-signal hover:bg-signal/15 disabled:cursor-not-allowed disabled:opacity-50"
+        className="inline-flex min-h-12 items-center justify-center border border-ink px-5 font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-ink hover:border-signal hover:text-signal disabled:cursor-not-allowed disabled:opacity-50"
         disabled={isSearching}
       >
         {isSearching ? "Searching" : "Search"}

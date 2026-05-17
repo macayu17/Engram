@@ -1,3 +1,5 @@
+import type { CSSProperties } from "react";
+
 const leftNodes = [
   { cx: 74, cy: 72, r: 3 },
   { cx: 128, cy: 96, r: 2 },
@@ -64,19 +66,17 @@ export function MemoryConstellation() {
           ))}
         </g>
         <g className="memory-constellation__paths">
-          <path d="M284 268C432 210 526 184 628 214C730 244 760 154 902 168" />
-          <path d="M236 420C364 354 472 356 572 392C688 434 740 338 894 316" />
-          <path d="M312 126C470 98 548 126 620 168C710 220 754 250 910 248" />
+          <path d="M284 268C430 212 526 184 628 214C726 243 776 247 900 246" />
+          <path d="M236 420C364 354 472 356 572 392C688 434 758 302 900 246" />
+          <path d="M312 126C470 98 548 126 620 168C710 220 770 244 900 246" />
         </g>
         <g className="memory-constellation__flow">
-          <path d="M284 268C432 210 526 184 628 214C730 244 760 154 902 168" />
-          <path d="M236 420C364 354 472 356 572 392C688 434 740 338 894 316" />
-          <path d="M312 126C470 98 548 126 620 168C710 220 754 250 910 248" />
+          <path d="M284 268C430 212 526 184 628 214C726 243 776 247 900 246" />
+          <path d="M236 420C364 354 472 356 572 392C688 434 758 302 900 246" />
+          <path d="M312 126C470 98 548 126 620 168C710 220 770 244 900 246" />
         </g>
         <g className="memory-constellation__beacons" filter="url(#memory-signal-glow)">
-          <circle cx="902" cy="168" r="5" />
-          <circle cx="894" cy="316" r="4" />
-          <circle cx="620" cy="168" r="3" />
+          <circle cx="900" cy="246" r="5" />
         </g>
       </svg>
       <div className="memory-constellation__labels">
@@ -87,4 +87,3 @@ export function MemoryConstellation() {
     </div>
   );
 }
-import type { CSSProperties } from "react";

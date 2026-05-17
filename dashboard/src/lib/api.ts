@@ -50,6 +50,17 @@ export type UserCreateResponse = User & {
   api_key: string;
 };
 
+export type ChatMessage = {
+  role: "system" | "user" | "assistant";
+  content: string;
+};
+
+export type ChatResponse = {
+  content: string;
+  conversationId: string;
+  injectedCount: number;
+};
+
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
 function getApiKey(): string {
@@ -70,12 +81,13 @@ function toQuery(params?: Record<string, string | number | undefined>): string {
   return query ? `?${query}` : "";
 }
 
-async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
+async function request<T>(method: string, path: string, body?: unknown, extraHeaders?: Record<string, string>): Promise<T> {
   const response = await fetch(`${BASE_URL}${path}`, {
     method,
     headers: {
       "Content-Type": "application/json",
       "X-Engram-Key": getApiKey(),
+      ...extraHeaders,
     },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
@@ -88,7 +100,35 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
   return response.json() as Promise<T>;
 }
 
+async function requestChat(params: { externalId: string; provider: string; model: string; messages: ChatMessage[] }): Promise<ChatResponse> {
+  const response = await fetch(`${BASE_URL}/v1/chat`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Engram-Key": getApiKey(),
+      "X-Engram-User-ID": params.externalId,
+      "X-Engram-Provider": params.provider,
+    },
+    body: JSON.stringify({
+      model: params.model,
+      messages: params.messages,
+    }),
+  });
+  if (!response.ok) {
+    throw new Error(`API error: ${response.status}`);
+  }
+  const payload = await response.json() as { choices?: Array<{ message?: { content?: string } }> };
+  return {
+    content: payload.choices?.[0]?.message?.content ?? JSON.stringify(payload),
+    conversationId: response.headers.get("X-Engram-Conversation-ID") ?? "",
+    injectedCount: Number(response.headers.get("X-Engram-Memories-Injected") ?? 0),
+  };
+}
+
 export const api = {
+  chat: {
+    send: requestChat,
+  },
   memories: {
     list: (params?: { limit?: number; offset?: number; search?: string; order?: string; direction?: string }) =>
       request<MemoryListResponse>("GET", `/memories${toQuery(params)}`),

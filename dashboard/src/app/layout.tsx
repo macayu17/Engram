@@ -43,6 +43,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                     <Link className="hover:text-signal" href="/">
                       Memories
                     </Link>
+                    <Link className="hover:text-signal" href="/chat">
+                      Chat
+                    </Link>
                     <Link className="hover:text-signal" href="/logs">
                       Logs
                     </Link>
@@ -58,6 +61,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <nav className="fixed inset-x-0 bottom-0 z-40 flex justify-around border-t border-line bg-paper/95 px-4 py-3 font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-muted backdrop-blur sm:hidden">
               <Link className="hover:text-signal" href="/">
                 Memories
+              </Link>
+              <Link className="hover:text-signal" href="/chat">
+                Chat
               </Link>
               <Link className="hover:text-signal" href="/logs">
                 Logs

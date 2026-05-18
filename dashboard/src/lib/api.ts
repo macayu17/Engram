@@ -66,7 +66,7 @@ export type ChatResponse = {
   injectedCount: number;
 };
 
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+const API_BASE_URL = (process.env.NEXT_PUBLIC_API_URL?.trim() || "http://localhost:8000").replace(/\/+$/, "");
 const ACTIVE_API_KEY_STORAGE_KEY = "engram_api_key";
 export const CLERK_API_KEY_STORAGE_PREFIX = "engram_api_key:clerk:";
 export const ACTIVE_API_KEY_CHANGED_EVENT = "engram-api-key-changed";
@@ -155,7 +155,7 @@ function toQuery(params?: Record<string, string | number | undefined>): string {
 }
 
 async function request<T>(method: string, path: string, body?: unknown, extraHeaders?: Record<string, string>): Promise<T> {
-  const response = await fetch(`${BASE_URL}${path}`, {
+  const response = await fetch(`${API_BASE_URL}${path}`, {
     method,
     headers: {
       "Content-Type": "application/json",
@@ -165,7 +165,7 @@ async function request<T>(method: string, path: string, body?: unknown, extraHea
     body: body === undefined ? undefined : JSON.stringify(body),
   });
   if (!response.ok) {
-    throw new Error(`API error: ${response.status}`);
+    throw new Error(await getResponseError(response, "API error"));
   }
   if (response.status === 204) {
     return undefined as T;
@@ -182,7 +182,7 @@ async function requestInternal<T>(method: string, path: string, body?: unknown):
     body: body === undefined ? undefined : JSON.stringify(body),
   });
   if (!response.ok) {
-    throw new Error(`Dashboard API error: ${response.status}`);
+    throw new Error(await getResponseError(response, "Dashboard API error"));
   }
   if (response.status === 204) {
     return undefined as T;
@@ -191,7 +191,7 @@ async function requestInternal<T>(method: string, path: string, body?: unknown):
 }
 
 async function requestChat(params: { externalId: string; provider: string; model: string; messages: ChatMessage[] }): Promise<ChatResponse> {
-  const response = await fetch(`${BASE_URL}/v1/chat`, {
+  const response = await fetch(`${API_BASE_URL}/v1/chat`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -205,7 +205,7 @@ async function requestChat(params: { externalId: string; provider: string; model
     }),
   });
   if (!response.ok) {
-    throw new Error(`API error: ${response.status}`);
+    throw new Error(await getResponseError(response, "API error"));
   }
   const payload = await response.json() as { choices?: Array<{ message?: { content?: string } }> };
   return {
@@ -233,9 +233,32 @@ export const api = {
       request<LogListResponse>("GET", `/logs${toQuery(params)}`),
   },
   users: {
-    create: (externalId: string) => request<UserCreateResponse>("POST", "/users", { external_id: externalId }),
+    create: (externalId: string) => requestInternal<UserCreateResponse>("POST", "/api/engram/users", { external_id: externalId }),
     ensureClerkKey: () => requestInternal<ClerkEngramKeyResponse>("POST", "/api/engram/user-key"),
     me: () => request<User>("GET", "/users/me"),
     deleteMe: () => request<void>("DELETE", "/users/me"),
   },
 };
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+async function getResponseError(response: Response, prefix: string): Promise<string> {
+  const body = await response.text();
+  if (!body) {
+    return `${prefix}: ${response.status}`;
+  }
+  try {
+    const parsed = JSON.parse(body) as unknown;
+    if (isRecord(parsed)) {
+      const detail = parsed.error ?? parsed.detail;
+      if (typeof detail === "string") {
+        return detail;
+      }
+    }
+  } catch {
+    return `${prefix}: ${response.status} ${body}`;
+  }
+  return `${prefix}: ${response.status} ${body}`;
+}

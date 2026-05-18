@@ -1,0 +1,12 @@
+api/
+mcp/
+docs/
+scripts/
+docker-compose.yml
+docker-compose.dev.yml
+docker-compose.supabase.yml
+AGENTS.md
+CONTRIBUTING.md
+.env
+.env.*
+!.env.example

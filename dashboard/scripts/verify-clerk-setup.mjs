@@ -25,7 +25,7 @@ const missingAuthLabel = ["Auth", "Not", "Configured"].join(" ");
 assertCheck("depends on @clerk/nextjs", Boolean(packageJson.dependencies?.["@clerk/nextjs"]));
 assertCheck("has proxy.ts", Boolean(proxySource));
 assertCheck("uses clerkMiddleware", proxySource.includes("clerkMiddleware()"));
-assertCheck("exports clerkMiddleware directly", proxySource.includes("export default clerkMiddleware()"));
+assertCheck("guards missing middleware key", proxySource.includes("NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY") && proxySource.includes("NextResponse.next"));
 assertCheck("imports middleware from server package", proxySource.includes("from \"@clerk/nextjs/server\"") || proxySource.includes("from '@clerk/nextjs/server'"));
 assertCheck("does not use authMiddleware", !proxySource.includes("authMiddleware"));
 assertCheck("imports Clerk provider in layout", layoutSource.includes("ClerkProvider"));

@@ -1,7 +1,6 @@
 "use client";
 
-import { Show, SignInButton, UserButton } from "@clerk/nextjs";
-
+import { Show, SignInButton, SignUpButton, UserButton } from "@clerk/nextjs";
 
 export function AuthControls({ enabled }: { enabled: boolean }) {
   if (!enabled) {
@@ -10,11 +9,18 @@ export function AuthControls({ enabled }: { enabled: boolean }) {
   return (
     <>
       <Show when="signed-out">
-        <SignInButton>
-          <button type="button" className="border border-line px-3 py-2 text-ink hover:border-signal hover:text-signal">
-            Sign In
-          </button>
-        </SignInButton>
+        <div className="flex items-center gap-3">
+          <SignInButton>
+            <button type="button" className="text-muted hover:text-signal">
+              Sign In
+            </button>
+          </SignInButton>
+          <SignUpButton>
+            <button type="button" className="hidden border border-line px-3 py-2 text-ink hover:border-signal hover:text-signal 2xl:inline-flex">
+              Join
+            </button>
+          </SignUpButton>
+        </div>
       </Show>
       <Show when="signed-in">
         <UserButton />

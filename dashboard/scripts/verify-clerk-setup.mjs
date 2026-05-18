@@ -20,6 +20,8 @@ const authControlsSource = read("src/components/AuthControls.tsx");
 const apiSource = read("src/lib/api.ts");
 const bridgePath = "src/components/ClerkEngramBridge.tsx";
 const bridgeSource = existsSync(join(root, bridgePath)) ? read(bridgePath) : "";
+const clerkRoutePath = "src/app/api/engram/user-key/route.ts";
+const clerkRouteSource = existsSync(join(root, clerkRoutePath)) ? read(clerkRoutePath) : "";
 const missingAuthLabel = ["Auth", "Not", "Configured"].join(" ");
 
 assertCheck("depends on @clerk/nextjs", Boolean(packageJson.dependencies?.["@clerk/nextjs"]));
@@ -41,9 +43,12 @@ assertCheck("does not use deprecated signed components", !layoutSource.includes(
 assertCheck("renders Clerk Engram bridge", layoutSource.includes("ClerkEngramBridge"));
 assertCheck("has Clerk Engram bridge component", Boolean(bridgeSource));
 assertCheck("bridge reads Clerk user", bridgeSource.includes("useUser") && bridgeSource.includes("from \"@clerk/nextjs\""));
-assertCheck("bridge creates Engram user", bridgeSource.includes("api.users.create"));
+assertCheck("bridge ensures Engram user key", bridgeSource.includes("api.users.ensureClerkKey"));
 assertCheck("bridge scopes API key by Clerk user", bridgeSource.includes("readClerkApiKey") && bridgeSource.includes("setClerkApiKey") && apiSource.includes("engram_api_key:clerk:"));
 assertCheck("bridge clears active key when signed out", bridgeSource.includes("clearActiveApiKey"));
+assertCheck("has Clerk key server route", Boolean(clerkRouteSource));
+assertCheck("server route uses Clerk auth", clerkRouteSource.includes("auth()") && clerkRouteSource.includes("from \"@clerk/nextjs/server\""));
+assertCheck("server route uses service key", clerkRouteSource.includes("ENGRAM_SERVICE_KEY") && clerkRouteSource.includes("X-Engram-Service-Key"));
 
 const failedChecks = checks.filter((check) => !check.passed);
 

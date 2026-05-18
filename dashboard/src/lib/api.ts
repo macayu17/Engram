@@ -50,6 +50,11 @@ export type UserCreateResponse = User & {
   api_key: string;
 };
 
+export type ClerkEngramKeyResponse = {
+  apiKey: string;
+  externalId: string;
+};
+
 export type ChatMessage = {
   role: "system" | "user" | "assistant";
   content: string;
@@ -168,6 +173,23 @@ async function request<T>(method: string, path: string, body?: unknown, extraHea
   return response.json() as Promise<T>;
 }
 
+async function requestInternal<T>(method: string, path: string, body?: unknown): Promise<T> {
+  const response = await fetch(path, {
+    method,
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+  if (!response.ok) {
+    throw new Error(`Dashboard API error: ${response.status}`);
+  }
+  if (response.status === 204) {
+    return undefined as T;
+  }
+  return response.json() as Promise<T>;
+}
+
 async function requestChat(params: { externalId: string; provider: string; model: string; messages: ChatMessage[] }): Promise<ChatResponse> {
   const response = await fetch(`${BASE_URL}/v1/chat`, {
     method: "POST",
@@ -212,6 +234,7 @@ export const api = {
   },
   users: {
     create: (externalId: string) => request<UserCreateResponse>("POST", "/users", { external_id: externalId }),
+    ensureClerkKey: () => requestInternal<ClerkEngramKeyResponse>("POST", "/api/engram/user-key"),
     me: () => request<User>("GET", "/users/me"),
     deleteMe: () => request<void>("DELETE", "/users/me"),
   },

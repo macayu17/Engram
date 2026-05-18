@@ -1,7 +1,6 @@
 import { ClerkProvider } from "@clerk/nextjs";
 import type { Metadata } from "next";
 import Link from "next/link";
-import Script from "next/script";
 
 import { AuthControls } from "@/components/AuthControls";
 import { ClerkEngramBridge } from "@/components/ClerkEngramBridge";
@@ -22,14 +21,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en" suppressHydrationWarning>
       <body className="min-h-screen bg-paper text-ink antialiased">
-        <Script
-          id="engram-theme"
-          strategy="beforeInteractive"
-          dangerouslySetInnerHTML={{
-            __html:
-              "try{var theme=localStorage.getItem('engram_theme');document.documentElement.dataset.theme=theme==='light'?'light':'dark'}catch{document.documentElement.dataset.theme='dark'}",
-          }}
-        />
         {clerkPublishableKey ? (
           <ClerkProvider publishableKey={clerkPublishableKey}>
             <DashboardShell authEnabled>{children}</DashboardShell>

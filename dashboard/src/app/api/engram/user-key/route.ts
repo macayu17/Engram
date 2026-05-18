@@ -1,8 +1,8 @@
 import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 
-const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
-const serviceKey = process.env.ENGRAM_SERVICE_KEY ?? "";
+const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL?.trim() || "http://localhost:8000";
+const serviceKey = process.env.ENGRAM_SERVICE_KEY?.trim() ?? "";
 
 export async function POST() {
   const { userId } = await auth();

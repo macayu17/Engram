@@ -2,6 +2,7 @@
 
 import { Moon, Sun } from "lucide-react";
 import { MouseEvent, useEffect, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 
 import { cn } from "@/lib/cn";
 
@@ -12,6 +13,7 @@ type ViewTransitionDocument = Document & {
 };
 
 const storageKey = "engram_theme";
+const transitionClassName = "theme-transition-active";
 
 function readStoredTheme(): ThemeMode {
   const storedTheme = localStorage.getItem(storageKey);
@@ -55,10 +57,14 @@ export function ThemeToggle() {
     root.style.setProperty("--theme-fallback-left", `${x - radius}px`);
     root.style.setProperty("--theme-fallback-top", `${y - radius}px`);
     root.style.setProperty("--theme-fallback-size", `${radius * 2}px`);
+    root.classList.add(transitionClassName);
 
     const transitionDocument = document as ViewTransitionDocument;
     if (transitionDocument.startViewTransition) {
-      transitionDocument.startViewTransition(() => switchTheme(nextThemeMode));
+      const transition = transitionDocument.startViewTransition(() => {
+        flushSync(() => switchTheme(nextThemeMode));
+      });
+      void transition.finished.finally(() => root.classList.remove(transitionClassName));
       return;
     }
 
@@ -66,7 +72,10 @@ export function ThemeToggle() {
     fallbackWaveId.current = id;
     setFallbackWave({ id, themeMode: nextThemeMode });
     window.setTimeout(() => switchTheme(nextThemeMode), 620);
-    window.setTimeout(() => setFallbackWave((wave) => (wave?.id === id ? null : wave)), 820);
+    window.setTimeout(() => {
+      root.classList.remove(transitionClassName);
+      setFallbackWave((wave) => (wave?.id === id ? null : wave));
+    }, 820);
   }
 
   const isDark = themeMode === "dark";

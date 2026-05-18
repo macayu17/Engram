@@ -45,7 +45,12 @@ html {
 body {
   background: rgb(var(--color-paper));
   overflow-x: hidden;
-  transition: background-color 180ms ease, color 180ms ease;
+}
+
+.theme-transition-active *,
+.theme-transition-active *::before,
+.theme-transition-active *::after {
+  transition: none !important;
 }
 
 ::selection {

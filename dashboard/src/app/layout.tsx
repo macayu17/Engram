@@ -6,6 +6,7 @@ import Script from "next/script";
 import { AuthControls } from "@/components/AuthControls";
 import { ClerkEngramBridge } from "@/components/ClerkEngramBridge";
 import { CommandPalette } from "@/components/CommandPalette";
+import { EngramLogo } from "@/components/EngramLogo";
 import { Providers } from "@/components/Providers";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import "./globals.css";
@@ -48,12 +49,8 @@ function DashboardShell({ authEnabled, children }: { authEnabled: boolean; child
       <div className="min-h-screen">
         <header className="sticky top-0 z-40 border-b border-line bg-paper/95 backdrop-blur">
           <div className="mx-auto grid min-h-14 max-w-7xl grid-cols-[1fr_auto] items-center gap-4 px-4 py-3 lg:grid-cols-[200px_minmax(18rem,30rem)_auto] lg:px-6">
-            <Link href="/" className="flex items-center gap-3">
-              <span className="flex h-8 w-8 items-center justify-center rounded bg-tag font-serif text-sm font-bold text-signal">E</span>
-              <span className="font-serif text-lg leading-none">
-                <span className="text-ink">En</span>
-                <span className="italic text-signal">gram</span>
-              </span>
+            <Link href="/" className="group">
+              <EngramLogo />
             </Link>
             <div className="col-span-2 row-start-2 flex justify-center lg:col-span-1 lg:row-start-auto">
               <CommandPalette />

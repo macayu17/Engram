@@ -10,7 +10,7 @@
   --color-muted: 166 160 148;
   --color-line: 55 51 44;
   --color-tag: 35 32 27;
-  --color-signal: 217 132 48;
+  --color-signal: 166 145 88;
   --color-caution: 210 175 88;
   --color-fault: 255 107 94;
   --theme-wave-x: 100vw;
@@ -23,13 +23,13 @@
 
 [data-theme="light"] {
   color-scheme: light;
-  --color-paper: 251 251 249;
+  --color-paper: 244 239 229;
   --color-ink: 26 26 24;
-  --color-panel: 255 255 255;
-  --color-muted: 107 107 99;
-  --color-line: 229 229 223;
-  --color-tag: 240 240 234;
-  --color-signal: 201 106 26;
+  --color-panel: 249 245 237;
+  --color-muted: 112 105 95;
+  --color-line: 219 211 198;
+  --color-tag: 235 227 213;
+  --color-signal: 105 88 48;
   --color-caution: 139 111 45;
   --color-fault: 180 35 24;
 }

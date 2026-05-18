@@ -227,6 +227,8 @@ For a production setup, deploy the services separately:
 
 When creating the Vercel project, set the project Root Directory to `dashboard`. The repository root is not a Next.js app, so Vercel will fail with `No Next.js version detected` if it builds from the root.
 
+If the build logs mention `Installing required dependencies from api/requirements.txt`, the Vercel project is still pointed at the repository root. Change Settings -> Build and Deployment -> Root Directory to `dashboard`, save, and redeploy the latest `main` commit. The `api/` service contains local embedding dependencies and must not be deployed as Vercel Python functions.
+
 Set these Vercel environment variables for the dashboard:
 
 ```bash

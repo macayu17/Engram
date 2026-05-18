@@ -53,6 +53,12 @@ body {
   transition: none !important;
 }
 
+.theme-view-transition-active *,
+.theme-view-transition-active *::before,
+.theme-view-transition-active *::after {
+  animation-play-state: paused !important;
+}
+
 ::selection {
   background: rgb(var(--color-tag));
   color: rgb(var(--color-ink));

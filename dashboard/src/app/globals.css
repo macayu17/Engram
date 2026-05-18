@@ -105,7 +105,7 @@ body {
   height: min(27rem, 52vw);
   pointer-events: none;
   position: absolute;
-  right: max(3rem, calc((100vw - 78rem) / 2));
+  right: max(1rem, calc((100vw - 82rem) / 2));
   top: 5.5rem;
   width: min(27rem, 52vw);
   z-index: 1;

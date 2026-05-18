@@ -16,7 +16,7 @@ export function AuthControls({ enabled }: { enabled: boolean }) {
             </button>
           </SignInButton>
           <SignUpButton>
-            <button type="button" className="hidden border border-line px-3 py-2 text-ink hover:border-signal hover:text-signal 2xl:inline-flex">
+            <button type="button" className="hidden border border-line px-3 py-2 text-ink hover:border-signal hover:text-signal xl:inline-flex">
               Join
             </button>
           </SignUpButton>

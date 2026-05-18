@@ -13,3 +13,4 @@ htmlcov/
 *.tsbuildinfo
 *.log
 pgdata/
+.vercel/

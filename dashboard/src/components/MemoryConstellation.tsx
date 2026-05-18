@@ -19,12 +19,14 @@ const leftNodes = [
   { cx: 82, cy: 484, r: 2 },
 ];
 
+const signalTarget = { cx: 798, cy: 246 };
+
 const signalPaths = [
-  "M74 72C220 18 390 94 524 166C638 228 732 235 900 246",
-  "M172 158C280 150 448 168 574 222C684 270 770 252 900 246",
-  "M96 210C270 206 400 230 548 254C682 276 760 256 900 246",
-  "M158 318C306 318 432 300 568 286C704 272 800 254 900 246",
-  "M196 468C324 426 440 382 572 338C710 292 800 262 900 246",
+  `M74 72C220 18 390 94 524 166C620 218 696 234 ${signalTarget.cx} ${signalTarget.cy}`,
+  `M172 158C280 150 448 168 574 222C660 262 718 252 ${signalTarget.cx} ${signalTarget.cy}`,
+  `M96 210C270 206 400 230 548 254C650 274 716 258 ${signalTarget.cx} ${signalTarget.cy}`,
+  `M158 318C306 318 432 300 568 286C670 274 724 256 ${signalTarget.cx} ${signalTarget.cy}`,
+  `M196 468C324 426 440 382 572 338C668 300 724 264 ${signalTarget.cx} ${signalTarget.cy}`,
 ];
 
 const memoryRows = [
@@ -74,9 +76,9 @@ export function MemoryConstellation() {
           <path d="M74 72L252 176L336 356L196 468" />
         </g>
         <g className="memory-constellation__core">
-          <circle cx="172" cy="258" r="88" />
-          <circle cx="172" cy="258" r="138" />
-          <circle cx="172" cy="258" r="190" />
+          <circle cx={signalTarget.cx} cy={signalTarget.cy} r="88" />
+          <circle cx={signalTarget.cx} cy={signalTarget.cy} r="138" />
+          <circle cx={signalTarget.cx} cy={signalTarget.cy} r="190" />
         </g>
         <g className="memory-constellation__nodes">
           {leftNodes.map((node) => (
@@ -94,7 +96,7 @@ export function MemoryConstellation() {
           ))}
         </g>
         <g className="memory-constellation__beacons" filter="url(#memory-signal-glow)">
-          <circle cx="900" cy="246" r="5" />
+          <circle cx={signalTarget.cx} cy={signalTarget.cy} r="5" />
         </g>
       </svg>
       <div className="memory-constellation__labels">

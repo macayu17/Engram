@@ -29,13 +29,14 @@ assertCheck("guards missing middleware key", proxySource.includes("NEXT_PUBLIC_C
 assertCheck("imports middleware from server package", proxySource.includes("from \"@clerk/nextjs/server\"") || proxySource.includes("from '@clerk/nextjs/server'"));
 assertCheck("does not use authMiddleware", !proxySource.includes("authMiddleware"));
 assertCheck("imports Clerk provider in layout", layoutSource.includes("ClerkProvider"));
-assertCheck("uses client Clerk components", authControlsSource.includes("\"use client\"") && authControlsSource.includes("Show") && authControlsSource.includes("SignInButton") && authControlsSource.includes("SignUpButton") && authControlsSource.includes("UserButton"));
+assertCheck("uses client Clerk components", authControlsSource.includes("\"use client\"") && authControlsSource.includes("Show") && authControlsSource.includes("SignInButton") && authControlsSource.includes("UserButton"));
 assertCheck("imports from @clerk/nextjs", layoutSource.includes("from \"@clerk/nextjs\"") || layoutSource.includes("from '@clerk/nextjs'"));
 assertCheck("auth controls import from @clerk/nextjs", authControlsSource.includes("from \"@clerk/nextjs\"") || authControlsSource.includes("from '@clerk/nextjs'"));
 assertCheck("places ClerkProvider inside body", layoutSource.indexOf("<body") !== -1 && layoutSource.indexOf("<ClerkProvider") > layoutSource.indexOf("<body"));
 assertCheck("guards missing publishable key", layoutSource.includes("NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY") && layoutSource.includes("authEnabled={false}"));
 assertCheck("hides missing publishable key warning", !layoutSource.includes(missingAuthLabel));
 assertCheck("uses Show components", authControlsSource.includes("<Show when=\"signed-out\">") && authControlsSource.includes("<Show when=\"signed-in\">"));
+assertCheck("uses one signed-out auth action", authControlsSource.includes("SignInButton") && !authControlsSource.includes("SignUpButton"));
 assertCheck("does not use deprecated signed components", !layoutSource.includes("SignedIn") && !layoutSource.includes("SignedOut") && !authControlsSource.includes("SignedIn") && !authControlsSource.includes("SignedOut"));
 assertCheck("renders Clerk Engram bridge", layoutSource.includes("ClerkEngramBridge"));
 assertCheck("has Clerk Engram bridge component", Boolean(bridgeSource));

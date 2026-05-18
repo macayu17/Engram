@@ -1,0 +1,31 @@
+name: Build Engram API Image
+
+  on:
+    workflow_dispatch:
+    push:
+      branches:
+        - main
+      paths:
+        - "api/**"
+        - ".github/workflows/build-api-image.yml"
+
+  jobs:
+    build:
+      runs-on: ubuntu-latest
+
+      steps:
+        - uses: actions/checkout@v4
+
+        - uses: docker/login-action@v3
+          with:
+            registry: ${{ secrets.ACR_LOGIN_SERVER }}
+            username: ${{ secrets.ACR_USERNAME }}
+            password: ${{ secrets.ACR_PASSWORD }}
+
+        - uses: docker/build-push-action@v6
+          with:
+            context: ./api
+            push: true
+            tags: |
+              ${{ secrets.ACR_LOGIN_SERVER }}/engram-api:latest
+              ${{ secrets.ACR_LOGIN_SERVER }}/engram-api:${{ github.sha }}

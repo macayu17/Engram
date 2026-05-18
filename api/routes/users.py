@@ -1,9 +1,9 @@
 import asyncpg
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 
-from api.dependencies import get_current_user, get_db
-from api.models.user import UserCreate, UserCreateResponse, UserResponse
-from api.services.users import create_user, delete_user
+from api.dependencies import get_current_user, get_db, require_service_key
+from api.models.user import ServiceUserKeyCreate, UserCreate, UserCreateResponse, UserResponse
+from api.services.users import create_or_issue_user_key, create_user, delete_user
 
 
 router = APIRouter()
@@ -15,6 +15,21 @@ async def create_user_route(payload: UserCreate, db: asyncpg.Connection = Depend
         row, api_key = await create_user(payload.external_id, db)
     except asyncpg.UniqueViolationError as error:
         raise HTTPException(status_code=409, detail="User external_id already exists") from error
+    return {
+        "id": row["id"],
+        "external_id": row["external_id"],
+        "api_key": api_key,
+        "created_at": row["created_at"],
+    }
+
+
+@router.post("/service-key", response_model=UserCreateResponse, status_code=status.HTTP_201_CREATED)
+async def create_service_user_key_route(
+    payload: ServiceUserKeyCreate,
+    _: None = Depends(require_service_key),
+    db: asyncpg.Connection = Depends(get_db),
+) -> dict[str, object]:
+    row, api_key = await create_or_issue_user_key(payload.external_id, payload.key_name, db)
     return {
         "id": row["id"],
         "external_id": row["external_id"],

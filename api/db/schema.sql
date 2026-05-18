@@ -27,6 +27,18 @@ CREATE INDEX IF NOT EXISTS memories_user_id_idx ON memories(user_id);
 CREATE INDEX IF NOT EXISTS memories_user_created_at_idx ON memories(user_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS memories_user_access_count_idx ON memories(user_id, access_count DESC);
 
+CREATE TABLE IF NOT EXISTS user_api_keys (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    api_key_hash TEXT UNIQUE NOT NULL,
+    name TEXT NOT NULL DEFAULT 'default',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    last_used_at TIMESTAMPTZ
+);
+
+CREATE INDEX IF NOT EXISTS user_api_keys_user_id_idx ON user_api_keys(user_id);
+CREATE INDEX IF NOT EXISTS user_api_keys_hash_idx ON user_api_keys(api_key_hash);
+
 CREATE TABLE IF NOT EXISTS retrieval_logs (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,

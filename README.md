@@ -24,6 +24,7 @@ POSTGRES_PASSWORD=replace_with_a_strong_password
 EXTRACTION_PROVIDER=openai
 OPENAI_API_KEY=your_key_here
 MCP_SERVICE_KEY=
+ENGRAM_SERVICE_KEY=your_server_to_server_key_here
 NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=your_clerk_publishable_key
 CLERK_SECRET_KEY=your_clerk_secret_key
 ```
@@ -80,12 +81,15 @@ The dashboard uses Clerk for sign-in and account management.
 ```bash
 NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_...
 CLERK_SECRET_KEY=sk_test_...
+ENGRAM_SERVICE_KEY=generate_a_long_random_value
 ```
 
-3. Rebuild the dashboard if you are running through Docker.
+`ENGRAM_SERVICE_KEY` must be set to the same value on the `api` service and the `dashboard` service. The dashboard uses it server-side to issue or recover an Engram API key for the signed-in Clerk user without exposing that service key to the browser.
+
+3. Rebuild the API and dashboard if you are running through Docker.
 
 ```bash
-docker compose up -d --build dashboard
+docker compose up -d --build api dashboard
 ```
 
 4. Open `http://localhost:3001`, use Create Account in the top nav, and sign up as the first dashboard user.
@@ -164,6 +168,7 @@ X-Engram-Key: ek_...
 User endpoints:
 
 - `POST /users`
+- `POST /users/service-key`
 - `GET /users/me`
 - `DELETE /users/me`
 
@@ -235,9 +240,16 @@ Set these Vercel environment variables for the dashboard:
 NEXT_PUBLIC_API_URL=https://your-api-host.example.com
 NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_...
 CLERK_SECRET_KEY=sk_...
+ENGRAM_SERVICE_KEY=generate_a_long_random_value
 ```
 
-The API must be reachable from the browser and must allow the dashboard origin through `CORS_ORIGINS`.
+The API must be reachable from the browser and must allow the dashboard origin through `CORS_ORIGINS`. Set the same `ENGRAM_SERVICE_KEY` on the hosted API so the dashboard can create or recover per-Clerk Engram keys.
+
+For an existing Supabase database, re-apply `api/db/schema.sql` after pulling updates so the `user_api_keys` table exists:
+
+```bash
+docker compose -f docker-compose.supabase.yml run --rm api python -m api.apply_schema
+```
 
 Supabase replaces only the Postgres service. It does not replace the FastAPI service, because Engram still needs `/users`, `/memories`, `/logs`, and `/v1/chat`. Host `api/` on a container-capable platform such as Azure Container Apps, Render, Railway, Fly.io, or another Docker host. Point its `DATABASE_URL` at Supabase and set provider keys such as `OPENAI_API_KEY`.
 

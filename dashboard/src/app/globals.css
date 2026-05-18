@@ -10,7 +10,7 @@
   --color-muted: 166 160 148;
   --color-line: 55 51 44;
   --color-tag: 35 32 27;
-  --color-signal: 166 145 88;
+  --color-signal: 200 145 74;
   --color-caution: 210 175 88;
   --color-fault: 255 107 94;
   --theme-wave-x: 100vw;
@@ -29,7 +29,7 @@
   --color-muted: 112 105 95;
   --color-line: 219 211 198;
   --color-tag: 235 227 213;
-  --color-signal: 105 88 48;
+  --color-signal: 122 85 40;
   --color-caution: 139 111 45;
   --color-fault: 180 35 24;
 }

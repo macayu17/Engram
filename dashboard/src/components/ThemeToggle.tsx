@@ -14,6 +14,7 @@ type ViewTransitionDocument = Document & {
 
 const storageKey = "engram_theme";
 const transitionClassName = "theme-transition-active";
+const viewTransitionClassName = "theme-view-transition-active";
 
 function readStoredTheme(): ThemeMode {
   const storedTheme = localStorage.getItem(storageKey);
@@ -28,7 +29,10 @@ function applyTheme(themeMode: ThemeMode) {
 export function ThemeToggle() {
   const [themeMode, setThemeMode] = useState<ThemeMode>("dark");
   const [fallbackWave, setFallbackWave] = useState<{ id: number; themeMode: ThemeMode } | null>(null);
+  const [isTransitioning, setIsTransitioning] = useState(false);
   const fallbackWaveId = useRef(0);
+  const fallbackTimers = useRef<number[]>([]);
+  const transitionInFlight = useRef(false);
 
   useEffect(() => {
     const storedTheme = readStoredTheme();
@@ -36,12 +40,27 @@ export function ThemeToggle() {
     applyTheme(storedTheme);
   }, []);
 
+  useEffect(() => {
+    return () => {
+      fallbackTimers.current.forEach((timer) => window.clearTimeout(timer));
+    };
+  }, []);
+
   function switchTheme(nextThemeMode: ThemeMode) {
     setThemeMode(nextThemeMode);
     applyTheme(nextThemeMode);
   }
 
+  function completeTransition() {
+    const root = document.documentElement;
+    root.classList.remove(transitionClassName, viewTransitionClassName);
+    transitionInFlight.current = false;
+    setIsTransitioning(false);
+  }
+
   function handleToggle(event: MouseEvent<HTMLButtonElement>) {
+    if (transitionInFlight.current) return;
+
     const nextThemeMode = themeMode === "dark" ? "light" : "dark";
     const rect = event.currentTarget.getBoundingClientRect();
     const x = rect.left + rect.width / 2;
@@ -58,24 +77,32 @@ export function ThemeToggle() {
     root.style.setProperty("--theme-fallback-top", `${y - radius}px`);
     root.style.setProperty("--theme-fallback-size", `${radius * 2}px`);
     root.classList.add(transitionClassName);
+    transitionInFlight.current = true;
+    setIsTransitioning(true);
 
     const transitionDocument = document as ViewTransitionDocument;
     if (transitionDocument.startViewTransition) {
+      root.classList.add(viewTransitionClassName);
       const transition = transitionDocument.startViewTransition(() => {
         flushSync(() => switchTheme(nextThemeMode));
       });
-      void transition.finished.finally(() => root.classList.remove(transitionClassName));
+      void transition.finished.finally(() => {
+        window.requestAnimationFrame(() => {
+          window.requestAnimationFrame(completeTransition);
+        });
+      });
       return;
     }
 
     const id = fallbackWaveId.current + 1;
     fallbackWaveId.current = id;
     setFallbackWave({ id, themeMode: nextThemeMode });
-    window.setTimeout(() => switchTheme(nextThemeMode), 620);
-    window.setTimeout(() => {
-      root.classList.remove(transitionClassName);
+    const switchTimer = window.setTimeout(() => switchTheme(nextThemeMode), 620);
+    const cleanupTimer = window.setTimeout(() => {
       setFallbackWave((wave) => (wave?.id === id ? null : wave));
+      completeTransition();
     }, 820);
+    fallbackTimers.current = [switchTimer, cleanupTimer];
   }
 
   const isDark = themeMode === "dark";
@@ -86,9 +113,10 @@ export function ThemeToggle() {
       <button
         type="button"
         onClick={handleToggle}
+        disabled={isTransitioning}
         aria-label={`Switch to ${nextThemeMode} mode`}
         title={`Switch to ${nextThemeMode} mode`}
-        className="relative inline-flex h-9 w-16 shrink-0 items-center rounded-full border border-line bg-tag p-1 transition hover:border-signal"
+        className="relative inline-flex h-9 w-16 shrink-0 items-center rounded-full border border-line bg-tag p-1 transition hover:border-signal disabled:cursor-default disabled:opacity-80"
       >
         <span
           className={cn(

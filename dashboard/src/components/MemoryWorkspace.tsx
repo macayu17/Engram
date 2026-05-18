@@ -100,17 +100,21 @@ export function MemoryWorkspace() {
               <button
                 type="button"
                 onClick={() => setIsAddOpen(true)}
-                className="inline-flex items-center gap-2 border border-signal px-5 py-3 font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-signal hover:bg-signal hover:text-paper"
+                className="group inline-flex items-center gap-3 rounded-full bg-signal px-4 py-2.5 font-sans text-[11px] font-semibold uppercase tracking-[0.12em] text-paper shadow-[0_18px_44px_rgb(var(--color-signal)_/_0.22)] transition hover:-translate-y-0.5 hover:bg-ink hover:text-paper focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-signal active:translate-y-0"
               >
-                <Plus size={15} aria-hidden="true" />
+                <span className="flex h-7 w-7 items-center justify-center rounded-full bg-paper/12 text-paper transition group-hover:bg-signal">
+                  <Plus size={15} aria-hidden="true" />
+                </span>
                 Add Memory
               </button>
               <Link
                 href="/chat"
-                className="inline-flex items-center gap-2 border border-line px-5 py-3 font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-muted hover:border-signal hover:text-signal"
+                className="group inline-flex items-center gap-3 py-2.5 font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-muted transition hover:text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-signal"
               >
-                <MessageSquare size={15} aria-hidden="true" />
-                Test Chat
+                <span className="flex h-8 w-8 items-center justify-center rounded-full border border-line bg-tag/35 text-muted transition group-hover:border-signal group-hover:bg-signal/10 group-hover:text-signal">
+                  <MessageSquare size={15} aria-hidden="true" />
+                </span>
+                <span className="border-b border-line pb-1 transition group-hover:border-signal">Test Chat</span>
               </Link>
             </div>
             <div className="mt-8 grid w-full max-w-lg grid-cols-1 gap-3 border-y border-line py-4 font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-muted sm:grid-cols-3 sm:gap-0">

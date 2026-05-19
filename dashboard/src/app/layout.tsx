@@ -43,7 +43,7 @@ function DashboardShell({ authEnabled, children }: { authEnabled: boolean; child
             <Link href="/" className="group">
               <EngramLogo />
             </Link>
-            <div className="col-span-2 row-start-2 flex justify-center lg:col-span-1 lg:row-start-auto">
+            <div className="col-span-2 row-start-2 flex w-full min-w-0 justify-center lg:col-span-1 lg:row-start-auto">
               <CommandPalette />
             </div>
             <nav className="flex items-center justify-end gap-3 font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-muted">

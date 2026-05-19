@@ -92,13 +92,13 @@ export function CommandPalette() {
       <button
         type="button"
         onClick={() => setIsOpen(true)}
-        className="flex min-h-10 w-full max-w-md items-center justify-between rounded-full border border-line bg-paper px-4 text-left text-sm text-muted transition hover:border-ink"
+        className="flex min-h-10 w-full max-w-[calc(100vw-2rem)] items-center justify-between rounded-full border border-line bg-paper px-4 text-left text-sm text-muted transition hover:border-ink sm:max-w-md"
       >
         <span className="flex min-w-0 items-center gap-2">
-          <Search size={15} aria-hidden="true" />
+          <Search size={15} aria-hidden="true" className="shrink-0" />
           <span className="truncate">Search memories and retrieval context</span>
         </span>
-        <span className="rounded border border-line px-2 py-0.5 font-sans text-[10px] uppercase tracking-[0.12em] text-muted">⌘ K</span>
+        <span className="hidden shrink-0 rounded border border-line px-2 py-0.5 font-sans text-[10px] uppercase tracking-[0.12em] text-muted sm:inline-flex">⌘ K</span>
       </button>
 
       {isOpen && (

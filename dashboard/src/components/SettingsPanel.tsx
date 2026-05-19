@@ -32,11 +32,7 @@ export function SettingsPanel() {
     },
   });
   const deleteMemoriesMutation = useMutation({
-    mutationFn: async () => {
-      const response = await api.memories.list({ limit: 100, offset: 0 });
-      await Promise.all(response.memories.map((memory) => api.memories.delete(memory.id)));
-      return response.memories.length;
-    },
+    mutationFn: () => api.memories.deleteAll(),
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["memories"] }),
   });
   const createUserMutation = useMutation({
@@ -103,7 +99,7 @@ export function SettingsPanel() {
   }
 
   function deleteMemories() {
-    if (window.confirm("Delete the first 100 memories for this account? Repeat if more remain.")) {
+    if (window.confirm("Delete all memories for this account?")) {
       deleteMemoriesMutation.mutate();
     }
   }

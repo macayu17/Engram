@@ -1,3 +1,5 @@
+import { extractChatResponseContent } from "./chat-response";
+
 export type Memory = {
   id: string;
   content: string;
@@ -207,12 +209,24 @@ async function requestChat(params: { externalId: string; provider: string; model
   if (!response.ok) {
     throw new Error(await getResponseError(response, "API error"));
   }
-  const payload = await response.json() as { choices?: Array<{ message?: { content?: string } }> };
+  const payload = await response.json() as unknown;
   return {
-    content: payload.choices?.[0]?.message?.content ?? JSON.stringify(payload),
+    content: extractChatResponseContent(payload),
     conversationId: response.headers.get("X-Engram-Conversation-ID") ?? "",
     injectedCount: Number(response.headers.get("X-Engram-Memories-Injected") ?? 0),
   };
+}
+
+async function deleteAllMemories(): Promise<number> {
+  let deletedCount = 0;
+  while (true) {
+    const response = await api.memories.list({ limit: 100, offset: 0 });
+    if (!response.memories.length) {
+      return deletedCount;
+    }
+    await Promise.all(response.memories.map((memory) => api.memories.delete(memory.id)));
+    deletedCount += response.memories.length;
+  }
 }
 
 export const api = {
@@ -225,6 +239,7 @@ export const api = {
     create: (content: string) => request<Memory>("POST", "/memories", { content }),
     update: (id: string, content: string) => request<Memory>("PATCH", `/memories/${id}`, { content }),
     delete: (id: string) => request<void>("DELETE", `/memories/${id}`),
+    deleteAll: deleteAllMemories,
     search: (query: string, limit = 5, threshold = 0.5) =>
       request<SearchResponse>("POST", "/memories/search", { query, limit, threshold }),
   },

@@ -6,8 +6,9 @@
     "dev": "next dev -p 3001",
     "build": "next build",
     "start": "next start -p 3001",
-    "typecheck": "tsc --noEmit",
-    "verify:clerk": "node scripts/verify-clerk-setup.mjs"
+    "typecheck": "next typegen && tsc --noEmit",
+    "verify:clerk": "node scripts/verify-clerk-setup.mjs",
+    "verify:logic": "node scripts/verify-dashboard-logic.mjs"
   },
   "dependencies": {
     "@clerk/nextjs": "^7.3.5",

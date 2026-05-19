@@ -274,6 +274,8 @@ Dashboard build:
 ```bash
 cd dashboard
 npm ci
+npm run verify:clerk
+npm run verify:logic
 npm run build
 ```
 
@@ -283,6 +285,12 @@ Docker smoke:
 docker compose up -d --build
 docker compose ps
 curl http://localhost:8000/health
+```
+
+Full deterministic flow with the local mock provider:
+
+```bash
+python scripts/verify_full_flow.py
 ```
 
 ## Local Test Scripts

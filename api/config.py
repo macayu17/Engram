@@ -24,6 +24,8 @@ class Settings(BaseSettings):
     log_level: str = "info"
     cors_origins: str = "http://localhost:3001"
     engram_service_key: str = ""
+    proxy_auth_cache_ttl_seconds: int = 300
+    proxy_auth_cache_max_entries: int = 4096
     engram_test_api_url: str = "http://localhost:8000"
     engram_test_provider: str = "openai"
     engram_test_model: str = "gpt-4o-mini"

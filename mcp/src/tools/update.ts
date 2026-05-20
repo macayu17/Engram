@@ -23,7 +23,7 @@ export const updateMemoryTool = {
   },
   handler: async (args: unknown): Promise<ToolResult> => {
     try {
-      const input = InputSchema.parse(args);
+      const input = InputSchema.parse(args ?? {});
       return textResult(await engramClient.updateMemory(input.memory_id, input.content));
     } catch (error) {
       return errorResult(error);

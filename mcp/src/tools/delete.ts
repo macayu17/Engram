@@ -21,7 +21,7 @@ export const deleteMemoryTool = {
   },
   handler: async (args: unknown): Promise<ToolResult> => {
     try {
-      const input = InputSchema.parse(args);
+      const input = InputSchema.parse(args ?? {});
       return textResult(await engramClient.deleteMemory(input.memory_id));
     } catch (error) {
       return errorResult(error);

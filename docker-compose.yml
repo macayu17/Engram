@@ -44,7 +44,7 @@ services:
       DEDUP_THRESHOLD: ${DEDUP_THRESHOLD:-0.95}
       MEMORY_REFINEMENT_THRESHOLD: ${MEMORY_REFINEMENT_THRESHOLD:-0.8}
       LOG_LEVEL: ${LOG_LEVEL:-info}
-      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3001}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3001,http://localhost:3011}
       ENGRAM_SERVICE_KEY: ${ENGRAM_SERVICE_KEY:-}
     depends_on:
       postgres:

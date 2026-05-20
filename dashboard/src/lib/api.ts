@@ -52,6 +52,14 @@ export type UserCreateResponse = User & {
   api_key: string;
 };
 
+export type UserConfig = {
+  max_memories_injected: number;
+  retrieval_threshold: number;
+  dedup_threshold: number;
+};
+
+export type UserConfigUpdate = Partial<UserConfig>;
+
 export type ClerkEngramKeyResponse = {
   apiKey: string;
   externalId: string;
@@ -251,6 +259,9 @@ export const api = {
     create: (externalId: string) => requestInternal<UserCreateResponse>("POST", "/api/engram/users", { external_id: externalId }),
     ensureClerkKey: () => requestInternal<ClerkEngramKeyResponse>("POST", "/api/engram/user-key"),
     me: () => request<User>("GET", "/users/me"),
+    config: () => request<UserConfig>("GET", "/users/me/config"),
+    updateConfig: (payload: UserConfigUpdate) => request<UserConfig>("PATCH", "/users/me/config", payload),
+    regenerateKey: () => request<UserCreateResponse>("POST", "/users/me/api-key"),
     deleteMe: () => request<void>("DELETE", "/users/me"),
   },
 };

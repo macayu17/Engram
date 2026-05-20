@@ -6,7 +6,8 @@
   "scripts": {
     "build": "tsc",
     "start": "node dist/index.js",
-    "dev": "tsx src/index.ts"
+    "dev": "tsx src/index.ts",
+    "verify:defaults": "npm run build && node ../scripts/verify_mcp_tool_defaults.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.0",

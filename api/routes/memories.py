@@ -46,7 +46,7 @@ async def create_memory_route(
     user: asyncpg.Record = Depends(get_current_user),
     db: asyncpg.Connection = Depends(get_db),
 ) -> dict[str, object]:
-    return await create_memory(user["id"], payload.content, db)
+    return await create_memory(user["id"], payload.content, db, float(user["dedup_threshold"]))
 
 
 @router.get("/{memory_id}", response_model=MemoryResponse)

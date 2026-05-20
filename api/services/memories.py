@@ -11,9 +11,9 @@ MemoryOrder = Literal["created_at", "last_accessed", "access_count"]
 SortDirection = Literal["asc", "desc"]
 
 
-async def create_memory(user_id: object, content: str, db: asyncpg.Connection) -> dict[str, object]:
+async def create_memory(user_id: object, content: str, db: asyncpg.Connection, dedup_threshold: float | None = None) -> dict[str, object]:
     embedding = embed(content)
-    result = await store_memory_with_deduplication(user_id, content, embedding, None, 1.0, db)
+    result = await store_memory_with_deduplication(user_id, content, embedding, None, 1.0, db, dedup_threshold)
     if result["memory"] is None:
         raise RuntimeError("Memory creation failed")
     return result["memory"]

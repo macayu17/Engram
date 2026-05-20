@@ -18,7 +18,9 @@ async def store_memory_with_deduplication(
     conversation_id: object | None,
     confidence: float,
     db: asyncpg.Connection,
+    dedup_threshold: float | None = None,
 ) -> StoreMemoryResult:
+    dedup_threshold_value = settings.dedup_threshold if dedup_threshold is None else dedup_threshold
     vector_literal = format_embedding_for_pgvector(embedding)
     nearest = await db.fetchrow(
         """
@@ -32,7 +34,7 @@ async def store_memory_with_deduplication(
         vector_literal,
         user_id,
     )
-    if nearest is not None and nearest["score"] > settings.dedup_threshold:
+    if nearest is not None and nearest["score"] > dedup_threshold_value:
         return {"action": "skipped", "memory": dict(nearest)}
     if nearest is not None and nearest["score"] > settings.memory_refinement_threshold:
         updated = await db.fetchrow(

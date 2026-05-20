@@ -1,6 +1,7 @@
 import json
 import logging
 from uuid import UUID
+from uuid import uuid4
 
 import asyncpg
 
@@ -111,6 +112,66 @@ async def store_extracted_memories(
         if result["action"] in {"inserted", "updated"}:
             stored_count += 1
     return stored_count
+
+
+async def capture_conversation_memories(
+    user_id: UUID,
+    user_message: str,
+    assistant_response: str,
+    source: str,
+    session_id: str | None,
+    db: asyncpg.Connection,
+    dedup_threshold: float | None = None,
+) -> dict[str, object]:
+    conversation_id = uuid4()
+    request_body = build_capture_request_body(user_message, assistant_response, source, session_id)
+    response_body = build_capture_response_body(assistant_response)
+    conversation = build_capture_conversation_text(user_message, assistant_response)
+    extracted_memories = await extract_memories(conversation)
+    memories_extracted = 0
+    if extracted_memories:
+        memories_extracted = await store_extracted_memories(user_id, conversation_id, extracted_memories, db, dedup_threshold)
+    await record_conversation(user_id, conversation_id, request_body, response_body, "completed", memories_extracted, db)
+    return {
+        "conversation_id": conversation_id,
+        "memories_extracted": memories_extracted,
+        "extracted_memories": extracted_memories,
+        "source": source,
+        "session_id": session_id,
+    }
+
+
+def build_capture_request_body(
+    user_message: str,
+    assistant_response: str,
+    source: str,
+    session_id: str | None,
+) -> dict[str, object]:
+    return {
+        "messages": [
+            {"role": "user", "content": user_message},
+            {"role": "assistant", "content": assistant_response},
+        ],
+        "source": source,
+        "session_id": session_id,
+    }
+
+
+def build_capture_response_body(assistant_response: str) -> bytes:
+    return json.dumps({
+        "choices": [
+            {
+                "message": {
+                    "role": "assistant",
+                    "content": assistant_response,
+                },
+            },
+        ],
+    }).encode("utf-8")
+
+
+def build_capture_conversation_text(user_message: str, assistant_response: str) -> str:
+    return f"user: {user_message}\nassistant: {assistant_response}"
 
 
 def build_conversation_text(request_body: dict[str, object], response_body: bytes) -> str:

@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from pydantic import UUID4
 
 from api.dependencies import get_current_user, get_db
+from api.models.conversation import ConversationCaptureRequest, ConversationCaptureResponse
 from api.models.memory import (
     MemoryCreate,
     MemoryListResponse,
@@ -13,6 +14,7 @@ from api.models.memory import (
     MemorySearchResponse,
     MemoryUpdate,
 )
+from api.services.extraction import capture_conversation_memories
 from api.services.memories import (
     create_memory,
     delete_memory,
@@ -47,6 +49,26 @@ async def create_memory_route(
     db: asyncpg.Connection = Depends(get_db),
 ) -> dict[str, object]:
     return await create_memory(user["id"], payload.content, db, float(user["dedup_threshold"]))
+
+
+@router.post("/capture", response_model=ConversationCaptureResponse, status_code=status.HTTP_201_CREATED)
+async def capture_conversation_route(
+    payload: ConversationCaptureRequest,
+    user: asyncpg.Record = Depends(get_current_user),
+    db: asyncpg.Connection = Depends(get_db),
+) -> dict[str, object]:
+    try:
+        return await capture_conversation_memories(
+            user["id"],
+            payload.user_message,
+            payload.assistant_response,
+            payload.source,
+            payload.session_id,
+            db,
+            float(user["dedup_threshold"]),
+        )
+    except RuntimeError as error:
+        raise HTTPException(status_code=502, detail=str(error)) from error
 
 
 @router.get("/{memory_id}", response_model=MemoryResponse)

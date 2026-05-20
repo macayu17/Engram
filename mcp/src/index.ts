@@ -7,6 +7,7 @@ import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprot
 
 import { config, type McpTransport } from "./config.js";
 import { addMemoryTool } from "./tools/add.js";
+import { captureConversationTool } from "./tools/capture.js";
 import { deleteMemoryTool } from "./tools/delete.js";
 import { listMemoriesTool } from "./tools/list.js";
 import { getRetrievalLogTool } from "./tools/logs.js";
@@ -22,6 +23,7 @@ function createEngramServer(): Server {
     tools: [
       searchMemoriesTool.definition,
       addMemoryTool.definition,
+      captureConversationTool.definition,
       deleteMemoryTool.definition,
       listMemoriesTool.definition,
       updateMemoryTool.definition,
@@ -34,6 +36,8 @@ function createEngramServer(): Server {
         return searchMemoriesTool.handler(request.params.arguments);
       case "add_memory":
         return addMemoryTool.handler(request.params.arguments);
+      case "capture_conversation":
+        return captureConversationTool.handler(request.params.arguments);
       case "delete_memory":
         return deleteMemoryTool.handler(request.params.arguments);
       case "list_memories":

@@ -176,6 +176,7 @@ Memory endpoints:
 
 - `GET /memories`
 - `POST /memories`
+- `POST /memories/capture`
 - `GET /memories/{memory_id}`
 - `PATCH /memories/{memory_id}`
 - `DELETE /memories/{memory_id}`
@@ -206,10 +207,19 @@ The MCP server exposes:
 
 - `search_memories`
 - `add_memory`
+- `capture_conversation`
 - `delete_memory`
 - `list_memories`
 - `update_memory`
 - `get_retrieval_log`
+
+`capture_conversation` lets MCP clients save memory without the user saying "store this". The client sends the user message and assistant response, then Engram runs the same durable-fact extraction and deduplication path used by the proxy.
+
+Suggested MCP client instruction:
+
+```text
+Always use Engram memory. Before answering when user context may matter, search Engram for relevant memories. After each meaningful exchange, call capture_conversation with the user message, assistant response, source client name, and session id. Store durable user facts, preferences, project context, and corrections. Do not store greetings, one-off questions, temporary details, or assistant-only claims.
+```
 
 SSE transport runs on `http://localhost:3000/sse`.
 

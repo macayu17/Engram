@@ -9,7 +9,9 @@ class MockOpenAIHandler(BaseHTTPRequestHandler):
         messages = payload.get("messages", [])
         combined_text = json.dumps(messages)
         if "MEMORIES (JSON array only)" in combined_text:
-            if "FastAPI" in combined_text and "TypeScript" in combined_text:
+            if "VS Code Agent mode" in combined_text:
+                content = json.dumps(["User connected Engram to VS Code Agent mode"])
+            elif "FastAPI" in combined_text and "TypeScript" in combined_text:
                 content = json.dumps(
                     [
                         "User prefers FastAPI for backend development",

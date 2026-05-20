@@ -16,6 +16,13 @@ export type RetrievalLogParams = {
   limit: number;
 };
 
+export type CaptureConversationParams = {
+  user_message: string;
+  assistant_response: string;
+  source: string;
+  session_id?: string;
+};
+
 class EngramClient {
   private baseUrl: string;
   private apiKey: string;
@@ -53,6 +60,10 @@ class EngramClient {
 
   async addMemory(content: string): Promise<unknown> {
     return this.request("POST", "/memories", { content });
+  }
+
+  async captureConversation(params: CaptureConversationParams): Promise<unknown> {
+    return this.request("POST", "/memories/capture", params);
   }
 
   async deleteMemory(memoryId: string): Promise<{ success: boolean }> {

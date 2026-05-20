@@ -9,7 +9,7 @@ class ExtractionProvider(ABC):
 
 
 def parse_memory_json(content: str) -> list[str]:
-    parsed = json.loads(content)
+    parsed = json.loads(strip_json_fence(content))
     if not isinstance(parsed, list):
         raise ValueError("Extraction provider returned non-array JSON")
     memories: list[str] = []
@@ -39,9 +39,35 @@ def extract_chat_message_content(payload: object) -> str:
     if not isinstance(first_choice, dict):
         raise ValueError("Provider choice was not a JSON object")
     message = first_choice.get("message")
-    if not isinstance(message, dict):
-        raise ValueError("Provider choice did not include a message")
-    content = message.get("content")
-    if not isinstance(content, str):
-        raise ValueError("Provider message did not include text content")
-    return content
+    if isinstance(message, dict):
+        content = message.get("content")
+        if isinstance(content, str):
+            return content
+        content_blocks = extract_text_content_parts(content)
+        if content_blocks:
+            return content_blocks
+    text = first_choice.get("text")
+    if isinstance(text, str):
+        return text
+    raise ValueError("Provider response did not include text content")
+
+
+def strip_json_fence(content: str) -> str:
+    stripped = content.strip()
+    if not stripped.startswith("```"):
+        return stripped
+    lines = stripped.splitlines()
+    if len(lines) >= 3 and lines[-1].strip() == "```":
+        return "\n".join(lines[1:-1]).strip()
+    return stripped
+
+
+def extract_text_content_parts(content: object) -> str:
+    if not isinstance(content, list):
+        return ""
+    parts = [
+        part["text"]
+        for part in content
+        if isinstance(part, dict) and isinstance(part.get("text"), str)
+    ]
+    return "\n".join(parts)

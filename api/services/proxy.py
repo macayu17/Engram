@@ -40,6 +40,8 @@ async def build_proxy_result(
     disable_injection: bool,
     incoming_headers: Mapping[str, str],
     db: asyncpg.Connection,
+    max_memories_injected: int | None = None,
+    retrieval_threshold: float | None = None,
 ) -> ProxyResult:
     if external_id != requested_external_id:
         raise PermissionError("X-Engram-User-ID does not match the authenticated user")
@@ -49,7 +51,7 @@ async def build_proxy_result(
     query = get_retrieval_query(body)
     if not disable_injection:
         try:
-            memories = await retrieve_memories(user_id, query, db)
+            memories = await retrieve_memories(user_id, query, db, max_memories_injected, retrieval_threshold)
             injected_count = len(memories)
             body = inject_memories(body, memories)
             await log_retrieval(user_id, str(conversation_id), query, memories, db)
@@ -63,6 +65,26 @@ async def build_proxy_result(
         provider_response.media_type,
         conversation_id,
         injected_count,
+    )
+
+
+async def build_proxy_passthrough_result(
+    external_id: str,
+    requested_external_id: str,
+    request_body: dict[str, object],
+    provider: str,
+    incoming_headers: Mapping[str, str],
+) -> ProxyResult:
+    if external_id != requested_external_id:
+        raise PermissionError("X-Engram-User-ID does not match the authenticated user")
+    conversation_id = uuid4()
+    provider_response = await forward_to_provider(copy.deepcopy(request_body), provider, incoming_headers)
+    return ProxyResult(
+        provider_response.content,
+        provider_response.status_code,
+        provider_response.media_type,
+        conversation_id,
+        0,
     )
 
 

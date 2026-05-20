@@ -20,3 +20,15 @@ class UserResponse(BaseModel):
 
 class UserCreateResponse(UserResponse):
     api_key: str
+
+
+class UserConfigUpdate(BaseModel):
+    max_memories_injected: int | None = Field(default=None, ge=1, le=20)
+    retrieval_threshold: float | None = Field(default=None, ge=0, le=1)
+    dedup_threshold: float | None = Field(default=None, ge=0, le=1)
+
+
+class UserConfigResponse(BaseModel):
+    max_memories_injected: int
+    retrieval_threshold: float
+    dedup_threshold: float

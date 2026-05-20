@@ -7,6 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from api.config import settings
 from api.db.connection import check_database, close_pool, init_pool
+from api.db.schema import apply_schema
 from api.routes import logs, memories, proxy, users
 from api.services.embedding import is_model_loaded, load_model
 
@@ -16,6 +17,7 @@ logging.basicConfig(level=settings.log_level.upper())
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    await apply_schema()
     await init_pool()
     load_model()
     yield

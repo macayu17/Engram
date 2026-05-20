@@ -23,7 +23,7 @@ export const listMemoriesTool = {
   },
   handler: async (args: unknown): Promise<ToolResult> => {
     try {
-      const input = InputSchema.parse(args);
+      const input = InputSchema.parse(args ?? {});
       return textResult(await engramClient.listMemories(input));
     } catch (error) {
       return errorResult(error);

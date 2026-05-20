@@ -74,6 +74,20 @@ def wait_for_api(timeout_seconds: int) -> None:
     raise RuntimeError(f"Timed out waiting for API health: {last_error}")
 
 
+def wait_for_database_unavailable(timeout_seconds: int) -> None:
+    deadline = time.time() + timeout_seconds
+    last_error = ""
+    while time.time() < deadline:
+        try:
+            json_request("GET", f"{API_URL}/health")
+        except RuntimeError as error:
+            last_error = str(error)
+            if "503" in last_error and "Database unavailable" in last_error:
+                return
+        time.sleep(2)
+    raise RuntimeError(f"Timed out waiting for database unavailable health state: {last_error}")
+
+
 def wait_for_dashboard(timeout_seconds: int) -> None:
     deadline = time.time() + timeout_seconds
     last_error = ""
@@ -116,6 +130,8 @@ def get_header(headers: dict[str, str], name: str, fallback: str = "") -> str:
 
 
 def main() -> None:
+    compose_env = os.environ.copy()
+    postgres_stopped = False
     mock_provider = subprocess.Popen(
         [sys.executable, str(ROOT / "scripts" / "mock_openai_provider.py")],
         stdout=subprocess.DEVNULL,
@@ -125,10 +141,10 @@ def main() -> None:
     user_deleted = False
     try:
         wait_for_socket("127.0.0.1", MOCK_PROVIDER_PORT, 30)
-        compose_env = os.environ.copy()
         compose_env.update(
             {
                 "POSTGRES_PASSWORD": "engram_dev_password",
+                "DATABASE_URL": "postgresql://engram:engram_dev_password@postgres:5432/engram",
                 "EXTRACTION_PROVIDER": "openai",
                 "OPENAI_API_KEY": "mock-openai-key",
                 "OPENAI_BASE_URL": f"http://host.docker.internal:{MOCK_PROVIDER_PORT}/v1",
@@ -142,10 +158,21 @@ def main() -> None:
         )
         run_command(["docker", "compose", "up", "-d", "--build", "postgres", "api", "dashboard"], ROOT, compose_env)
         wait_for_api(300)
+        run_command(["docker", "compose", "exec", "-T", "api", "python", "-m", "api.apply_schema"], ROOT, compose_env)
+        wait_for_api(60)
         wait_for_dashboard(180)
         external_id = f"full_flow_{uuid4()}"
         _, user_payload, _ = json_request("POST", f"{API_URL}/users", {"external_id": external_id})
         api_key = str(user_payload["api_key"])
+        _, config_payload, _ = json_request(
+            "PATCH",
+            f"{API_URL}/users/me/config",
+            {"max_memories_injected": 1, "retrieval_threshold": 0, "dedup_threshold": 0.91},
+            {"X-Engram-Key": api_key},
+        )
+        assert_true(config_payload["max_memories_injected"] == 1, "User config did not save max_memories_injected")
+        assert_true(config_payload["retrieval_threshold"] == 0, "User config did not save retrieval_threshold")
+        assert_true(config_payload["dedup_threshold"] == 0.91, "User config did not save dedup_threshold")
         auth_headers = {
             "X-Engram-Key": api_key,
             "X-Engram-User-ID": external_id,
@@ -171,11 +198,24 @@ def main() -> None:
             "messages": [{"role": "user", "content": "What tech stack should I use for my next project?"}],
         }
         _, second_payload, second_headers = json_request("POST", f"{API_URL}/v1/chat", second_body, auth_headers)
-        assert_true("FastAPI" in second_payload["choices"][0]["message"]["content"], "Second proxy response did not use injected memory")
         injected_count = int(get_header(second_headers, "X-Engram-Memories-Injected", "0"))
-        assert_true(injected_count > 0, "Second proxy call did not inject memories")
+        assert_true(injected_count == 1, "Second proxy call did not respect max_memories_injected user config")
+        run_command(["docker", "compose", "stop", "postgres"], ROOT, compose_env)
+        postgres_stopped = True
+        wait_for_database_unavailable(60)
+        third_body = {
+            "model": "gpt-4o-mini",
+            "messages": [{"role": "user", "content": "Can you still answer while the memory database is unavailable?"}],
+        }
+        _, third_payload, third_headers = json_request("POST", f"{API_URL}/v1/chat", third_body, auth_headers)
+        assert_true(third_payload["choices"][0]["message"]["content"] == "I recorded your preferences.", "Proxy did not forward while database was unavailable")
+        assert_true(int(get_header(third_headers, "X-Engram-Memories-Injected", "0")) == 0, "Database fallback proxy call should not inject memories")
+        wait_for_database_unavailable(10)
+        run_command(["docker", "compose", "up", "-d", "postgres"], ROOT, compose_env)
+        postgres_stopped = False
+        wait_for_api(180)
         _, logs_payload, _ = json_request("GET", f"{API_URL}/logs?limit=20&offset=0", headers={"X-Engram-Key": api_key})
-        assert_true(logs_payload["total"] >= 2, "Retrieval logs were not recorded")
+        assert_true(logs_payload["total"] == 2, "Database fallback proxy call should not create a retrieval log")
         run_command([command_name("npm"), "run", "build"], ROOT / "mcp")
         mcp_env = os.environ.copy()
         mcp_env.update({"ENGRAM_API_URL": API_URL, "ENGRAM_API_KEY": api_key})
@@ -196,12 +236,20 @@ def main() -> None:
             "proxyFirstCall": True,
             "extractionStoredMemories": len(memories_payload["memories"]),
             "proxySecondCallInjected": injected_count,
+            "proxyForwardedDuringDatabaseOutage": True,
             "logsTotal": logs_payload["total"],
             "dashboardReachable": True,
             "mcpTools": mcp_payload,
             "cleanupUserDeleted": user_deleted,
+            "userConfigApplied": config_payload,
         })}\n")
     finally:
+        if postgres_stopped:
+            try:
+                run_command(["docker", "compose", "up", "-d", "postgres"], ROOT, compose_env)
+                wait_for_api(180)
+            except RuntimeError:
+                pass
         if api_key and not user_deleted:
             try:
                 json_request("DELETE", f"{API_URL}/users/me", headers={"X-Engram-Key": api_key})

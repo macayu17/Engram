@@ -25,7 +25,7 @@ export const searchMemoriesTool = {
   },
   handler: async (args: unknown): Promise<ToolResult> => {
     try {
-      const input = InputSchema.parse(args);
+      const input = InputSchema.parse(args ?? {});
       return textResult(await engramClient.searchMemories(input));
     } catch (error) {
       return errorResult(error);

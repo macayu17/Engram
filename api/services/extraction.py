@@ -7,7 +7,6 @@ import asyncpg
 from api.config import settings
 from api.db.connection import get_pool
 from api.services.deduplication import store_memory_with_deduplication
-from api.services.embedding import embed_batch
 from api.services.providers.base import ExtractionProvider
 from api.services.providers.gemini import GeminiExtractionProvider
 from api.services.providers.ollama import OllamaExtractionProvider
@@ -60,13 +59,14 @@ async def run_extraction_task(
     conversation_id: UUID,
     request_body: dict[str, object],
     response_body: bytes,
+    dedup_threshold: float | None = None,
 ) -> None:
     try:
         conversation = build_conversation_text(request_body, response_body)
         async with get_pool().acquire() as db:
             await record_conversation(user_id, conversation_id, request_body, response_body, "running", 0, db)
             extracted = await extract_memories(conversation)
-            inserted_count = await store_extracted_memories(user_id, conversation_id, extracted, db)
+            inserted_count = await store_extracted_memories(user_id, conversation_id, extracted, db, dedup_threshold)
             await record_conversation(
                 user_id,
                 conversation_id,
@@ -90,9 +90,12 @@ async def store_extracted_memories(
     conversation_id: UUID,
     memories: list[str],
     db: asyncpg.Connection,
+    dedup_threshold: float | None = None,
 ) -> int:
     if not memories:
         return 0
+    from api.services.embedding import embed_batch
+
     embeddings = embed_batch(memories)
     stored_count = 0
     for index, content in enumerate(memories):
@@ -103,6 +106,7 @@ async def store_extracted_memories(
             conversation_id,
             1.0,
             db,
+            dedup_threshold,
         )
         if result["action"] in {"inserted", "updated"}:
             stored_count += 1
@@ -117,8 +121,8 @@ def build_conversation_text(request_body: dict[str, object], response_body: byte
             if not isinstance(message, dict):
                 continue
             role = message.get("role")
-            content = message.get("content")
-            if isinstance(role, str) and isinstance(content, str):
+            content = stringify_message_content(message.get("content"))
+            if isinstance(role, str) and content:
                 lines.append(f"{role}: {content}")
     assistant_text = extract_assistant_response_text(response_body)
     if assistant_text:
@@ -138,8 +142,10 @@ def extract_assistant_response_text(response_body: bytes) -> str:
         first_choice = choices[0]
         if isinstance(first_choice, dict):
             message = first_choice.get("message")
-            if isinstance(message, dict) and isinstance(message.get("content"), str):
-                return message["content"]
+            if isinstance(message, dict):
+                message_content = stringify_message_content(message.get("content"))
+                if message_content:
+                    return message_content
             text = first_choice.get("text")
             if isinstance(text, str):
                 return text
@@ -151,6 +157,19 @@ def extract_assistant_response_text(response_body: bytes) -> str:
             if isinstance(part, dict) and part.get("type") == "text" and isinstance(part.get("text"), str)
         ]
         return "\n".join(text_parts)
+    return ""
+
+
+def stringify_message_content(content: object) -> str:
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        parts = [
+            part["text"]
+            for part in content
+            if isinstance(part, dict) and isinstance(part.get("text"), str)
+        ]
+        return "\n".join(parts)
     return ""
 
 

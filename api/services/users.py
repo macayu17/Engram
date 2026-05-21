@@ -141,6 +141,23 @@ async def get_user_config(user_id: object, db: asyncpg.Connection) -> dict[str, 
     return dict(row)
 
 
+async def update_user_external_id(user_id: object, external_id: str, db: asyncpg.Connection) -> dict[str, object]:
+    row = await db.fetchrow(
+        """
+        UPDATE users
+        SET external_id = $2
+        WHERE id = $1
+        RETURNING id, external_id, created_at
+        """,
+        user_id,
+        external_id,
+    )
+    if row is None:
+        raise RuntimeError("User not found")
+    clear_cached_user(user_id)
+    return dict(row)
+
+
 async def update_user_config(
     user_id: object,
     max_memories_injected: int | None,

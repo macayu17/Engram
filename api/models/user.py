@@ -7,6 +7,10 @@ class UserCreate(BaseModel):
     external_id: str = Field(min_length=1, max_length=255)
 
 
+class UserUpdate(BaseModel):
+    external_id: str = Field(min_length=1, max_length=255)
+
+
 class ServiceUserKeyCreate(BaseModel):
     external_id: str = Field(min_length=1, max_length=255)
     key_name: str = Field(default="clerk", min_length=1, max_length=80)

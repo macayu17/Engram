@@ -1,3 +1,7 @@
+from uuid import uuid4
+
+import pytest
+
 from api.services import users
 from api.services.security import hash_api_key
 
@@ -10,7 +14,7 @@ def teardown_function() -> None:
     users._user_auth_cache.clear()
 
 
-def row(user_id: str, external_id: str) -> dict[str, object]:
+def row(user_id: object, external_id: str) -> dict[str, object]:
     return {
         "id": user_id,
         "external_id": external_id,
@@ -83,3 +87,26 @@ def test_cache_trims_oldest_entry_when_full(monkeypatch) -> None:
     assert users.get_cached_user_by_api_key("ek_oldest") is None
     assert users.get_cached_user_by_api_key("ek_middle") is not None
     assert users.get_cached_user_by_api_key("ek_newest") is not None
+
+
+@pytest.mark.asyncio
+async def test_update_user_external_id_clears_cached_user(monkeypatch) -> None:
+    class FakeDb:
+        async def fetchrow(self, query, *args):
+            return {
+                "id": args[0],
+                "external_id": args[1],
+                "created_at": None,
+            }
+
+    monkeypatch.setattr(users, "monotonic", lambda: 100.0)
+    monkeypatch.setattr(users.settings, "proxy_auth_cache_ttl_seconds", 300)
+    api_key = "ek_user_name"
+    user_id = uuid4()
+
+    users.cache_user_auth(hash_api_key(api_key), row(user_id, "old-name"))
+
+    updated_user = await users.update_user_external_id(user_id, "new-name", FakeDb())
+
+    assert updated_user["external_id"] == "new-name"
+    assert users.get_cached_user_by_api_key(api_key) is None

@@ -259,6 +259,7 @@ export const api = {
     create: (externalId: string) => requestInternal<UserCreateResponse>("POST", "/api/engram/users", { external_id: externalId }),
     ensureClerkKey: () => requestInternal<ClerkEngramKeyResponse>("POST", "/api/engram/user-key"),
     me: () => request<User>("GET", "/users/me"),
+    update: (externalId: string) => request<User>("PATCH", "/users/me", { external_id: externalId }),
     config: () => request<UserConfig>("GET", "/users/me/config"),
     updateConfig: (payload: UserConfigUpdate) => request<UserConfig>("PATCH", "/users/me/config", payload),
     regenerateKey: () => request<UserCreateResponse>("POST", "/users/me/api-key"),

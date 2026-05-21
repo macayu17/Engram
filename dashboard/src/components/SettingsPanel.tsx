@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, Copy, KeyRound, Plus, Trash2 } from "lucide-react";
+import { Check, Copy, Eye, EyeOff, KeyRound, Plus, Trash2 } from "lucide-react";
 import { FormEvent, useEffect, useState } from "react";
 
 import { api, clearActiveApiKey, readActiveApiKey, setActiveApiKey } from "@/lib/api";
@@ -11,8 +11,11 @@ export function SettingsPanel() {
   const queryClient = useQueryClient();
   const apiKey = useActiveApiKey();
   const [draftApiKey, setDraftApiKey] = useState(readActiveApiKey);
+  const [showApiKey, setShowApiKey] = useState(false);
   const [saved, setSaved] = useState(false);
   const [keyError, setKeyError] = useState("");
+  const [externalIdDraft, setExternalIdDraft] = useState("");
+  const [externalIdMessage, setExternalIdMessage] = useState("");
   const [externalId, setExternalId] = useState(() => `dashboard_user_${Date.now()}`);
   const [generatedKey, setGeneratedKey] = useState("");
   const [generatedExternalId, setGeneratedExternalId] = useState("");
@@ -51,9 +54,30 @@ export function SettingsPanel() {
       setGenerationMessage(error instanceof Error ? error.message : "Unable to generate key.");
     },
   });
+  const updateUserMutation = useMutation({
+    mutationFn: (nextExternalId: string) => api.users.update(nextExternalId),
+    onSuccess: (response) => {
+      setExternalIdDraft(response.external_id);
+      setExternalIdMessage("Username updated.");
+      void queryClient.invalidateQueries({ queryKey: ["current-user"] });
+    },
+    onError: (error) => {
+      setExternalIdMessage(error instanceof Error ? error.message : "Unable to update username.");
+    },
+  });
 
   useEffect(() => {
     setDraftApiKey(apiKey);
+  }, [apiKey]);
+
+  useEffect(() => {
+    if (userQuery.data?.external_id) {
+      setExternalIdDraft(userQuery.data.external_id);
+    }
+  }, [userQuery.data?.external_id]);
+
+  useEffect(() => {
+    setExternalIdMessage("");
   }, [apiKey]);
 
   function saveApiKey(event: FormEvent<HTMLFormElement>) {
@@ -96,6 +120,21 @@ export function SettingsPanel() {
     setGeneratedExternalId("");
     setGenerationMessage("");
     createUserMutation.mutate(trimmedExternalId);
+  }
+
+  function updateExternalId(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const trimmedExternalId = externalIdDraft.trim();
+    if (!trimmedExternalId) {
+      setExternalIdMessage("Enter a username first.");
+      return;
+    }
+    if (trimmedExternalId === userQuery.data?.external_id) {
+      setExternalIdMessage("Username already saved.");
+      return;
+    }
+    setExternalIdMessage("");
+    updateUserMutation.mutate(trimmedExternalId);
   }
 
   function deleteMemories() {
@@ -141,8 +180,17 @@ export function SettingsPanel() {
               }}
               placeholder="ek_..."
               className="min-h-12 min-w-0 flex-1 rounded-full border border-line bg-paper px-4 font-serif text-base text-ink outline-none focus:border-signal"
-              type="password"
+              type={showApiKey ? "text" : "password"}
             />
+            <button
+              type="button"
+              onClick={() => setShowApiKey((value) => !value)}
+              title={showApiKey ? "Hide saved key" : "View saved key"}
+              className="inline-flex min-h-12 items-center justify-center gap-2 border border-line px-4 font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-muted hover:border-signal hover:text-signal"
+            >
+              {showApiKey ? <EyeOff size={16} aria-hidden="true" /> : <Eye size={16} aria-hidden="true" />}
+              {showApiKey ? "Hide" : "View"}
+            </button>
             <button
               type="button"
               onClick={copyApiKey}
@@ -174,16 +222,37 @@ export function SettingsPanel() {
             ) : userQuery.isError ? (
               <p className="mt-4 font-serif text-base text-fault">Unable to authenticate this key.</p>
             ) : (
-              <dl className="mt-4 space-y-5 text-sm">
+              <div className="mt-4 space-y-5">
+                <form onSubmit={updateExternalId} className="space-y-3">
+                  <label className="block">
+                    <span className="font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-muted">Username</span>
+                    <span className="mt-1 block font-sans text-[11px] uppercase tracking-[0.12em] text-muted/70">Stored as external ID</span>
+                  </label>
+                  <div className="flex flex-col gap-3 sm:flex-row">
+                    <input
+                      value={externalIdDraft}
+                      onChange={(event) => {
+                        setExternalIdDraft(event.target.value);
+                        setExternalIdMessage("");
+                      }}
+                      className="min-h-12 min-w-0 flex-1 rounded-full border border-line bg-paper px-4 font-serif text-base text-ink outline-none focus:border-signal"
+                    />
+                    <button
+                      type="submit"
+                      disabled={updateUserMutation.isPending}
+                      className="inline-flex min-h-12 items-center justify-center gap-2 border border-ink px-5 font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-ink hover:border-signal hover:text-signal disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      <Check size={16} aria-hidden="true" />
+                      Save
+                    </button>
+                  </div>
+                  {externalIdMessage && <p className="font-serif text-base text-muted">{externalIdMessage}</p>}
+                </form>
                 <div>
-                  <dt className="font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-muted">External ID</dt>
-                  <dd className="mt-1 font-serif text-lg text-ink">{userQuery.data?.external_id}</dd>
+                  <p className="font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-muted">Created</p>
+                  <p className="mt-1 font-serif text-lg text-ink">{userQuery.data ? formatDate(userQuery.data.created_at) : ""}</p>
                 </div>
-                <div>
-                  <dt className="font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-muted">Created</dt>
-                  <dd className="mt-1 font-serif text-lg text-ink">{userQuery.data ? formatDate(userQuery.data.created_at) : ""}</dd>
-                </div>
-              </dl>
+              </div>
             )
           ) : (
             <p className="mt-4 font-serif text-base text-muted">No key saved.</p>

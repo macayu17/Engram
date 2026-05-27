@@ -71,6 +71,27 @@ CREATE TABLE IF NOT EXISTS conversations (
 
 CREATE INDEX IF NOT EXISTS conversations_user_created_at_idx ON conversations(user_id, created_at DESC);
 
+ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.memories ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.user_api_keys ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.retrieval_logs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.conversations ENABLE ROW LEVEL SECURITY;
+
+DO $$
+DECLARE
+    target_table TEXT;
+    target_role TEXT;
+BEGIN
+    FOREACH target_table IN ARRAY ARRAY['users', 'memories', 'user_api_keys', 'retrieval_logs', 'conversations'] LOOP
+        FOREACH target_role IN ARRAY ARRAY['anon', 'authenticated'] LOOP
+            IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = target_role) THEN
+                EXECUTE format('REVOKE ALL ON TABLE public.%I FROM %I', target_table, target_role);
+            END IF;
+        END LOOP;
+    END LOOP;
+END;
+$$;
+
 CREATE OR REPLACE FUNCTION set_updated_at()
 RETURNS TRIGGER AS $$
 BEGIN

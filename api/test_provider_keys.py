@@ -118,6 +118,15 @@ def test_resolve_user_provider_falls_back_to_server_env(monkeypatch) -> None:
     assert resolved.source == "server"
 
 
+def test_settings_accepts_engram_prefixed_env_var(monkeypatch) -> None:
+    monkeypatch.delenv("ENGRAM_PROVIDER_KEY_ENCRYPTION_KEY", raising=False)
+    monkeypatch.setenv("ENGRAM_PROVIDER_KEY_ENCRYPTION_KEY", Fernet.generate_key().decode())
+    import importlib
+    import api.config as config_module
+    importlib.reload(config_module)
+    assert config_module.settings.provider_key_encryption_key
+
+
 def test_summarize_provider_for_response_masks_key(monkeypatch) -> None:
     monkeypatch.setattr(security.settings, "provider_key_encryption_key", Fernet.generate_key().decode())
     user = {

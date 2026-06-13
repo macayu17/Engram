@@ -21,7 +21,7 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS openai_api_key_encrypted BYTEA;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS gemini_api_key_encrypted BYTEA;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS anthropic_api_key_encrypted BYTEA;
 
-DO \$\$
+DO $$
 BEGIN
     IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'users_extraction_provider_check') THEN
         ALTER TABLE users DROP CONSTRAINT users_extraction_provider_check;
@@ -29,7 +29,7 @@ BEGIN
     ALTER TABLE users ADD CONSTRAINT users_extraction_provider_check
         CHECK (extraction_provider IN ('openai', 'gemini', 'ollama', 'anthropic'));
 END;
-\$\$;
+$$;
 
 CREATE TABLE IF NOT EXISTS memories (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),

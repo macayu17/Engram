@@ -1,3 +1,4 @@
+from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -27,7 +28,14 @@ class Settings(BaseSettings):
     proxy_auth_cache_ttl_seconds: int = 300
     proxy_auth_cache_max_entries: int = 4096
     engram_test_api_url: str = "http://localhost:8000"
-    provider_key_encryption_key: str = ""
+    provider_key_encryption_key: str = Field(
+        default="",
+        validation_alias=AliasChoices(
+            "provider_key_encryption_key",
+            "ENGRAM_PROVIDER_KEY_ENCRYPTION_KEY",
+            "PROVIDER_KEY_ENCRYPTION_KEY",
+        ),
+    )
     engram_test_provider: str = "openai"
     engram_test_model: str = "gpt-4o-mini"
 

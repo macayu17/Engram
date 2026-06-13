@@ -9,6 +9,7 @@ import httpx
 from api.config import settings
 from api.services.extraction import run_extraction_task
 from api.services.providers.base import build_chat_completions_url
+from api.services.provider_keys import ProviderConfigError, ResolvedProvider, resolve_user_provider
 from api.services.retrieval import get_retrieval_query, log_retrieval, retrieve_memories
 
 
@@ -42,6 +43,8 @@ async def build_proxy_result(
     db: asyncpg.Connection,
     max_memories_injected: int | None = None,
     retrieval_threshold: float | None = None,
+    override_provider: str | None = None,
+    override_provider_key: str | None = None,
 ) -> ProxyResult:
     if external_id != requested_external_id:
         raise PermissionError("X-Engram-User-ID does not match the authenticated user")
@@ -58,7 +61,24 @@ async def build_proxy_result(
         except Exception as error:
             injected_count = 0
             logger.warning("Retrieval failed, proceeding without memories: %s", error)
-    provider_response = await forward_to_provider(body, provider, incoming_headers)
+    user_row = await db.fetchrow(
+        """SELECT id, external_id, extraction_provider,
+                  openai_api_key_encrypted, gemini_api_key_encrypted, anthropic_api_key_encrypted
+           FROM users WHERE id = $1""",
+        user_id,
+    )
+    if user_row is None:
+        raise PermissionError("Authenticated user no longer exists")
+    try:
+        resolved = resolve_user_provider(
+            user_row,
+            override_provider=override_provider or provider,
+            override_key=override_provider_key,
+        )
+    except ProviderConfigError as error:
+        raise RuntimeError(str(error)) from error
+    provider_response = await forward_to_provider(body, resolved, incoming_headers)
+    setattr(provider_response, "_resolved", resolved)
     return ProxyResult(
         provider_response.content,
         provider_response.status_code,
@@ -78,7 +98,18 @@ async def build_proxy_passthrough_result(
     if external_id != requested_external_id:
         raise PermissionError("X-Engram-User-ID does not match the authenticated user")
     conversation_id = uuid4()
-    provider_response = await forward_to_provider(copy.deepcopy(request_body), provider, incoming_headers)
+    from api.services.provider_keys import resolve_user_provider
+    from api.config import settings as _settings
+    fallback_row = {
+        "id": None,
+        "external_id": external_id,
+        "extraction_provider": _settings.extraction_provider,
+        "openai_api_key_encrypted": None,
+        "gemini_api_key_encrypted": None,
+        "anthropic_api_key_encrypted": None,
+    }
+    resolved = resolve_user_provider(fallback_row, override_provider=provider)
+    provider_response = await forward_to_provider(copy.deepcopy(request_body), resolved, incoming_headers)
     return ProxyResult(
         provider_response.content,
         provider_response.status_code,
@@ -115,14 +146,13 @@ def find_system_message(messages: list[object]) -> dict[str, object] | None:
 
 async def forward_to_provider(
     body: dict[str, object],
-    provider: str,
+    resolved: ResolvedProvider,
     incoming_headers: Mapping[str, str],
 ) -> ProviderResponse:
-    provider_name = provider.lower()
-    if provider_name == "anthropic":
-        return await forward_to_anthropic(body, incoming_headers)
-    url = get_openai_compatible_url(provider_name)
-    headers = build_provider_headers(provider_name, incoming_headers)
+    if resolved.name == "anthropic":
+        return await forward_to_anthropic(body, resolved, incoming_headers)
+    url = build_chat_completions_url(resolved.base_url)
+    headers = build_provider_headers(resolved, incoming_headers)
     try:
         async with httpx.AsyncClient(timeout=120) as client:
             response = await client.post(url, headers=headers, json=body)
@@ -131,11 +161,11 @@ async def forward_to_provider(
     return ProviderResponse(response.content, response.status_code, get_response_media_type(response))
 
 
-async def forward_to_anthropic(body: dict[str, object], incoming_headers: Mapping[str, str]) -> ProviderResponse:
-    if not settings.anthropic_api_key:
-        raise RuntimeError("ANTHROPIC_API_KEY is required for Anthropic proxy requests")
+async def forward_to_anthropic(body: dict[str, object], resolved: ResolvedProvider, incoming_headers: Mapping[str, str]) -> ProviderResponse:
+    if not resolved.api_key:
+        raise RuntimeError("Anthropic API key is required for Anthropic proxy requests")
     headers = sanitize_passthrough_headers(incoming_headers)
-    headers["x-api-key"] = settings.anthropic_api_key
+    headers["x-api-key"] = resolved.api_key
     headers["anthropic-version"] = "2023-06-01"
     headers["content-type"] = "application/json"
     payload = convert_openai_body_to_anthropic(body)
@@ -157,17 +187,13 @@ def get_openai_compatible_url(provider: str) -> str:
     raise ValueError(f"Unsupported provider: {provider}")
 
 
-def build_provider_headers(provider: str, incoming_headers: Mapping[str, str]) -> dict[str, str]:
+def build_provider_headers(resolved: ResolvedProvider, incoming_headers: Mapping[str, str]) -> dict[str, str]:
     headers = sanitize_passthrough_headers(incoming_headers)
     headers["content-type"] = "application/json"
-    if provider == "openai":
-        if not settings.openai_api_key:
-            raise RuntimeError("OPENAI_API_KEY is required for OpenAI proxy requests")
-        headers["authorization"] = f"Bearer {settings.openai_api_key}"
-    if provider == "gemini":
-        if not settings.gemini_api_key:
-            raise RuntimeError("GEMINI_API_KEY is required for Gemini proxy requests")
-        headers["authorization"] = f"Bearer {settings.gemini_api_key}"
+    if resolved.name in {"openai", "gemini"}:
+        if not resolved.api_key:
+            raise RuntimeError(f"{resolved.name} API key is required for proxy requests")
+        headers["authorization"] = f"Bearer {resolved.api_key}"
     return headers
 
 
@@ -188,6 +214,7 @@ def sanitize_passthrough_headers(incoming_headers: Mapping[str, str]) -> dict[st
         "x-engram-provider",
         "x-engram-disable-injection",
         "x-engram-disable-extraction",
+        "x-engram-provider-key",
     }
     return {key.lower(): value for key, value in incoming_headers.items() if key.lower() not in blocked}
 

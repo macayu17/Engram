@@ -16,6 +16,21 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS max_memories_injected INT NOT NULL DE
 ALTER TABLE users ADD COLUMN IF NOT EXISTS retrieval_threshold DOUBLE PRECISION NOT NULL DEFAULT 0.5;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS dedup_threshold DOUBLE PRECISION NOT NULL DEFAULT 0.95;
 
+ALTER TABLE users ADD COLUMN IF NOT EXISTS extraction_provider TEXT NOT NULL DEFAULT 'openai';
+ALTER TABLE users ADD COLUMN IF NOT EXISTS openai_api_key_encrypted BYTEA;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS gemini_api_key_encrypted BYTEA;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS anthropic_api_key_encrypted BYTEA;
+
+DO \$\$
+BEGIN
+    IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'users_extraction_provider_check') THEN
+        ALTER TABLE users DROP CONSTRAINT users_extraction_provider_check;
+    END IF;
+    ALTER TABLE users ADD CONSTRAINT users_extraction_provider_check
+        CHECK (extraction_provider IN ('openai', 'gemini', 'ollama', 'anthropic'));
+END;
+\$\$;
+
 CREATE TABLE IF NOT EXISTS memories (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,

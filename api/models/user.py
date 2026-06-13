@@ -36,3 +36,20 @@ class UserConfigResponse(BaseModel):
     max_memories_injected: int
     retrieval_threshold: float
     dedup_threshold: float
+
+
+class UserProviderConfigUpdate(BaseModel):
+    extraction_provider: str | None = Field(default=None, pattern="^(openai|gemini|ollama|anthropic)$")
+    openai_api_key: str | None = Field(default=None, max_length=512)
+    gemini_api_key: str | None = Field(default=None, max_length=512)
+    anthropic_api_key: str | None = Field(default=None, max_length=512)
+    clear_openai_key: bool = Field(default=False)
+    clear_gemini_key: bool = Field(default=False)
+    clear_anthropic_key: bool = Field(default=False)
+
+
+class UserProviderConfigResponse(BaseModel):
+    extraction_provider: str
+    extraction_model: str
+    has_user_api_key: bool
+    user_api_key_preview: str | None

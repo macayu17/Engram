@@ -65,3 +65,4 @@ services:
     depends_on:
       api:
         condition: service_healthy
+      ENGRAM_PROVIDER_KEY_ENCRYPTION_KEY: ${ENGRAM_PROVIDER_KEY_ENCRYPTION_KEY:-}

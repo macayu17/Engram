@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, Copy, Eye, EyeOff, KeyRound, Plus, Trash2 } from "lucide-react";
 import { FormEvent, useEffect, useState } from "react";
 
-import { api, clearActiveApiKey, readActiveApiKey, setActiveApiKey } from "@/lib/api";
+import { api, clearActiveApiKey, readActiveApiKey, setActiveApiKey, type UserProviderConfig, type UserProviderConfigUpdate } from "@/lib/api";
 import { useActiveApiKey } from "@/lib/useActiveApiKey";
 
 export function SettingsPanel() {
@@ -312,6 +312,8 @@ export function SettingsPanel() {
         {generationMessage && <p className="mt-3 font-serif text-base text-muted">{generationMessage}</p>}
       </form>
 
+      <ProviderConfigSection apiKey={apiKey} onError={setKeyError} />
+
       <div className="border-y border-fault/30 bg-fault/5 py-6">
         <h2 className="px-0 font-serif text-2xl font-semibold text-fault">Danger Zone</h2>
         <div className="mt-4 flex flex-col gap-3 sm:flex-row">
@@ -343,5 +345,155 @@ export function SettingsPanel() {
 function formatDate(value: string): string {
   return new Intl.DateTimeFormat(undefined, { month: "short", day: "2-digit", hour: "2-digit", minute: "2-digit" }).format(
     new Date(value),
+  );
+}
+
+function ProviderConfigSection({ apiKey, onError }: { apiKey: string; onError: (msg: string) => void }) {
+  const queryClient = useQueryClient();
+  const malformed = Boolean(apiKey) && !apiKey.startsWith("ek_");
+  const providerQuery = useQuery({
+    queryKey: ["user-provider", apiKey],
+    queryFn: () => api.users.provider(),
+    enabled: Boolean(apiKey) && !malformed,
+  });
+  const [provider, setProvider] = useState("openai");
+  const [model, setModel] = useState("gpt-4o-mini");
+  const [apiKeyInput, setApiKeyInput] = useState("");
+  const [saveMessage, setSaveMessage] = useState("");
+
+  useEffect(() => {
+    if (providerQuery.data) {
+      setProvider(providerQuery.data.extraction_provider);
+      setModel(providerQuery.data.extraction_model);
+    }
+  }, [providerQuery.data]);
+
+  const updateMutation = useMutation({
+    mutationFn: (payload: UserProviderConfigUpdate) => api.users.updateProvider(payload),
+    onSuccess: (response: UserProviderConfig) => {
+      setSaveMessage("Saved.");
+      setApiKeyInput("");
+      void queryClient.invalidateQueries({ queryKey: ["user-provider"] });
+      void queryClient.invalidateQueries({ queryKey: ["current-user"] });
+      onError("");
+    },
+    onError: (err) => {
+      const msg = err instanceof Error ? err.message : "Unable to save provider config.";
+      onError(msg);
+      setSaveMessage("");
+    },
+  });
+
+  function save(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const payload: UserProviderConfigUpdate = { extraction_provider: provider as UserProviderConfig["extraction_provider"] };
+    if (apiKeyInput.trim()) {
+      if (provider === "openai") payload.openai_api_key = apiKeyInput.trim();
+      if (provider === "gemini") payload.gemini_api_key = apiKeyInput.trim();
+      if (provider === "anthropic") payload.anthropic_api_key = apiKeyInput.trim();
+    }
+    updateMutation.mutate(payload);
+  }
+
+  function clearKey() {
+    const payload: UserProviderConfigUpdate = { extraction_provider: provider as UserProviderConfig["extraction_provider"] };
+    if (provider === "openai") payload.clear_openai_key = true;
+    if (provider === "gemini") payload.clear_gemini_key = true;
+    if (provider === "anthropic") payload.clear_anthropic_key = true;
+    updateMutation.mutate(payload);
+  }
+
+  if (!apiKey) return null;
+  if (malformed) {
+    return (
+      <div className="border-y border-line py-6">
+        <h2 className="font-serif text-2xl font-semibold">Extraction</h2>
+        <p className="mt-2 font-serif text-base text-muted">Save a valid Engram key first.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="border-y border-line py-6">
+      <h2 className="font-serif text-2xl font-semibold">Extraction</h2>
+      <p className="mt-1 font-serif text-base text-muted">
+        Choose which provider extracts durable memories. The key is encrypted with Fernet on the server before storage.
+      </p>
+      {providerQuery.isLoading ? (
+        <p className="mt-4 font-serif text-base text-muted">Loading provider config...</p>
+      ) : providerQuery.isError ? (
+        <p className="mt-4 font-serif text-base text-fault">Unable to load provider config.</p>
+      ) : (
+        <form onSubmit={save} className="mt-5 space-y-4">
+          <div>
+            <label className="block">
+              <span className="font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-muted">Provider</span>
+              <select
+                value={provider}
+                onChange={(event) => setProvider(event.target.value)}
+                className="mt-2 min-h-12 w-full rounded-full border border-line bg-paper px-4 font-serif text-base text-ink outline-none focus:border-signal"
+              >
+                <option value="openai">OpenAI</option>
+                <option value="gemini">Gemini</option>
+                <option value="ollama">Ollama (local, no key)</option>
+                <option value="anthropic">Anthropic (chat only, no extraction yet)</option>
+              </select>
+            </label>
+          </div>
+          <div>
+            <label className="block">
+              <span className="font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-muted">Model</span>
+              <input
+                value={model}
+                onChange={(event) => setModel(event.target.value)}
+                placeholder="gpt-4o-mini"
+                className="mt-2 min-h-12 w-full rounded-full border border-line bg-paper px-4 font-serif text-base text-ink outline-none focus:border-signal"
+              />
+            </label>
+          </div>
+          {provider !== "ollama" && (
+            <div>
+              <label className="block">
+                <span className="font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-muted">
+                  {provider === "openai" ? "OpenAI" : provider === "gemini" ? "Gemini" : "Anthropic"} API key
+                </span>
+                <span className="mt-1 block font-sans text-[11px] uppercase tracking-[0.12em] text-muted/70">
+                  {providerQuery.data?.user_api_key_preview
+                    ? `Stored as ${providerQuery.data.user_api_key_preview}`
+                    : "Not stored. Server fallback will be used."}
+                </span>
+              </label>
+              <div className="mt-2 flex flex-col gap-3 sm:flex-row">
+                <input
+                  type="password"
+                  value={apiKeyInput}
+                  onChange={(event) => setApiKeyInput(event.target.value)}
+                  placeholder={providerQuery.data?.has_user_api_key ? "••• (leave blank to keep stored key)" : "Paste key"}
+                  className="min-h-12 min-w-0 flex-1 rounded-full border border-line bg-paper px-4 font-serif text-base text-ink outline-none focus:border-signal"
+                />
+                <button
+                  type="button"
+                  onClick={clearKey}
+                  disabled={!providerQuery.data?.has_user_api_key || updateMutation.isPending}
+                  className="inline-flex min-h-12 items-center justify-center gap-2 border border-line px-4 font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-muted hover:border-signal hover:text-signal disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Clear
+                </button>
+              </div>
+            </div>
+          )}
+          <div className="flex items-center gap-3">
+            <button
+              type="submit"
+              disabled={updateMutation.isPending}
+              className="inline-flex min-h-12 items-center justify-center gap-2 border border-ink px-5 font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-ink hover:border-signal hover:text-signal disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Save Provider
+            </button>
+            {saveMessage && <span className="font-serif text-base text-signal">{saveMessage}</span>}
+          </div>
+        </form>
+      )}
+    </div>
   );
 }

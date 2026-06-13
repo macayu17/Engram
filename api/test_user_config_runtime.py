@@ -21,8 +21,19 @@ async def test_proxy_uses_user_retrieval_config(monkeypatch) -> None:
     async def fake_log_retrieval(user_id, conversation_id, query, memories, db):
         captured["logged"] = True
 
-    async def fake_forward_to_provider(body, provider, incoming_headers):
+    async def fake_forward_to_provider(body, resolved, incoming_headers):
         return ProviderResponse(b"{}", 200, "application/json")
+
+    class FakeDb:
+        async def fetchrow(self, query, *args):
+            return {
+                "id": args[0],
+                "external_id": "external-user",
+                "extraction_provider": "openai",
+                "openai_api_key_encrypted": None,
+                "gemini_api_key_encrypted": None,
+                "anthropic_api_key_encrypted": None,
+            }
 
     monkeypatch.setattr(proxy, "retrieve_memories", fake_retrieve_memories)
     monkeypatch.setattr(proxy, "log_retrieval", fake_log_retrieval)
@@ -37,7 +48,7 @@ async def test_proxy_uses_user_retrieval_config(monkeypatch) -> None:
         "openai",
         False,
         {},
-        object(),
+        FakeDb(),
         2,
         0.72,
     )
@@ -102,6 +113,10 @@ async def test_regenerate_user_key_removes_all_old_issued_keys() -> None:
                 "max_memories_injected": 5,
                 "retrieval_threshold": 0.5,
                 "dedup_threshold": 0.95,
+                "extraction_provider": "openai",
+                "openai_api_key_encrypted": None,
+                "gemini_api_key_encrypted": None,
+                "anthropic_api_key_encrypted": None,
             }
 
         async def execute(self, query, *args):

@@ -6,6 +6,26 @@ import asyncpg
 from api.config import settings
 from api.services.security import api_key_hashes_match, generate_api_key, hash_api_key
 
+from api.services.provider_keys import (
+    ProviderConfigError,
+    normalize_provider_name,
+)
+from api.services.security import encrypt_provider_key
+
+
+_USER_COLUMNS: str = (
+    "id, external_id, api_key_hash, created_at, max_memories_injected, "
+    "retrieval_threshold, dedup_threshold, extraction_provider, "
+    "openai_api_key_encrypted, gemini_api_key_encrypted, anthropic_api_key_encrypted"
+)
+
+
+_PROVIDER_KEY_ENCRYPTED_COLUMNS: dict[str, str] = {
+    "openai": "openai_api_key_encrypted",
+    "gemini": "gemini_api_key_encrypted",
+    "anthropic": "anthropic_api_key_encrypted",
+}
+
 
 class CachedUser(TypedDict):
     id: object
@@ -15,6 +35,7 @@ class CachedUser(TypedDict):
     max_memories_injected: int
     retrieval_threshold: float
     dedup_threshold: float
+    extraction_provider: str
     cached_at: float
 
 
@@ -26,10 +47,10 @@ async def create_user(external_id: str, db: asyncpg.Connection) -> tuple[asyncpg
     api_key_hash = hash_api_key(api_key)
     async with db.transaction():
         row = await db.fetchrow(
-            """
+            f"""
             INSERT INTO users (external_id, api_key_hash)
             VALUES ($1, $2)
-            RETURNING id, external_id, created_at, max_memories_injected, retrieval_threshold, dedup_threshold
+            RETURNING {_USER_COLUMNS}
             """,
             external_id,
             api_key_hash,
@@ -47,12 +68,12 @@ async def create_or_issue_user_key(external_id: str, key_name: str, db: asyncpg.
     api_key_hash = hash_api_key(api_key)
     async with db.transaction():
         row = await db.fetchrow(
-            """
+            f"""
             INSERT INTO users (external_id, api_key_hash)
             VALUES ($1, $2)
             ON CONFLICT (external_id) DO UPDATE
             SET updated_at = users.updated_at
-            RETURNING id, external_id, created_at, max_memories_injected, retrieval_threshold, dedup_threshold
+            RETURNING {_USER_COLUMNS}
             """,
             external_id,
             api_key_hash,
@@ -79,8 +100,8 @@ async def insert_user_api_key(user_id: object, api_key_hash: str, key_name: str,
 async def get_user_by_api_key(api_key: str, db: asyncpg.Connection) -> asyncpg.Record | None:
     api_key_hash = hash_api_key(api_key)
     row = await db.fetchrow(
-        """
-        SELECT id, external_id, api_key_hash, created_at, max_memories_injected, retrieval_threshold, dedup_threshold
+        f"""
+        SELECT {_USER_COLUMNS}
         FROM users
         WHERE api_key_hash = $1
         """,
@@ -88,22 +109,14 @@ async def get_user_by_api_key(api_key: str, db: asyncpg.Connection) -> asyncpg.R
     )
     if row is None:
         row = await db.fetchrow(
-            """
-            SELECT users.id, users.external_id, user_api_keys.api_key_hash, users.created_at,
-                   users.max_memories_injected, users.retrieval_threshold, users.dedup_threshold
-            FROM user_api_keys
-            JOIN users ON users.id = user_api_keys.user_id
-            WHERE user_api_keys.api_key_hash = $1
-            """,
-            api_key_hash,
-        )
-        if row is None:
-            return None
-        await db.execute(
-            """
-            UPDATE user_api_keys
-            SET last_used_at = now()
-            WHERE api_key_hash = $1
+            f"""
+        SELECT users.id, users.external_id, user_api_keys.api_key_hash, users.created_at,
+               users.max_memories_injected, users.retrieval_threshold, users.dedup_threshold,
+               users.extraction_provider,
+               users.openai_api_key_encrypted, users.gemini_api_key_encrypted, users.anthropic_api_key_encrypted
+        FROM user_api_keys
+        JOIN users ON users.id = user_api_keys.user_id
+        WHERE user_api_keys.api_key_hash = $1
             """,
             api_key_hash,
         )
@@ -190,11 +203,11 @@ async def regenerate_user_key(user: asyncpg.Record, db: asyncpg.Connection) -> t
     api_key_hash = hash_api_key(api_key)
     async with db.transaction():
         row = await db.fetchrow(
-            """
+            f"""
             UPDATE users
             SET api_key_hash = $2
             WHERE id = $1
-            RETURNING id, external_id, created_at, max_memories_injected, retrieval_threshold, dedup_threshold
+            RETURNING {_USER_COLUMNS}
             """,
             user["id"],
             api_key_hash,
@@ -214,11 +227,97 @@ async def regenerate_user_key(user: asyncpg.Record, db: asyncpg.Connection) -> t
     return dict(row), api_key
 
 
+_SENTINEL_NO_UPDATE = object()
+
+
+async def get_user_provider_config(user_id: object, db: asyncpg.Connection) -> dict[str, object]:
+    from api.services.provider_keys import summarize_provider_for_response
+    row = await db.fetchrow(
+        f"""
+        SELECT {_USER_COLUMNS}
+        FROM users
+        WHERE id = $1
+        """,
+        user_id,
+    )
+    if row is None:
+        raise RuntimeError("User not found")
+    return summarize_provider_for_response(row)
+
+
+async def update_user_provider_config(
+    user_id: object,
+    extraction_provider: str | None,
+    openai_api_key: str | None,
+    gemini_api_key: str | None,
+    anthropic_api_key: str | None,
+    clear_openai_key: bool,
+    clear_gemini_key: bool,
+    clear_anthropic_key: bool,
+    db: asyncpg.Connection,
+) -> dict[str, object]:
+    chosen_provider: str | None = None
+    if extraction_provider is not None:
+        chosen_provider = normalize_provider_name(extraction_provider)
+
+    openai_blob: object = _SENTINEL_NO_UPDATE
+    gemini_blob: object = _SENTINEL_NO_UPDATE
+    anthropic_blob: object = _SENTINEL_NO_UPDATE
+    if openai_api_key is not None:
+        openai_blob = encrypt_provider_key(openai_api_key) if openai_api_key else None
+    if clear_openai_key:
+        openai_blob = None
+    if gemini_api_key is not None:
+        gemini_blob = encrypt_provider_key(gemini_api_key) if gemini_api_key else None
+    if clear_gemini_key:
+        gemini_blob = None
+    if anthropic_api_key is not None:
+        anthropic_blob = encrypt_provider_key(anthropic_api_key) if anthropic_api_key else None
+    if clear_anthropic_key:
+        anthropic_blob = None
+
+    assignments: list[str] = []
+    params: list[object] = []
+    if chosen_provider is not None:
+        assignments.append("extraction_provider = $" + str(len(params) + 2))
+        params.append(chosen_provider)
+    if openai_blob is not _SENTINEL_NO_UPDATE:
+        assignments.append("openai_api_key_encrypted = $" + str(len(params) + 2))
+        params.append(openai_blob)
+    if gemini_blob is not _SENTINEL_NO_UPDATE:
+        assignments.append("gemini_api_key_encrypted = $" + str(len(params) + 2))
+        params.append(gemini_blob)
+    if anthropic_blob is not _SENTINEL_NO_UPDATE:
+        assignments.append("anthropic_api_key_encrypted = $" + str(len(params) + 2))
+        params.append(anthropic_blob)
+
+    if not assignments:
+        return await get_user_provider_config(user_id, db)
+
+    set_clause = ", ".join(assignments)
+    row = await db.fetchrow(
+        f"""
+        UPDATE users
+        SET {set_clause}
+        WHERE id = $1
+        RETURNING {_USER_COLUMNS}
+        """,
+        user_id,
+        *params,
+    )
+    if row is None:
+        raise RuntimeError("User not found")
+    clear_cached_user(user_id)
+    from api.services.provider_keys import summarize_provider_for_response
+    return summarize_provider_for_response(row)
+
+
 def cache_user_auth(api_key_hash: str, row: asyncpg.Record | dict[str, object]) -> None:
     prune_user_auth_cache()
     max_memories_injected = get_row_value(row, "max_memories_injected", settings.max_memories_injected)
     retrieval_threshold = get_row_value(row, "retrieval_threshold", settings.retrieval_threshold)
     dedup_threshold = get_row_value(row, "dedup_threshold", settings.dedup_threshold)
+    extraction_provider = get_row_value(row, "extraction_provider", settings.extraction_provider)
     _user_auth_cache[api_key_hash] = {
         "id": row["id"],
         "external_id": row["external_id"],
@@ -227,6 +326,7 @@ def cache_user_auth(api_key_hash: str, row: asyncpg.Record | dict[str, object]) 
         "max_memories_injected": int(max_memories_injected),
         "retrieval_threshold": float(retrieval_threshold),
         "dedup_threshold": float(dedup_threshold),
+        "extraction_provider": str(extraction_provider),
         "cached_at": monotonic(),
     }
     trim_user_auth_cache()

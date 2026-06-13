@@ -1,7 +1,7 @@
 from typing import Literal
 
 import asyncpg
-from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response, status
 from pydantic import UUID4
 
 from api.dependencies import get_current_user, get_db
@@ -54,6 +54,8 @@ async def create_memory_route(
 @router.post("/capture", response_model=ConversationCaptureResponse, status_code=status.HTTP_201_CREATED)
 async def capture_conversation_route(
     payload: ConversationCaptureRequest,
+    x_engram_provider: str | None = Header(default=None),
+    x_engram_provider_key: str | None = Header(default=None, alias="X-Engram-Provider-Key"),
     user: asyncpg.Record = Depends(get_current_user),
     db: asyncpg.Connection = Depends(get_db),
 ) -> dict[str, object]:
@@ -66,6 +68,8 @@ async def capture_conversation_route(
             payload.session_id,
             db,
             float(user["dedup_threshold"]),
+            override_provider=x_engram_provider,
+            override_provider_key=x_engram_provider_key,
         )
     except RuntimeError as error:
         raise HTTPException(status_code=502, detail=str(error)) from error

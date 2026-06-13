@@ -24,6 +24,7 @@ async def proxy_chat(
     x_engram_provider: str = Header(default="openai"),
     x_engram_disable_injection: bool = Header(default=False),
     x_engram_disable_extraction: bool = Header(default=False),
+    x_engram_provider_key: str | None = Header(default=None, alias="X-Engram-Provider-Key"),
 ) -> Response:
     body = await parse_request_body(request)
     result = await build_proxy_response_with_available_auth(
@@ -32,6 +33,7 @@ async def proxy_chat(
         x_engram_provider,
         x_engram_disable_injection,
         x_engram_disable_extraction,
+        x_engram_provider_key,
         body,
         request.headers,
     )
@@ -44,6 +46,7 @@ async def build_proxy_response_with_available_auth(
     provider: str,
     disable_injection: bool,
     disable_extraction: bool,
+    override_provider_key: str | None,
     body: dict[str, object],
     headers: Mapping[str, str],
 ) -> ProxyResult:
@@ -77,6 +80,8 @@ async def build_proxy_response_with_available_auth(
             db,
             int(user["max_memories_injected"]),
             float(user["retrieval_threshold"]),
+            override_provider=provider,
+            override_provider_key=override_provider_key,
         )
     except PermissionError as error:
         raise HTTPException(status_code=403, detail=str(error)) from error
@@ -91,7 +96,17 @@ async def build_proxy_response_with_available_auth(
             logger.warning("Database connection release failed: %s", error)
     if not disable_extraction and result.status_code < 400:
         try:
-            asyncio.create_task(run_extraction_task(user["id"], result.conversation_id, body, result.content, float(user["dedup_threshold"])))
+            asyncio.create_task(
+                run_extraction_task(
+                    user["id"],
+                    result.conversation_id,
+                    body,
+                    result.content,
+                    float(user["dedup_threshold"]),
+                    override_provider=provider,
+                    override_provider_key=override_provider_key,
+                )
+            )
         except Exception as error:
             logger.warning("Failed to schedule extraction: %s", error)
     return result

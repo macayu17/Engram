@@ -90,3 +90,4 @@ services:
 
 volumes:
   pgdata:
+      ENGRAM_PROVIDER_KEY_ENCRYPTION_KEY: ${ENGRAM_PROVIDER_KEY_ENCRYPTION_KEY:-}

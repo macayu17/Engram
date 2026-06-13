@@ -1,27 +1,32 @@
 import httpx
 
-from api.config import settings
 from api.services.providers.base import (
     ExtractionProvider,
     build_chat_completions_url,
     extract_chat_message_content,
     parse_memory_json,
 )
+from api.services.provider_keys import ResolvedProvider
 
 
 class OpenAIExtractionProvider(ExtractionProvider):
+    def __init__(self, resolved: ResolvedProvider) -> None:
+        self._base_url = resolved.base_url
+        self._api_key = resolved.api_key
+        self._model = resolved.model
+
     async def extract(self, prompt: str) -> list[str]:
-        if not settings.openai_api_key:
-            raise RuntimeError("OPENAI_API_KEY is required for OpenAI extraction")
+        if not self._api_key:
+            raise RuntimeError("OpenAI API key is required for OpenAI extraction")
         async with httpx.AsyncClient(timeout=60) as client:
             response = await client.post(
-                build_chat_completions_url(settings.openai_base_url),
+                build_chat_completions_url(self._base_url),
                 headers={
-                    "Authorization": f"Bearer {settings.openai_api_key}",
+                    "Authorization": f"Bearer {self._api_key}",
                     "Content-Type": "application/json",
                 },
                 json={
-                    "model": settings.extraction_model,
+                    "model": self._model,
                     "messages": [{"role": "user", "content": prompt}],
                     "temperature": 0,
                 },

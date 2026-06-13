@@ -60,6 +60,23 @@ export type UserConfig = {
 
 export type UserConfigUpdate = Partial<UserConfig>;
 
+export type UserProviderConfig = {
+  extraction_provider: "openai" | "gemini" | "ollama" | "anthropic";
+  extraction_model: string;
+  has_user_api_key: boolean;
+  user_api_key_preview: string | null;
+};
+
+export type UserProviderConfigUpdate = {
+  extraction_provider?: "openai" | "gemini" | "ollama" | "anthropic";
+  openai_api_key?: string;
+  gemini_api_key?: string;
+  anthropic_api_key?: string;
+  clear_openai_key?: boolean;
+  clear_gemini_key?: boolean;
+  clear_anthropic_key?: boolean;
+};
+
 export type ClerkEngramKeyResponse = {
   apiKey: string;
   externalId: string;
@@ -200,15 +217,25 @@ async function requestInternal<T>(method: string, path: string, body?: unknown):
   return response.json() as Promise<T>;
 }
 
-async function requestChat(params: { externalId: string; provider: string; model: string; messages: ChatMessage[] }): Promise<ChatResponse> {
+async function requestChat(params: {
+  externalId: string;
+  provider: string;
+  model: string;
+  messages: ChatMessage[];
+  providerKey?: string;
+}): Promise<ChatResponse> {
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    "X-Engram-Key": getApiKey(),
+    "X-Engram-User-ID": params.externalId,
+    "X-Engram-Provider": params.provider,
+  };
+  if (params.providerKey) {
+    headers["X-Engram-Provider-Key"] = params.providerKey;
+  }
   const response = await fetch(`${API_BASE_URL}/v1/chat`, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "X-Engram-Key": getApiKey(),
-      "X-Engram-User-ID": params.externalId,
-      "X-Engram-Provider": params.provider,
-    },
+    headers,
     body: JSON.stringify({
       model: params.model,
       messages: params.messages,
@@ -262,6 +289,8 @@ export const api = {
     update: (externalId: string) => request<User>("PATCH", "/users/me", { external_id: externalId }),
     config: () => request<UserConfig>("GET", "/users/me/config"),
     updateConfig: (payload: UserConfigUpdate) => request<UserConfig>("PATCH", "/users/me/config", payload),
+    provider: () => request<UserProviderConfig>("GET", "/users/me/provider"),
+    updateProvider: (payload: UserProviderConfigUpdate) => request<UserProviderConfig>("PATCH", "/users/me/provider", payload),
     regenerateKey: () => request<UserCreateResponse>("POST", "/users/me/api-key"),
     deleteMe: () => request<void>("DELETE", "/users/me"),
   },

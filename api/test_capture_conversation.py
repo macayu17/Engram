@@ -37,13 +37,33 @@ async def test_capture_conversation_extracts_stores_and_records(monkeypatch) -> 
     monkeypatch.setattr(extraction, "store_extracted_memories", fake_store_extracted_memories)
     monkeypatch.setattr(extraction, "record_conversation", fake_record_conversation)
 
+    class FakeDb:
+        async def fetchrow(self, query, *args):
+            return {
+                "id": user_id,
+                "external_id": "vscode-user",
+                "extraction_provider": "openai",
+                "openai_api_key_encrypted": None,
+                "gemini_api_key_encrypted": None,
+                "anthropic_api_key_encrypted": None,
+            }
+
+    from api.services.provider_keys import ResolvedProvider
+    monkeypatch.setattr(
+        extraction,
+        "resolve_user_provider",
+        lambda user, override_provider=None, override_key=None: ResolvedProvider(
+            name="openai", api_key="", base_url="", model="", source="test"
+        ),
+    )
+
     result = await extraction.capture_conversation_memories(
         user_id,
         "I want Engram to remember useful facts automatically.",
         "I will capture durable facts after each meaningful exchange.",
         "vscode",
         "session-1",
-        object(),
+        FakeDb(),
         0.77,
     )
 
@@ -85,13 +105,33 @@ async def test_capture_conversation_records_zero_when_nothing_extracted(monkeypa
     monkeypatch.setattr(extraction, "store_extracted_memories", fake_store_extracted_memories)
     monkeypatch.setattr(extraction, "record_conversation", fake_record_conversation)
 
+    class FakeDb:
+        async def fetchrow(self, query, *args):
+            return {
+                "id": args[0] if args else None,
+                "external_id": "claude-user",
+                "extraction_provider": "openai",
+                "openai_api_key_encrypted": None,
+                "gemini_api_key_encrypted": None,
+                "anthropic_api_key_encrypted": None,
+            }
+
+    from api.services.provider_keys import ResolvedProvider
+    monkeypatch.setattr(
+        extraction,
+        "resolve_user_provider",
+        lambda user, override_provider=None, override_key=None: ResolvedProvider(
+            name="openai", api_key="", base_url="", model="", source="test"
+        ),
+    )
+
     result = await extraction.capture_conversation_memories(
         uuid4(),
         "Hello",
         "Hi",
         "claude_desktop",
         None,
-        object(),
+        FakeDb(),
         None,
     )
 

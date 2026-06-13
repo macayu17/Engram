@@ -27,6 +27,7 @@ class Settings(BaseSettings):
     proxy_auth_cache_ttl_seconds: int = 300
     proxy_auth_cache_max_entries: int = 4096
     engram_test_api_url: str = "http://localhost:8000"
+    provider_key_encryption_key: str = ""
     engram_test_provider: str = "openai"
     engram_test_model: str = "gpt-4o-mini"
 

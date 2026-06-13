@@ -6,6 +6,8 @@ from api.models.user import (
     ServiceUserKeyCreate,
     UserConfigResponse,
     UserConfigUpdate,
+    UserProviderConfigResponse,
+    UserProviderConfigUpdate,
     UserCreate,
     UserCreateResponse,
     UserResponse,
@@ -16,9 +18,11 @@ from api.services.users import (
     create_user,
     delete_user,
     get_user_config,
+    get_user_provider_config,
     regenerate_user_key,
     update_user_config,
     update_user_external_id,
+    update_user_provider_config,
 )
 
 
@@ -121,3 +125,32 @@ async def delete_current_user_route(
     if not deleted:
         raise HTTPException(status_code=404, detail="User not found")
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+@router.get("/me/provider", response_model=UserProviderConfigResponse)
+async def get_current_user_provider_route(
+    user: asyncpg.Record = Depends(get_current_user),
+    db: asyncpg.Connection = Depends(get_db),
+) -> dict[str, object]:
+    return await get_user_provider_config(user["id"], db)
+
+
+@router.patch("/me/provider", response_model=UserProviderConfigResponse)
+async def update_current_user_provider_route(
+    payload: UserProviderConfigUpdate,
+    user: asyncpg.Record = Depends(get_current_user),
+    db: asyncpg.Connection = Depends(get_db),
+) -> dict[str, object]:
+    try:
+        return await update_user_provider_config(
+            user["id"],
+            payload.extraction_provider,
+            payload.openai_api_key,
+            payload.gemini_api_key,
+            payload.anthropic_api_key,
+            payload.clear_openai_key,
+            payload.clear_gemini_key,
+            payload.clear_anthropic_key,
+            db,
+        )
+    except ValueError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error

@@ -5,13 +5,12 @@ from uuid import uuid4
 
 import asyncpg
 
-from api.config import settings
+from api.services.users import _USER_COLUMNS
 from api.db.connection import get_pool
 from api.services.deduplication import store_memory_with_deduplication
 from api.services.providers.base import ExtractionProvider
-from api.services.providers.gemini import GeminiExtractionProvider
-from api.services.providers.ollama import OllamaExtractionProvider
-from api.services.providers.openai import OpenAIExtractionProvider
+from api.services.providers.factory import build_extraction_provider
+from api.services.provider_keys import ProviderConfigError, resolve_user_provider, ResolvedProvider
 
 
 logger = logging.getLogger(__name__)
@@ -39,19 +38,12 @@ CONVERSATION:
 MEMORIES (JSON array only):"""
 
 
-def get_extraction_provider() -> ExtractionProvider:
-    provider = settings.extraction_provider.lower()
-    if provider == "openai":
-        return OpenAIExtractionProvider()
-    if provider == "gemini":
-        return GeminiExtractionProvider()
-    if provider == "ollama":
-        return OllamaExtractionProvider()
-    raise RuntimeError(f"Unsupported extraction provider: {settings.extraction_provider}")
+def get_extraction_provider(resolved: ResolvedProvider) -> ExtractionProvider:
+    return build_extraction_provider(resolved)
 
 
-async def extract_memories(conversation: str) -> list[str]:
-    provider = get_extraction_provider()
+async def extract_memories(conversation: str, resolved: ResolvedProvider) -> list[str]:
+    provider = get_extraction_provider(resolved)
     return await provider.extract(EXTRACTION_PROMPT.format(conversation=conversation))
 
 
@@ -61,12 +53,32 @@ async def run_extraction_task(
     request_body: dict[str, object],
     response_body: bytes,
     dedup_threshold: float | None = None,
+    override_provider: str | None = None,
+    override_provider_key: str | None = None,
 ) -> None:
     try:
         conversation = build_conversation_text(request_body, response_body)
         async with get_pool().acquire() as db:
             await record_conversation(user_id, conversation_id, request_body, response_body, "running", 0, db)
-            extracted = await extract_memories(conversation)
+            user_row = await db.fetchrow(
+                f"""
+                SELECT {_USER_COLUMNS}
+                FROM users
+                WHERE id = $1
+                """,
+                user_id,
+            )
+            if user_row is None:
+                raise RuntimeError("User not found during extraction")
+            try:
+                resolved = resolve_user_provider(
+                    user_row,
+                    override_provider=override_provider,
+                    override_key=override_provider_key,
+                )
+            except ProviderConfigError as error:
+                raise RuntimeError(str(error)) from error
+            extracted = await extract_memories(conversation, resolved)
             inserted_count = await store_extracted_memories(user_id, conversation_id, extracted, db, dedup_threshold)
             await record_conversation(
                 user_id,
@@ -122,12 +134,32 @@ async def capture_conversation_memories(
     session_id: str | None,
     db: asyncpg.Connection,
     dedup_threshold: float | None = None,
+    override_provider: str | None = None,
+    override_provider_key: str | None = None,
 ) -> dict[str, object]:
     conversation_id = uuid4()
     request_body = build_capture_request_body(user_message, assistant_response, source, session_id)
     response_body = build_capture_response_body(assistant_response)
     conversation = build_capture_conversation_text(user_message, assistant_response)
-    extracted_memories = await extract_memories(conversation)
+    user_row = await db.fetchrow(
+        f"""
+        SELECT {_USER_COLUMNS}
+        FROM users
+        WHERE id = $1
+        """,
+        user_id,
+    )
+    if user_row is None:
+        raise RuntimeError("User not found during capture")
+    try:
+        resolved = resolve_user_provider(
+            user_row,
+            override_provider=override_provider,
+            override_key=override_provider_key,
+        )
+    except ProviderConfigError as error:
+        raise RuntimeError(str(error)) from error
+    extracted_memories = await extract_memories(conversation, resolved)
     memories_extracted = 0
     if extracted_memories:
         memories_extracted = await store_extracted_memories(user_id, conversation_id, extracted_memories, db, dedup_threshold)

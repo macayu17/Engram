@@ -186,6 +186,7 @@ Memory endpoints:
 - `POST /memories/capture`
 - `GET /memories/{memory_id}`
 - `PATCH /memories/{memory_id}`
+- `DELETE /memories` (bulk delete all memories for the authenticated user)
 - `DELETE /memories/{memory_id}`
 - `POST /memories/search`
 

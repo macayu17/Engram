@@ -46,6 +46,7 @@ services:
       LOG_LEVEL: ${LOG_LEVEL:-info}
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3001,http://localhost:3011}
       ENGRAM_SERVICE_KEY: ${ENGRAM_SERVICE_KEY:-}
+      ENGRAM_PROVIDER_KEY_ENCRYPTION_KEY: ${ENGRAM_PROVIDER_KEY_ENCRYPTION_KEY:-}
     depends_on:
       postgres:
         condition: service_healthy
@@ -90,4 +91,3 @@ services:
 
 volumes:
   pgdata:
-      ENGRAM_PROVIDER_KEY_ENCRYPTION_KEY: ${ENGRAM_PROVIDER_KEY_ENCRYPTION_KEY:-}

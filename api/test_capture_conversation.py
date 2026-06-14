@@ -10,7 +10,7 @@ async def test_capture_conversation_extracts_stores_and_records(monkeypatch) -> 
     captured: dict[str, object] = {}
     user_id = uuid4()
 
-    async def fake_extract_memories(conversation: str) -> list[str]:
+    async def fake_extract_memories(conversation: str, resolved) -> list[str]:
         captured["conversation"] = conversation
         return ["User prefers automatic Engram memory capture"]
 
@@ -91,7 +91,7 @@ async def test_capture_conversation_extracts_stores_and_records(monkeypatch) -> 
 async def test_capture_conversation_records_zero_when_nothing_extracted(monkeypatch) -> None:
     captured: dict[str, object] = {}
 
-    async def fake_extract_memories(conversation: str) -> list[str]:
+    async def fake_extract_memories(conversation: str, resolved) -> list[str]:
         return []
 
     async def fake_store_extracted_memories(user_id_arg, conversation_id_arg, memories, db, dedup_threshold=None):

@@ -24,6 +24,16 @@ async def test_proxy_uses_user_retrieval_config(monkeypatch) -> None:
     async def fake_forward_to_provider(body, resolved, incoming_headers):
         return ProviderResponse(b"{}", 200, "application/json")
 
+    def fake_resolve_user_provider(user, override_provider=None, override_key=None):
+        from api.services.provider_keys import ResolvedProvider
+        return ResolvedProvider(
+            name="openai",
+            api_key="server-test-key",
+            base_url="https://api.openai.com/v1",
+            model="gpt-4o-mini",
+            source="server",
+        )
+
     class FakeDb:
         async def fetchrow(self, query, *args):
             return {
@@ -38,6 +48,7 @@ async def test_proxy_uses_user_retrieval_config(monkeypatch) -> None:
     monkeypatch.setattr(proxy, "retrieve_memories", fake_retrieve_memories)
     monkeypatch.setattr(proxy, "log_retrieval", fake_log_retrieval)
     monkeypatch.setattr(proxy, "forward_to_provider", fake_forward_to_provider)
+    monkeypatch.setattr(proxy, "resolve_user_provider", fake_resolve_user_provider)
 
     user_id = uuid4()
     await proxy.build_proxy_result(

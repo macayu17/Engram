@@ -108,6 +108,18 @@ async def delete_memory(user_id: object, memory_id: object, db: asyncpg.Connecti
     return result.endswith("1")
 
 
+async def delete_all_memories(user_id: object, db: asyncpg.Connection) -> int:
+    result = await db.execute(
+        """
+        DELETE FROM memories
+        WHERE user_id = $1
+        """
+,
+        user_id,
+    )
+    return int(result.split()[1])
+
+
 async def search_memories(
     user_id: object,
     query: str,

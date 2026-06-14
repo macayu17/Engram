@@ -252,16 +252,8 @@ async function requestChat(params: {
   };
 }
 
-async function deleteAllMemories(): Promise<number> {
-  let deletedCount = 0;
-  while (true) {
-    const response = await api.memories.list({ limit: 100, offset: 0 });
-    if (!response.memories.length) {
-      return deletedCount;
-    }
-    await Promise.all(response.memories.map((memory) => api.memories.delete(memory.id)));
-    deletedCount += response.memories.length;
-  }
+async function deleteAllMemories(): Promise<void> {
+  await request<void>("DELETE", "/memories");
 }
 
 export const api = {

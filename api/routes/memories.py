@@ -17,6 +17,7 @@ from api.models.memory import (
 from api.services.extraction import capture_conversation_memories
 from api.services.memories import (
     create_memory,
+    delete_all_memories,
     delete_memory,
     get_memory,
     list_memories,
@@ -50,6 +51,14 @@ async def create_memory_route(
 ) -> dict[str, object]:
     return await create_memory(user["id"], payload.content, db, float(user["dedup_threshold"]))
 
+
+@router.delete("", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_all_memories_route(
+    user: asyncpg.Record = Depends(get_current_user),
+    db: asyncpg.Connection = Depends(get_db),
+) -> Response:
+    deleted = await delete_all_memories(user["id"], db)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 @router.post("/capture", response_model=ConversationCaptureResponse, status_code=status.HTTP_201_CREATED)
 async def capture_conversation_route(

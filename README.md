@@ -25,6 +25,7 @@ EXTRACTION_PROVIDER=openai
 OPENAI_API_KEY=your_key_here
 MCP_SERVICE_KEY=
 ENGRAM_SERVICE_KEY=your_server_to_server_key_here
+ENGRAM_PROVIDER_KEY_ENCRYPTION_KEY=your_fernet_key_for_per_user_provider_keys
 NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=your_clerk_publishable_key
 CLERK_SECRET_KEY=your_clerk_secret_key
 ```
@@ -170,7 +171,13 @@ User endpoints:
 - `POST /users`
 - `POST /users/service-key`
 - `GET /users/me`
+- `PATCH /users/me`
 - `DELETE /users/me`
+- `GET /users/me/config`
+- `PATCH /users/me/config`
+- `GET /users/me/provider`
+- `PATCH /users/me/provider`
+- `POST /users/me/api-key`
 
 Memory endpoints:
 
@@ -199,6 +206,13 @@ X-Engram-User-ID: your_external_user_id
 X-Engram-Provider: openai | anthropic | gemini | ollama
 X-Engram-Disable-Injection: false
 X-Engram-Disable-Extraction: false
+X-Engram-Provider-Key: sk-... (optional, ephemeral override for openai/gemini; never persisted)
+```
+
+The API service also accepts a service key on internal routes such as `POST /users/service-key`:
+
+```text
+X-Engram-Service-Key: esk_...
 ```
 
 ## MCP

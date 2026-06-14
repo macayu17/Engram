@@ -120,6 +120,8 @@ async def get_user_by_api_key(api_key: str, db: asyncpg.Connection) -> asyncpg.R
             """,
             api_key_hash,
         )
+    if row is None:
+        return None
     if not api_key_hashes_match(row["api_key_hash"], api_key):
         return None
     cache_user_auth(api_key_hash, row)

@@ -110,3 +110,16 @@ async def test_update_user_external_id_clears_cached_user(monkeypatch) -> None:
 
     assert updated_user["external_id"] == "new-name"
     assert users.get_cached_user_by_api_key(api_key) is None
+
+
+@pytest.mark.asyncio
+async def test_get_user_by_api_key_returns_none_when_no_user_or_key_row() -> None:
+    class FakeDb:
+        async def fetchrow(self, query, *args):
+            return None
+
+    api_key = "ek_missing"
+
+    result = await users.get_user_by_api_key(api_key, FakeDb())
+
+    assert result is None

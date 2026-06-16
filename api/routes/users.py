@@ -144,6 +144,7 @@ async def update_current_user_provider_route(
         return await update_user_provider_config(
             user["id"],
             payload.extraction_provider,
+            payload.extraction_model,
             payload.openai_api_key,
             payload.gemini_api_key,
             payload.anthropic_api_key,

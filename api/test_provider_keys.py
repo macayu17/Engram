@@ -65,12 +65,14 @@ def test_resolve_user_provider_uses_user_key(monkeypatch) -> None:
         "id": "u1",
         "external_id": "alice",
         "extraction_provider": "gemini",
+        "extraction_model": "gemini-1.5-flash",
         "openai_api_key_encrypted": None,
         "gemini_api_key_encrypted": encrypt_provider_key("user-gemini"),
         "anthropic_api_key_encrypted": None,
     }
     resolved = provider_keys.resolve_user_provider(user)
     assert resolved.name == "gemini"
+    assert resolved.model == "gemini-1.5-flash"
     assert resolved.api_key == "user-gemini"
     assert resolved.source == "user"
 
@@ -131,6 +133,7 @@ def test_summarize_provider_for_response_masks_key(monkeypatch) -> None:
     monkeypatch.setattr(security.settings, "provider_key_encryption_key", Fernet.generate_key().decode())
     user = {
         "extraction_provider": "openai",
+        "extraction_model": "gpt-4.1-mini",
         "openai_api_key_encrypted": encrypt_provider_key("sk-supersecretvalue12345"),
         "gemini_api_key_encrypted": None,
         "anthropic_api_key_encrypted": None,
@@ -140,3 +143,4 @@ def test_summarize_provider_for_response_masks_key(monkeypatch) -> None:
     assert summary["user_api_key_preview"] is not None
     assert "supersecretvalue" not in summary["user_api_key_preview"]
     assert summary["extraction_provider"] == "openai"
+    assert summary["extraction_model"] == "gpt-4.1-mini"

@@ -386,7 +386,16 @@ function ProviderConfigSection({ apiKey, onError }: { apiKey: string; onError: (
 
   function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const payload: UserProviderConfigUpdate = { extraction_provider: provider as UserProviderConfig["extraction_provider"] };
+    const trimmedModel = model.trim();
+    if (!trimmedModel) {
+      setSaveMessage("");
+      onError("Enter an extraction model first.");
+      return;
+    }
+    const payload: UserProviderConfigUpdate = {
+      extraction_provider: provider as UserProviderConfig["extraction_provider"],
+      extraction_model: trimmedModel,
+    };
     if (apiKeyInput.trim()) {
       if (provider === "openai") payload.openai_api_key = apiKeyInput.trim();
       if (provider === "gemini") payload.gemini_api_key = apiKeyInput.trim();

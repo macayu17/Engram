@@ -4,27 +4,15 @@ from typing import TypedDict
 import asyncpg
 
 from api.config import settings
-from api.services.security import api_key_hashes_match, generate_api_key, hash_api_key
-
-from api.services.provider_keys import (
-    ProviderConfigError,
-    normalize_provider_name,
-)
-from api.services.security import encrypt_provider_key
+from api.services.provider_keys import normalize_provider_name
+from api.services.security import api_key_hashes_match, encrypt_provider_key, generate_api_key, hash_api_key
 
 
 _USER_COLUMNS: str = (
     "id, external_id, api_key_hash, created_at, max_memories_injected, "
     "retrieval_threshold, dedup_threshold, extraction_provider, "
-    "openai_api_key_encrypted, gemini_api_key_encrypted, anthropic_api_key_encrypted"
+    "extraction_model, openai_api_key_encrypted, gemini_api_key_encrypted, anthropic_api_key_encrypted"
 )
-
-
-_PROVIDER_KEY_ENCRYPTED_COLUMNS: dict[str, str] = {
-    "openai": "openai_api_key_encrypted",
-    "gemini": "gemini_api_key_encrypted",
-    "anthropic": "anthropic_api_key_encrypted",
-}
 
 
 class CachedUser(TypedDict):
@@ -36,6 +24,7 @@ class CachedUser(TypedDict):
     retrieval_threshold: float
     dedup_threshold: float
     extraction_provider: str
+    extraction_model: str
     cached_at: float
 
 
@@ -112,7 +101,7 @@ async def get_user_by_api_key(api_key: str, db: asyncpg.Connection) -> asyncpg.R
             f"""
         SELECT users.id, users.external_id, user_api_keys.api_key_hash, users.created_at,
                users.max_memories_injected, users.retrieval_threshold, users.dedup_threshold,
-               users.extraction_provider,
+               users.extraction_provider, users.extraction_model,
                users.openai_api_key_encrypted, users.gemini_api_key_encrypted, users.anthropic_api_key_encrypted
         FROM user_api_keys
         JOIN users ON users.id = user_api_keys.user_id
@@ -250,6 +239,7 @@ async def get_user_provider_config(user_id: object, db: asyncpg.Connection) -> d
 async def update_user_provider_config(
     user_id: object,
     extraction_provider: str | None,
+    extraction_model: str | None,
     openai_api_key: str | None,
     gemini_api_key: str | None,
     anthropic_api_key: str | None,
@@ -261,6 +251,11 @@ async def update_user_provider_config(
     chosen_provider: str | None = None
     if extraction_provider is not None:
         chosen_provider = normalize_provider_name(extraction_provider)
+    clean_extraction_model: str | None = None
+    if extraction_model is not None:
+        clean_extraction_model = extraction_model.strip()
+        if not clean_extraction_model:
+            raise ValueError("Extraction model is required")
 
     openai_blob: object = _SENTINEL_NO_UPDATE
     gemini_blob: object = _SENTINEL_NO_UPDATE
@@ -283,6 +278,9 @@ async def update_user_provider_config(
     if chosen_provider is not None:
         assignments.append("extraction_provider = $" + str(len(params) + 2))
         params.append(chosen_provider)
+    if clean_extraction_model is not None:
+        assignments.append("extraction_model = $" + str(len(params) + 2))
+        params.append(clean_extraction_model)
     if openai_blob is not _SENTINEL_NO_UPDATE:
         assignments.append("openai_api_key_encrypted = $" + str(len(params) + 2))
         params.append(openai_blob)
@@ -320,6 +318,7 @@ def cache_user_auth(api_key_hash: str, row: asyncpg.Record | dict[str, object]) 
     retrieval_threshold = get_row_value(row, "retrieval_threshold", settings.retrieval_threshold)
     dedup_threshold = get_row_value(row, "dedup_threshold", settings.dedup_threshold)
     extraction_provider = get_row_value(row, "extraction_provider", settings.extraction_provider)
+    extraction_model = get_row_value(row, "extraction_model", settings.extraction_model)
     _user_auth_cache[api_key_hash] = {
         "id": row["id"],
         "external_id": row["external_id"],
@@ -329,6 +328,7 @@ def cache_user_auth(api_key_hash: str, row: asyncpg.Record | dict[str, object]) 
         "retrieval_threshold": float(retrieval_threshold),
         "dedup_threshold": float(dedup_threshold),
         "extraction_provider": str(extraction_provider),
+        "extraction_model": str(extraction_model),
         "cached_at": monotonic(),
     }
     trim_user_auth_cache()

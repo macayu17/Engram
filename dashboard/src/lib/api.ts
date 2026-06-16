@@ -69,6 +69,7 @@ export type UserProviderConfig = {
 
 export type UserProviderConfigUpdate = {
   extraction_provider?: "openai" | "gemini" | "ollama" | "anthropic";
+  extraction_model?: string;
   openai_api_key?: string;
   gemini_api_key?: string;
   anthropic_api_key?: string;

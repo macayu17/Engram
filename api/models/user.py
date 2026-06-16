@@ -40,6 +40,7 @@ class UserConfigResponse(BaseModel):
 
 class UserProviderConfigUpdate(BaseModel):
     extraction_provider: str | None = Field(default=None, pattern="^(openai|gemini|ollama|anthropic)$")
+    extraction_model: str | None = Field(default=None, min_length=1, max_length=120)
     openai_api_key: str | None = Field(default=None, max_length=512)
     gemini_api_key: str | None = Field(default=None, max_length=512)
     anthropic_api_key: str | None = Field(default=None, max_length=512)

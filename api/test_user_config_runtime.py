@@ -4,7 +4,7 @@ import pytest
 
 from api.services import extraction, proxy
 from api.services.proxy import ProviderResponse
-from api.services.users import regenerate_user_key
+from api.services.users import regenerate_user_key, update_user_provider_config
 
 
 @pytest.mark.asyncio
@@ -146,3 +146,70 @@ async def test_regenerate_user_key_removes_all_old_issued_keys() -> None:
     assert db.deleted_user_id == user["id"]
     assert db.deleted_with_hash_filter is False
     assert db.inserted_key_name == "default"
+
+
+@pytest.mark.asyncio
+async def test_update_user_provider_config_persists_extraction_model() -> None:
+    class FakeDb:
+        def __init__(self) -> None:
+            self.query = ""
+            self.args: tuple[object, ...] = ()
+
+        async def fetchrow(self, query, *args):
+            self.query = query
+            self.args = args
+            return {
+                "id": args[0],
+                "external_id": "external-user",
+                "created_at": None,
+                "max_memories_injected": 5,
+                "retrieval_threshold": 0.5,
+                "dedup_threshold": 0.95,
+                "extraction_provider": args[1],
+                "extraction_model": args[2],
+                "openai_api_key_encrypted": None,
+                "gemini_api_key_encrypted": None,
+                "anthropic_api_key_encrypted": None,
+            }
+
+    db = FakeDb()
+    user_id = uuid4()
+
+    response = await update_user_provider_config(
+        user_id,
+        "gemini",
+        "gemini-1.5-flash",
+        None,
+        None,
+        None,
+        False,
+        False,
+        False,
+        db,
+    )
+
+    assert "extraction_model" in db.query
+    assert db.args == (user_id, "gemini", "gemini-1.5-flash")
+    assert response["extraction_provider"] == "gemini"
+    assert response["extraction_model"] == "gemini-1.5-flash"
+
+
+@pytest.mark.asyncio
+async def test_update_user_provider_config_rejects_blank_extraction_model() -> None:
+    class FakeDb:
+        async def fetchrow(self, query, *args):
+            raise AssertionError("database should not be called for invalid model")
+
+    with pytest.raises(ValueError, match="Extraction model is required"):
+        await update_user_provider_config(
+            uuid4(),
+            "openai",
+            "   ",
+            None,
+            None,
+            None,
+            False,
+            False,
+            False,
+            FakeDb(),
+        )

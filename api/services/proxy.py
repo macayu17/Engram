@@ -63,6 +63,7 @@ async def build_proxy_result(
             logger.warning("Retrieval failed, proceeding without memories: %s", error)
     user_row = await db.fetchrow(
         """SELECT id, external_id, extraction_provider,
+                  extraction_model,
                   openai_api_key_encrypted, gemini_api_key_encrypted, anthropic_api_key_encrypted
            FROM users WHERE id = $1""",
         user_id,
@@ -104,6 +105,7 @@ async def build_proxy_passthrough_result(
         "id": None,
         "external_id": external_id,
         "extraction_provider": _settings.extraction_provider,
+        "extraction_model": _settings.extraction_model,
         "openai_api_key_encrypted": None,
         "gemini_api_key_encrypted": None,
         "anthropic_api_key_encrypted": None,

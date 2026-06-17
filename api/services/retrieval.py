@@ -104,10 +104,12 @@ async def retrieve_memories(
         rows = await db.fetch(
             """
             SELECT id, content, confidence, access_count, last_accessed, created_at, source_conversation_id,
-                   1 - (embedding <=> $1::vector) AS score
+                   status, category, pinned, source, last_confirmed,
+                   1 - (embedding <=> $1::vector) + CASE WHEN pinned THEN 0.08 ELSE 0 END AS score
             FROM memories
             WHERE user_id = $2
-              AND 1 - (embedding <=> $1::vector) > $3
+              AND status = 'approved'
+              AND (1 - (embedding <=> $1::vector) > $3 OR pinned = true)
             ORDER BY score DESC
             LIMIT $4
             """,

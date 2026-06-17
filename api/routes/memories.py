@@ -8,20 +8,35 @@ from api.dependencies import get_current_user, get_db
 from api.models.conversation import ConversationCaptureRequest, ConversationCaptureResponse
 from api.models.memory import (
     MemoryCreate,
+    MemoryDecayResponse,
+    MemoryExportResponse,
+    MemoryImportRequest,
+    MemoryImportResponse,
     MemoryListResponse,
+    MemoryMergeRequest,
+    MemoryMergeSuggestionsResponse,
     MemoryResponse,
     MemorySearchRequest,
     MemorySearchResponse,
+    MemorySourceResponse,
+    MemoryTimelineResponse,
     MemoryUpdate,
 )
 from api.services.extraction import capture_conversation_memories
 from api.services.memories import (
+    apply_confidence_decay,
     create_memory,
     delete_all_memories,
     delete_memory,
+    export_memories,
     get_memory,
+    get_memory_source,
+    import_memories,
     list_memories,
+    list_merge_suggestions,
+    merge_memories,
     search_memories,
+    timeline,
     update_memory,
 )
 
@@ -36,10 +51,12 @@ async def list_memories_route(
     search: str | None = Query(default=None),
     order: Literal["created_at", "last_accessed", "access_count"] = Query(default="created_at"),
     direction: Literal["asc", "desc"] = Query(default="desc"),
+    status: Literal["pending", "approved", "rejected"] | None = Query(default="approved"),
+    category: str | None = Query(default=None),
     user: asyncpg.Record = Depends(get_current_user),
     db: asyncpg.Connection = Depends(get_db),
 ) -> dict[str, object]:
-    memories, total = await list_memories(user["id"], db, limit, offset, search, order, direction)
+    memories, total = await list_memories(user["id"], db, limit, offset, search, order, direction, status, category)
     return {"memories": memories, "total": total, "limit": limit, "offset": offset}
 
 
@@ -49,7 +66,7 @@ async def create_memory_route(
     user: asyncpg.Record = Depends(get_current_user),
     db: asyncpg.Connection = Depends(get_db),
 ) -> dict[str, object]:
-    return await create_memory(user["id"], payload.content, db, float(user["dedup_threshold"]))
+    return await create_memory(user["id"], payload.content, db, float(user["dedup_threshold"]), payload.category, payload.pinned)
 
 
 @router.delete("", status_code=status.HTTP_204_NO_CONTENT)
@@ -57,8 +74,76 @@ async def delete_all_memories_route(
     user: asyncpg.Record = Depends(get_current_user),
     db: asyncpg.Connection = Depends(get_db),
 ) -> Response:
-    deleted = await delete_all_memories(user["id"], db)
+    await delete_all_memories(user["id"], db)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.get("/review", response_model=MemoryListResponse)
+async def list_review_memories_route(
+    limit: int = Query(default=20, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    user: asyncpg.Record = Depends(get_current_user),
+    db: asyncpg.Connection = Depends(get_db),
+) -> dict[str, object]:
+    memories, total = await list_memories(user["id"], db, limit, offset, None, "created_at", "desc", "pending", None)
+    return {"memories": memories, "total": total, "limit": limit, "offset": offset}
+
+
+@router.get("/export", response_model=MemoryExportResponse)
+async def export_memories_route(
+    user: asyncpg.Record = Depends(get_current_user),
+    db: asyncpg.Connection = Depends(get_db),
+) -> dict[str, object]:
+    return {"memories": await export_memories(user["id"], db)}
+
+
+@router.post("/import", response_model=MemoryImportResponse, status_code=status.HTTP_201_CREATED)
+async def import_memories_route(
+    payload: MemoryImportRequest,
+    user: asyncpg.Record = Depends(get_current_user),
+    db: asyncpg.Connection = Depends(get_db),
+) -> dict[str, object]:
+    imported = await import_memories(user["id"], [item.model_dump() for item in payload.memories], db, float(user["dedup_threshold"]))
+    return {"imported": imported}
+
+
+@router.get("/merge-suggestions", response_model=MemoryMergeSuggestionsResponse)
+async def merge_suggestions_route(
+    limit: int = Query(default=10, ge=1, le=50),
+    user: asyncpg.Record = Depends(get_current_user),
+    db: asyncpg.Connection = Depends(get_db),
+) -> dict[str, object]:
+    return {"suggestions": await list_merge_suggestions(user["id"], db, limit)}
+
+
+@router.post("/merge", response_model=MemoryResponse)
+async def merge_memories_route(
+    payload: MemoryMergeRequest,
+    user: asyncpg.Record = Depends(get_current_user),
+    db: asyncpg.Connection = Depends(get_db),
+) -> dict[str, object]:
+    memory = await merge_memories(user["id"], payload.primary_id, payload.duplicate_id, payload.content, db)
+    if memory is None:
+        raise HTTPException(status_code=404, detail="Memory not found")
+    return memory
+
+
+@router.post("/decay", response_model=MemoryDecayResponse)
+async def decay_memories_route(
+    user: asyncpg.Record = Depends(get_current_user),
+    db: asyncpg.Connection = Depends(get_db),
+) -> dict[str, object]:
+    return {"updated": await apply_confidence_decay(user["id"], db)}
+
+
+@router.get("/timeline", response_model=MemoryTimelineResponse)
+async def memory_timeline_route(
+    limit: int = Query(default=50, ge=1, le=200),
+    user: asyncpg.Record = Depends(get_current_user),
+    db: asyncpg.Connection = Depends(get_db),
+) -> dict[str, object]:
+    return {"items": await timeline(user["id"], db, limit)}
+
 
 @router.post("/capture", response_model=ConversationCaptureResponse, status_code=status.HTTP_201_CREATED)
 async def capture_conversation_route(
@@ -84,6 +169,28 @@ async def capture_conversation_route(
         raise HTTPException(status_code=502, detail=str(error)) from error
 
 
+@router.post("/search", response_model=MemorySearchResponse)
+async def search_memories_route(
+    payload: MemorySearchRequest,
+    user: asyncpg.Record = Depends(get_current_user),
+    db: asyncpg.Connection = Depends(get_db),
+) -> dict[str, object]:
+    results = await search_memories(user["id"], payload.query, payload.limit, payload.threshold, db)
+    return {"results": results}
+
+
+@router.get("/{memory_id}/source", response_model=MemorySourceResponse)
+async def get_memory_source_route(
+    memory_id: UUID4,
+    user: asyncpg.Record = Depends(get_current_user),
+    db: asyncpg.Connection = Depends(get_db),
+) -> dict[str, object]:
+    source = await get_memory_source(user["id"], memory_id, db)
+    if source is None:
+        raise HTTPException(status_code=404, detail="Memory not found")
+    return source
+
+
 @router.get("/{memory_id}", response_model=MemoryResponse)
 async def get_memory_route(
     memory_id: UUID4,
@@ -103,7 +210,7 @@ async def update_memory_route(
     user: asyncpg.Record = Depends(get_current_user),
     db: asyncpg.Connection = Depends(get_db),
 ) -> dict[str, object]:
-    memory = await update_memory(user["id"], memory_id, payload.content, db)
+    memory = await update_memory(user["id"], memory_id, payload.content, db, payload.category, payload.pinned, payload.status)
     if memory is None:
         raise HTTPException(status_code=404, detail="Memory not found")
     return memory
@@ -119,13 +226,3 @@ async def delete_memory_route(
     if not deleted:
         raise HTTPException(status_code=404, detail="Memory not found")
     return Response(status_code=status.HTTP_204_NO_CONTENT)
-
-
-@router.post("/search", response_model=MemorySearchResponse)
-async def search_memories_route(
-    payload: MemorySearchRequest,
-    user: asyncpg.Record = Depends(get_current_user),
-    db: asyncpg.Connection = Depends(get_db),
-) -> dict[str, object]:
-    results = await search_memories(user["id"], payload.query, payload.limit, payload.threshold, db)
-    return {"results": results}

@@ -83,6 +83,23 @@ async def get_retrieval_log(
     return hydrated
 
 
+async def list_clients(user_id: object, db: asyncpg.Connection) -> list[dict[str, object]]:
+    rows = await db.fetch(
+        """
+        SELECT COALESCE(raw_exchange->'request'->>'source', 'proxy') AS source,
+               COUNT(*)::int AS conversations,
+               COALESCE(SUM(memories_extracted), 0)::int AS memories_extracted,
+               MAX(created_at) AS last_seen
+        FROM conversations
+        WHERE user_id = $1
+        GROUP BY source
+        ORDER BY last_seen DESC
+        """,
+        user_id,
+    )
+    return [dict(row) for row in rows]
+
+
 async def hydrate_log_row(user_id: object, row: asyncpg.Record, db: asyncpg.Connection) -> dict[str, object]:
     memory_ids = list(row["retrieved_memory_ids"])
     content_by_id = await get_memory_content_map(user_id, memory_ids, db)

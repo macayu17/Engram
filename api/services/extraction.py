@@ -8,6 +8,7 @@ import asyncpg
 from api.services.users import _USER_COLUMNS
 from api.db.connection import get_pool
 from api.services.deduplication import store_memory_with_deduplication
+from api.services.memories import infer_category
 from api.services.providers.base import ExtractionProvider
 from api.services.providers.factory import build_extraction_provider
 from api.services.provider_keys import ProviderConfigError, resolve_user_provider, ResolvedProvider
@@ -120,6 +121,9 @@ async def store_extracted_memories(
             1.0,
             db,
             dedup_threshold,
+            "pending",
+            infer_category(content),
+            "extraction",
         )
         if result["action"] in {"inserted", "updated"}:
             stored_count += 1

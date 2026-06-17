@@ -97,6 +97,7 @@ export function ChatWorkspace() {
   }
 
   const canChat = Boolean(apiKey) && apiKey.startsWith("ek_") && Boolean(userQuery.data);
+  const lastAssistantMessage = [...messages].reverse().find((message) => message.role === "assistant");
 
   return (
     <section className="space-y-10">
@@ -190,6 +191,15 @@ export function ChatWorkspace() {
                   onChange={(event) => setModel(event.target.value)}
                   className="min-h-10 w-full border border-line bg-paper px-3 font-serif text-base text-ink outline-none focus:border-signal"
                 />
+              </dd>
+            </div>
+            <div>
+              <dt className="font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-muted">Last Exchange</dt>
+              <dd className="mt-2 space-y-2 font-serif text-base leading-7 text-ink">
+                <p>{lastAssistantMessage?.injectedCount ?? 0} memories injected</p>
+                <p className="break-words font-sans text-[10px] uppercase tracking-[0.12em] text-muted">
+                  {lastAssistantMessage?.conversationId ?? "No conversation yet"}
+                </p>
               </dd>
             </div>
           </dl>

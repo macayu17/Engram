@@ -19,12 +19,16 @@ async def store_memory_with_deduplication(
     confidence: float,
     db: asyncpg.Connection,
     dedup_threshold: float | None = None,
+    status: str = "approved",
+    category: str = "general",
+    source: str = "manual",
 ) -> StoreMemoryResult:
     dedup_threshold_value = settings.dedup_threshold if dedup_threshold is None else dedup_threshold
     vector_literal = format_embedding_for_pgvector(embedding)
     nearest = await db.fetchrow(
         """
         SELECT id, content, confidence, access_count, last_accessed, created_at, source_conversation_id,
+               status, category, pinned, source, last_confirmed,
                1 - (embedding <=> $1::vector) AS score
         FROM memories
         WHERE user_id = $2
@@ -34,7 +38,7 @@ async def store_memory_with_deduplication(
         vector_literal,
         user_id,
     )
-    if nearest is not None and nearest["score"] > dedup_threshold_value:
+    if nearest is not None and nearest["status"] != "rejected" and nearest["score"] > dedup_threshold_value:
         return {"action": "skipped", "memory": dict(nearest)}
     if nearest is not None and nearest["score"] > settings.memory_refinement_threshold:
         updated = await db.fetchrow(
@@ -43,10 +47,14 @@ async def store_memory_with_deduplication(
             SET content = $1,
                 embedding = $2::vector,
                 source_conversation_id = COALESCE($3, source_conversation_id),
-                confidence = GREATEST(confidence, $4)
+                confidence = GREATEST(confidence, $4),
+                status = CASE WHEN status IN ('approved', 'rejected') THEN status ELSE $7 END,
+                category = $8,
+                source = $9
             WHERE user_id = $5
               AND id = $6
-            RETURNING id, content, confidence, access_count, last_accessed, created_at, source_conversation_id
+            RETURNING id, content, confidence, access_count, last_accessed, created_at, source_conversation_id,
+                      status, category, pinned, source, last_confirmed
             """,
             content,
             vector_literal,
@@ -54,18 +62,25 @@ async def store_memory_with_deduplication(
             confidence,
             user_id,
             nearest["id"],
+            status,
+            category,
+            source,
         )
         return {"action": "updated", "memory": dict(updated) if updated is not None else None}
     inserted = await db.fetchrow(
         """
-        INSERT INTO memories (user_id, content, embedding, source_conversation_id, confidence)
-        VALUES ($1, $2, $3::vector, $4, $5)
-        RETURNING id, content, confidence, access_count, last_accessed, created_at, source_conversation_id
+        INSERT INTO memories (user_id, content, embedding, source_conversation_id, confidence, status, category, source)
+        VALUES ($1, $2, $3::vector, $4, $5, $6, $7, $8)
+        RETURNING id, content, confidence, access_count, last_accessed, created_at, source_conversation_id,
+                  status, category, pinned, source, last_confirmed
         """,
         user_id,
         content,
         vector_literal,
         conversation_id,
         confidence,
+        status,
+        category,
+        source,
     )
     return {"action": "inserted", "memory": dict(inserted) if inserted is not None else None}

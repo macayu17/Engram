@@ -24,6 +24,17 @@ class RetrievalLogListResponse(BaseModel):
     offset: int
 
 
+class ClientRegistryItem(BaseModel):
+    source: str
+    conversations: int
+    memories_extracted: int
+    last_seen: datetime
+
+
+class ClientRegistryResponse(BaseModel):
+    clients: list[ClientRegistryItem]
+
+
 class RetrievalLogDetailResponse(RetrievalLogResponse):
     query_embedding_dimensions: int | None
 

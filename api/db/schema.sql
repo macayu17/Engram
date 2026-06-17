@@ -45,10 +45,28 @@ CREATE TABLE IF NOT EXISTS memories (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+ALTER TABLE memories ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'approved';
+ALTER TABLE memories ADD COLUMN IF NOT EXISTS category TEXT NOT NULL DEFAULT 'general';
+ALTER TABLE memories ADD COLUMN IF NOT EXISTS pinned BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE memories ADD COLUMN IF NOT EXISTS source TEXT NOT NULL DEFAULT 'manual';
+ALTER TABLE memories ADD COLUMN IF NOT EXISTS last_confirmed TIMESTAMPTZ;
+
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'memories_status_check') THEN
+        ALTER TABLE memories DROP CONSTRAINT memories_status_check;
+    END IF;
+    ALTER TABLE memories ADD CONSTRAINT memories_status_check
+        CHECK (status IN ('pending', 'approved', 'rejected'));
+END;
+$$;
+
 CREATE INDEX IF NOT EXISTS memories_embedding_idx ON memories USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100);
 CREATE INDEX IF NOT EXISTS memories_user_id_idx ON memories(user_id);
 CREATE INDEX IF NOT EXISTS memories_user_created_at_idx ON memories(user_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS memories_user_access_count_idx ON memories(user_id, access_count DESC);
+CREATE INDEX IF NOT EXISTS memories_user_status_idx ON memories(user_id, status);
+CREATE INDEX IF NOT EXISTS memories_user_category_idx ON memories(user_id, category);
 
 CREATE TABLE IF NOT EXISTS user_api_keys (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),

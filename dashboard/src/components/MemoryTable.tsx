@@ -1,20 +1,21 @@
 "use client";
 
-import { Check, ChevronDown, ChevronUp, Pencil, Trash2, X } from "lucide-react";
+import { Check, ChevronDown, ChevronUp, Eye, Pencil, Pin, PinOff, ShieldCheck, Trash2, X } from "lucide-react";
 import { useState } from "react";
 
-import { type Memory } from "@/lib/api";
+import { type Memory, type MemoryUpdatePayload } from "@/lib/api";
 import { cn } from "@/lib/cn";
 
 
 type MemoryTableProps = {
   memories: Memory[];
-  onUpdate: (id: string, content: string) => void;
+  onUpdate: (id: string, payload: MemoryUpdatePayload) => void;
   onDelete: (id: string) => void;
+  onSource: (id: string) => void;
   isBusy: boolean;
 };
 
-export function MemoryTable({ memories, onUpdate, onDelete, isBusy }: MemoryTableProps) {
+export function MemoryTable({ memories, onUpdate, onDelete, onSource, isBusy }: MemoryTableProps) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
   const [expandedIds, setExpandedIds] = useState<Set<string>>(() => new Set());
@@ -27,7 +28,7 @@ export function MemoryTable({ memories, onUpdate, onDelete, isBusy }: MemoryTabl
   function saveEditing(id: string) {
     const trimmed = draft.trim();
     if (trimmed) {
-      onUpdate(id, trimmed);
+      onUpdate(id, { content: trimmed });
       setEditingId(null);
       setDraft("");
     }
@@ -66,6 +67,7 @@ export function MemoryTable({ memories, onUpdate, onDelete, isBusy }: MemoryTabl
           <tr>
             <th className="py-4 pr-4 font-medium">Memory</th>
             <th className="px-4 py-4 font-medium">Confidence</th>
+            <th className="px-4 py-4 font-medium">State</th>
             <th className="px-4 py-4 font-medium">Access</th>
             <th className="px-4 py-4 font-medium">Last Accessed</th>
             <th className="px-4 py-4 font-medium">Created</th>
@@ -108,8 +110,14 @@ export function MemoryTable({ memories, onUpdate, onDelete, isBusy }: MemoryTabl
                     </div>
                   )}
                   <p className="mt-2 font-sans text-[11px] uppercase tracking-[0.12em] text-muted">{memory.id}</p>
+                  <div className="mt-3 flex flex-wrap gap-2 font-sans text-[10px] uppercase tracking-[0.12em] text-muted">
+                    <span className="border border-line px-2 py-1">{memory.category}</span>
+                    <span className="border border-line px-2 py-1">{memory.source}</span>
+                    {memory.pinned && <span className="border border-signal px-2 py-1 text-signal">pinned</span>}
+                  </div>
                 </td>
                 <td className="px-4 py-5 font-sans text-[11px] uppercase tracking-[0.12em] text-muted">{memory.confidence.toFixed(2)}</td>
+                <td className="px-4 py-5 font-sans text-[11px] uppercase tracking-[0.12em] text-muted">{memory.status}</td>
                 <td className="px-4 py-5 font-sans text-[11px] uppercase tracking-[0.12em] text-muted">{memory.access_count}</td>
                 <td className="px-4 py-5 font-sans text-[11px] uppercase tracking-[0.12em] text-muted">{formatOptionalDate(memory.last_accessed)}</td>
                 <td className="px-4 py-5 font-sans text-[11px] uppercase tracking-[0.12em] text-muted">{formatOptionalDate(memory.created_at)}</td>
@@ -137,6 +145,35 @@ export function MemoryTable({ memories, onUpdate, onDelete, isBusy }: MemoryTabl
                       </>
                     ) : (
                       <>
+                        {memory.status === "pending" && (
+                          <button
+                            type="button"
+                            title="Approve memory"
+                            onClick={() => onUpdate(memory.id, { status: "approved" })}
+                            disabled={isBusy}
+                            className="rounded bg-tag p-2 text-muted hover:text-signal disabled:opacity-50"
+                          >
+                            <ShieldCheck size={16} aria-hidden="true" />
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          title={memory.pinned ? "Unpin memory" : "Pin memory"}
+                          onClick={() => onUpdate(memory.id, { pinned: !memory.pinned })}
+                          disabled={isBusy}
+                          className="rounded bg-tag p-2 text-muted hover:text-signal disabled:opacity-50"
+                        >
+                          {memory.pinned ? <PinOff size={16} aria-hidden="true" /> : <Pin size={16} aria-hidden="true" />}
+                        </button>
+                        <button
+                          type="button"
+                          title="View source"
+                          onClick={() => onSource(memory.id)}
+                          disabled={isBusy}
+                          className="rounded bg-tag p-2 text-muted hover:text-signal disabled:opacity-50"
+                        >
+                          <Eye size={16} aria-hidden="true" />
+                        </button>
                         <button
                           type="button"
                           title="Edit memory"
@@ -147,8 +184,14 @@ export function MemoryTable({ memories, onUpdate, onDelete, isBusy }: MemoryTabl
                         </button>
                         <button
                           type="button"
-                          title="Delete memory"
-                          onClick={() => confirmDelete(memory.id)}
+                          title={memory.status === "pending" ? "Reject memory" : "Delete memory"}
+                          onClick={() => {
+                            if (memory.status === "pending") {
+                              onUpdate(memory.id, { status: "rejected" });
+                            } else {
+                              confirmDelete(memory.id);
+                            }
+                          }}
                           disabled={isBusy}
                           className="rounded bg-tag p-2 text-muted hover:text-fault disabled:opacity-50"
                         >

@@ -74,8 +74,22 @@ async def test_proxy_uses_user_retrieval_config(monkeypatch) -> None:
 async def test_extracted_memory_storage_uses_user_dedup_threshold(monkeypatch) -> None:
     captured: dict[str, object] = {}
 
-    async def fake_store_memory_with_deduplication(user_id, content, embedding, conversation_id, confidence, db, dedup_threshold=None):
+    async def fake_store_memory_with_deduplication(
+        user_id,
+        content,
+        embedding,
+        conversation_id,
+        confidence,
+        db,
+        dedup_threshold=None,
+        status="approved",
+        category="general",
+        source="manual",
+    ):
         captured["dedup_threshold"] = dedup_threshold
+        captured["status"] = status
+        captured["category"] = category
+        captured["source"] = source
         return {"action": "inserted", "memory": {"id": "memory-1"}}
 
     def fake_embed_batch(texts):
@@ -96,6 +110,9 @@ async def test_extracted_memory_storage_uses_user_dedup_threshold(monkeypatch) -
     assert stored_count == 1
     assert captured["texts"] == ["User prefers FastAPI"]
     assert captured["dedup_threshold"] == 0.61
+    assert captured["status"] == "pending"
+    assert captured["category"] == "preferences"
+    assert captured["source"] == "extraction"
 
 
 @pytest.mark.asyncio

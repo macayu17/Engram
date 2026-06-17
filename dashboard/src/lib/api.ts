@@ -8,6 +8,18 @@ export type Memory = {
   last_accessed: string | null;
   created_at: string;
   source_conversation_id: string | null;
+  status: "pending" | "approved" | "rejected";
+  category: string;
+  pinned: boolean;
+  source: string;
+  last_confirmed: string | null;
+};
+
+export type MemoryUpdatePayload = {
+  content?: string;
+  category?: string;
+  pinned?: boolean;
+  status?: "pending" | "approved" | "rejected";
 };
 
 export type MemoryListResponse = {
@@ -19,6 +31,25 @@ export type MemoryListResponse = {
 
 export type SearchResponse = {
   results: Array<{ memory: Memory; score: number }>;
+};
+
+export type MemorySourceResponse = {
+  memory: Memory;
+  conversation: Record<string, unknown> | null;
+};
+
+export type MemoryMergeSuggestion = {
+  primary: Memory;
+  duplicate: Memory;
+  reason: string;
+};
+
+export type MemoryTimelineItem = {
+  id: string;
+  type: string;
+  title: string;
+  category: string | null;
+  created_at: string;
 };
 
 export type RetrievedMemory = {
@@ -40,6 +71,13 @@ export type LogListResponse = {
   total: number;
   limit: number;
   offset: number;
+};
+
+export type ClientRegistryItem = {
+  source: string;
+  conversations: number;
+  memories_extracted: number;
+  last_seen: string;
 };
 
 export type User = {
@@ -262,18 +300,28 @@ export const api = {
     send: requestChat,
   },
   memories: {
-    list: (params?: { limit?: number; offset?: number; search?: string; order?: string; direction?: string }) =>
+    list: (params?: { limit?: number; offset?: number; search?: string; order?: string; direction?: string; status?: string; category?: string }) =>
       request<MemoryListResponse>("GET", `/memories${toQuery(params)}`),
     create: (content: string) => request<Memory>("POST", "/memories", { content }),
-    update: (id: string, content: string) => request<Memory>("PATCH", `/memories/${id}`, { content }),
+    update: (id: string, payload: MemoryUpdatePayload) => request<Memory>("PATCH", `/memories/${id}`, payload),
     delete: (id: string) => request<void>("DELETE", `/memories/${id}`),
     deleteAll: deleteAllMemories,
+    review: (params?: { limit?: number; offset?: number }) => request<MemoryListResponse>("GET", `/memories/review${toQuery(params)}`),
+    exportAll: () => request<{ memories: Memory[] }>("GET", "/memories/export"),
+    importMany: (memories: Array<{ content: string; category?: string; pinned?: boolean }>) =>
+      request<{ imported: number }>("POST", "/memories/import", { memories }),
+    source: (id: string) => request<MemorySourceResponse>("GET", `/memories/${id}/source`),
+    mergeSuggestions: (limit = 5) => request<{ suggestions: MemoryMergeSuggestion[] }>("GET", `/memories/merge-suggestions${toQuery({ limit })}`),
+    merge: (payload: { primary_id: string; duplicate_id: string; content?: string }) => request<Memory>("POST", "/memories/merge", payload),
+    decay: () => request<{ updated: number }>("POST", "/memories/decay"),
+    timeline: (limit = 12) => request<{ items: MemoryTimelineItem[] }>("GET", `/memories/timeline${toQuery({ limit })}`),
     search: (query: string, limit = 5, threshold = 0.5) =>
       request<SearchResponse>("POST", "/memories/search", { query, limit, threshold }),
   },
   logs: {
     list: (params?: { limit?: number; offset?: number; conversation_id?: string }) =>
       request<LogListResponse>("GET", `/logs${toQuery(params)}`),
+    clients: () => request<{ clients: ClientRegistryItem[] }>("GET", "/logs/clients"),
   },
   users: {
     create: (externalId: string) => requestInternal<UserCreateResponse>("POST", "/api/engram/users", { external_id: externalId }),

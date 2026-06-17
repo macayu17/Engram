@@ -9,14 +9,46 @@ from api.services.retrieval import retrieve_memories
 
 MemoryOrder = Literal["created_at", "last_accessed", "access_count"]
 SortDirection = Literal["asc", "desc"]
+MemoryStatus = Literal["pending", "approved", "rejected"]
 
 
-async def create_memory(user_id: object, content: str, db: asyncpg.Connection, dedup_threshold: float | None = None) -> dict[str, object]:
+MEMORY_COLUMNS = (
+    "id, content, confidence, access_count, last_accessed, created_at, source_conversation_id, "
+    "status, category, pinned, source, last_confirmed"
+)
+
+
+async def create_memory(
+    user_id: object,
+    content: str,
+    db: asyncpg.Connection,
+    dedup_threshold: float | None = None,
+    category: str | None = None,
+    pinned: bool = False,
+    status: MemoryStatus = "approved",
+    source: str = "manual",
+) -> dict[str, object]:
     embedding = embed(content)
-    result = await store_memory_with_deduplication(user_id, content, embedding, None, 1.0, db, dedup_threshold)
+    result = await store_memory_with_deduplication(
+        user_id,
+        content,
+        embedding,
+        None,
+        1.0,
+        db,
+        dedup_threshold,
+        status,
+        normalize_category(category or infer_category(content)),
+        source,
+    )
     if result["memory"] is None:
         raise RuntimeError("Memory creation failed")
-    return result["memory"]
+    memory = result["memory"]
+    if pinned:
+        updated = await update_memory(user_id, memory["id"], None, db, pinned=True)
+        if updated is not None:
+            return updated
+    return memory
 
 
 async def list_memories(
@@ -27,40 +59,46 @@ async def list_memories(
     search: str | None,
     order: MemoryOrder,
     direction: SortDirection,
+    status: MemoryStatus | None = "approved",
+    category: str | None = None,
 ) -> tuple[list[dict[str, object]], int]:
     if search:
         results = await retrieve_memories(user_id, search, db, limit=limit + offset, threshold=0)
-        return [strip_score(result) for result in results[offset : offset + limit]], len(results)
+        filtered = filter_memory_rows([strip_score(result) for result in results], status, category)
+        return filtered[offset : offset + limit], len(filtered)
     order_column = validate_order_column(order)
     sort_direction = validate_sort_direction(direction)
+    status_clause, category_clause, params = build_memory_filters(user_id, status, category)
     rows = await db.fetch(
         f"""
-        SELECT id, content, confidence, access_count, last_accessed, created_at, source_conversation_id
+        SELECT {MEMORY_COLUMNS}
         FROM memories
-        WHERE user_id = $1
+        WHERE {status_clause}
+          {category_clause}
         ORDER BY {order_column} {sort_direction}
-        LIMIT $2
-        OFFSET $3
+        LIMIT ${len(params) + 1}
+        OFFSET ${len(params) + 2}
         """,
-        user_id,
+        *params,
         limit,
         offset,
     )
     total = await db.fetchval(
-        """
+        f"""
         SELECT COUNT(*)
         FROM memories
-        WHERE user_id = $1
+        WHERE {status_clause}
+          {category_clause}
         """,
-        user_id,
+        *params,
     )
     return [dict(row) for row in rows], int(total)
 
 
 async def get_memory(user_id: object, memory_id: object, db: asyncpg.Connection) -> dict[str, object] | None:
     row = await db.fetchrow(
-        """
-        SELECT id, content, confidence, access_count, last_accessed, created_at, source_conversation_id
+        f"""
+        SELECT {MEMORY_COLUMNS}
         FROM memories
         WHERE user_id = $1
           AND id = $2
@@ -74,21 +112,59 @@ async def get_memory(user_id: object, memory_id: object, db: asyncpg.Connection)
 async def update_memory(
     user_id: object,
     memory_id: object,
-    content: str,
+    content: str | None,
     db: asyncpg.Connection,
+    category: str | None = None,
+    pinned: bool | None = None,
+    status: MemoryStatus | None = None,
 ) -> dict[str, object] | None:
-    embedding = format_embedding_for_pgvector(embed(content))
+    current = await get_memory(user_id, memory_id, db)
+    if current is None:
+        return None
+    next_content = content or str(current["content"])
+    next_category = normalize_category(category) if category is not None else current["category"]
+    next_pinned = pinned if pinned is not None else current["pinned"]
+    next_status = status if status is not None else current["status"]
+    if content is None:
+        row = await db.fetchrow(
+            """
+            UPDATE memories
+            SET category = $1,
+                pinned = $2,
+                status = $3,
+                last_confirmed = CASE WHEN $3 = 'approved' THEN now() ELSE last_confirmed END
+            WHERE user_id = $4
+              AND id = $5
+            RETURNING id, content, confidence, access_count, last_accessed, created_at, source_conversation_id,
+                      status, category, pinned, source, last_confirmed
+            """,
+            next_category,
+            next_pinned,
+            next_status,
+            user_id,
+            memory_id,
+        )
+        return dict(row) if row is not None else None
+    embedding = format_embedding_for_pgvector(embed(next_content))
     row = await db.fetchrow(
         """
         UPDATE memories
         SET content = $1,
-            embedding = $2::vector
-        WHERE user_id = $3
-          AND id = $4
-        RETURNING id, content, confidence, access_count, last_accessed, created_at, source_conversation_id
+            embedding = $2::vector,
+            category = $3,
+            pinned = $4,
+            status = $5,
+            last_confirmed = CASE WHEN $5 = 'approved' THEN now() ELSE last_confirmed END
+        WHERE user_id = $6
+          AND id = $7
+        RETURNING id, content, confidence, access_count, last_accessed, created_at, source_conversation_id,
+                  status, category, pinned, source, last_confirmed
         """,
-        content,
+        next_content,
         embedding,
+        next_category,
+        next_pinned,
+        next_status,
         user_id,
         memory_id,
     )
@@ -131,8 +207,194 @@ async def search_memories(
     return [{"memory": strip_score(result), "score": result["score"]} for result in results]
 
 
+async def export_memories(user_id: object, db: asyncpg.Connection) -> list[dict[str, object]]:
+    rows = await db.fetch(
+        f"""
+        SELECT {MEMORY_COLUMNS}
+        FROM memories
+        WHERE user_id = $1
+        ORDER BY created_at DESC
+        """,
+        user_id,
+    )
+    return [dict(row) for row in rows]
+
+
+async def import_memories(user_id: object, items: list[dict[str, object]], db: asyncpg.Connection, dedup_threshold: float | None = None) -> int:
+    imported = 0
+    for item in items:
+        content = str(item["content"]).strip()
+        category = normalize_category(item.get("category") if isinstance(item.get("category"), str) else infer_category(content))
+        pinned = bool(item.get("pinned", False))
+        result = await create_memory(user_id, content, db, dedup_threshold, category, pinned, "approved", "import")
+        if result:
+            imported += 1
+    return imported
+
+
+async def get_memory_source(user_id: object, memory_id: object, db: asyncpg.Connection) -> dict[str, object] | None:
+    memory = await get_memory(user_id, memory_id, db)
+    if memory is None:
+        return None
+    conversation = None
+    if memory["source_conversation_id"] is not None:
+        row = await db.fetchrow(
+            """
+            SELECT id, extraction_status, memories_extracted, raw_exchange, created_at
+            FROM conversations
+            WHERE user_id = $1
+              AND id = $2
+            """,
+            user_id,
+            memory["source_conversation_id"],
+        )
+        conversation = dict(row) if row is not None else None
+    return {"memory": memory, "conversation": conversation}
+
+
+async def list_merge_suggestions(user_id: object, db: asyncpg.Connection, limit: int = 10) -> list[dict[str, object]]:
+    rows = await db.fetch(
+        f"""
+        SELECT {MEMORY_COLUMNS}
+        FROM memories
+        WHERE user_id = $1
+          AND status = 'approved'
+        ORDER BY category, created_at DESC
+        LIMIT 200
+        """,
+        user_id,
+    )
+    memories = [dict(row) for row in rows]
+    suggestions: list[dict[str, object]] = []
+    for index, primary in enumerate(memories):
+        for duplicate in memories[index + 1:]:
+            if primary["category"] != duplicate["category"]:
+                continue
+            if memory_similarity_hint(str(primary["content"]), str(duplicate["content"])) < 0.42:
+                continue
+            suggestions.append({"primary": primary, "duplicate": duplicate, "reason": "Similar wording and category"})
+            if len(suggestions) >= limit:
+                return suggestions
+    return suggestions
+
+
+async def merge_memories(user_id: object, primary_id: object, duplicate_id: object, content: str | None, db: asyncpg.Connection) -> dict[str, object] | None:
+    primary = await get_memory(user_id, primary_id, db)
+    duplicate = await get_memory(user_id, duplicate_id, db)
+    if primary is None or duplicate is None:
+        return None
+    merged_content = content or f"{primary['content']}\n{duplicate['content']}"
+    updated = await update_memory(
+        user_id,
+        primary_id,
+        merged_content,
+        db,
+        category=str(primary["category"]),
+        pinned=bool(primary["pinned"]) or bool(duplicate["pinned"]),
+        status="approved",
+    )
+    await delete_memory(user_id, duplicate_id, db)
+    return updated
+
+
+async def apply_confidence_decay(user_id: object, db: asyncpg.Connection) -> int:
+    result = await db.execute(
+        """
+        UPDATE memories
+        SET confidence = GREATEST(0.1, confidence * 0.92)
+        WHERE user_id = $1
+          AND status = 'approved'
+          AND pinned = false
+          AND (
+            last_accessed IS NULL AND created_at < now() - interval '30 days'
+            OR last_accessed < now() - interval '30 days'
+          )
+        """,
+        user_id,
+    )
+    return int(result.split()[1])
+
+
+async def timeline(user_id: object, db: asyncpg.Connection, limit: int = 50) -> list[dict[str, object]]:
+    memory_rows = await db.fetch(
+        """
+        SELECT id::text AS id, 'memory' AS type, content AS title, category, created_at
+        FROM memories
+        WHERE user_id = $1
+        ORDER BY created_at DESC
+        LIMIT $2
+        """,
+        user_id,
+        limit,
+    )
+    conversation_rows = await db.fetch(
+        """
+        SELECT id::text AS id, 'conversation' AS type, extraction_status AS title, NULL AS category, created_at
+        FROM conversations
+        WHERE user_id = $1
+        ORDER BY created_at DESC
+        LIMIT $2
+        """,
+        user_id,
+        limit,
+    )
+    items = [dict(row) for row in memory_rows] + [dict(row) for row in conversation_rows]
+    return sorted(items, key=lambda item: item["created_at"], reverse=True)[:limit]
+
+
 def strip_score(memory: dict[str, object]) -> dict[str, object]:
     return {key: value for key, value in memory.items() if key != "score"}
+
+
+def build_memory_filters(user_id: object, status: MemoryStatus | None, category: str | None) -> tuple[str, str, list[object]]:
+    params = [user_id]
+    status_clause = "user_id = $1"
+    category_clause = ""
+    if status is not None:
+        params.append(status)
+        status_clause += f" AND status = ${len(params)}"
+    if category:
+        params.append(normalize_category(category))
+        category_clause = f"AND category = ${len(params)}"
+    return status_clause, category_clause, params
+
+
+def filter_memory_rows(rows: list[dict[str, object]], status: MemoryStatus | None, category: str | None) -> list[dict[str, object]]:
+    normalized_category = normalize_category(category) if category else None
+    return [
+        row
+        for row in rows
+        if (status is None or row.get("status") == status)
+        and (normalized_category is None or row.get("category") == normalized_category)
+    ]
+
+
+def normalize_category(category: str | None) -> str:
+    if not category:
+        return "general"
+    normalized = category.strip().lower().replace(" ", "_")
+    return normalized[:80] or "general"
+
+
+def infer_category(content: str) -> str:
+    text = content.lower()
+    if any(token in text for token in ("prefer", "likes", "wants", "uses")):
+        return "preferences"
+    if any(token in text for token in ("project", "building", "working on", "repo")):
+        return "projects"
+    if any(token in text for token in ("python", "typescript", "fastapi", "react", "postgres", "skill")):
+        return "skills"
+    if any(token in text for token in ("correction", "actually", "not ", "instead")):
+        return "corrections"
+    return "profile"
+
+
+def memory_similarity_hint(first: str, second: str) -> float:
+    first_words = set(first.lower().split())
+    second_words = set(second.lower().split())
+    if not first_words or not second_words:
+        return 0.0
+    return len(first_words & second_words) / len(first_words | second_words)
 
 
 def validate_order_column(order: MemoryOrder) -> str:

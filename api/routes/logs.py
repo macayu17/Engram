@@ -3,11 +3,19 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import UUID4
 
 from api.dependencies import get_current_user, get_db
-from api.models.log import RetrievalLogDetailResponse, RetrievalLogListResponse
-from api.services.logs import get_retrieval_log, list_retrieval_logs
+from api.models.log import ClientRegistryResponse, RetrievalLogDetailResponse, RetrievalLogListResponse
+from api.services.logs import get_retrieval_log, list_clients, list_retrieval_logs
 
 
 router = APIRouter()
+
+
+@router.get("/clients", response_model=ClientRegistryResponse)
+async def list_clients_route(
+    user: asyncpg.Record = Depends(get_current_user),
+    db: asyncpg.Connection = Depends(get_db),
+) -> dict[str, object]:
+    return {"clients": await list_clients(user["id"], db)}
 
 
 @router.get("", response_model=RetrievalLogListResponse)

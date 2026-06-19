@@ -1,18 +1,29 @@
 from datetime import datetime
 
-from pydantic import BaseModel, Field, UUID4
+from pydantic import BaseModel, Field, UUID4, field_validator
 
 
-class UserCreate(BaseModel):
+class ExternalIdModel(BaseModel):
     external_id: str = Field(min_length=1, max_length=255)
 
+    @field_validator("external_id")
+    @classmethod
+    def strip_external_id(cls, value: str) -> str:
+        stripped_value = value.strip()
+        if not stripped_value:
+            raise ValueError("External ID is required")
+        return stripped_value
 
-class UserUpdate(BaseModel):
-    external_id: str = Field(min_length=1, max_length=255)
+
+class UserCreate(ExternalIdModel):
+    pass
 
 
-class ServiceUserKeyCreate(BaseModel):
-    external_id: str = Field(min_length=1, max_length=255)
+class UserUpdate(ExternalIdModel):
+    pass
+
+
+class ServiceUserKeyCreate(ExternalIdModel):
     key_name: str = Field(default="clerk", min_length=1, max_length=80)
 
 

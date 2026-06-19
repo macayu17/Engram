@@ -1,5 +1,10 @@
+from pathlib import Path
+
 from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+ROOT_DIR = Path(__file__).resolve().parent.parent
 
 
 class Settings(BaseSettings):
@@ -39,7 +44,7 @@ class Settings(BaseSettings):
     engram_test_provider: str = "openai"
     engram_test_model: str = "gpt-4o-mini"
 
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+    model_config = SettingsConfigDict(env_file=ROOT_DIR / ".env", extra="ignore")
 
     @property
     def cors_origin_list(self) -> list[str]:

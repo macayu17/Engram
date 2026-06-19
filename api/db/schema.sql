@@ -117,6 +117,12 @@ DECLARE
     target_role TEXT;
 BEGIN
     FOREACH target_table IN ARRAY ARRAY['users', 'memories', 'user_api_keys', 'retrieval_logs', 'conversations'] LOOP
+        EXECUTE format('DROP POLICY IF EXISTS engram_server_access ON public.%I', target_table);
+        EXECUTE format(
+            'CREATE POLICY engram_server_access ON public.%I FOR ALL TO %I USING (true) WITH CHECK (true)',
+            target_table,
+            current_user
+        );
         FOREACH target_role IN ARRAY ARRAY['anon', 'authenticated'] LOOP
             IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = target_role) THEN
                 EXECUTE format('REVOKE ALL ON TABLE public.%I FROM %I', target_table, target_role);

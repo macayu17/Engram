@@ -1,6 +1,7 @@
 from typing import Literal
 
 import asyncpg
+import httpx
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response, status
 from pydantic import UUID4
 
@@ -165,7 +166,7 @@ async def capture_conversation_route(
             override_provider=x_engram_provider,
             override_provider_key=x_engram_provider_key,
         )
-    except RuntimeError as error:
+    except (RuntimeError, httpx.HTTPError) as error:
         raise HTTPException(status_code=502, detail=str(error)) from error
 
 

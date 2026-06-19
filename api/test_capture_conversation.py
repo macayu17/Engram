@@ -1,7 +1,10 @@
 from uuid import UUID, uuid4
 
+import httpx
 import pytest
+from fastapi import HTTPException
 
+from api.routes import memories
 from api.services import extraction
 
 
@@ -139,3 +142,27 @@ async def test_capture_conversation_records_zero_when_nothing_extracted(monkeypa
     assert result["extracted_memories"] == []
     assert captured["status"] == "completed"
     assert captured["memories_extracted"] == 0
+
+
+@pytest.mark.asyncio
+async def test_capture_conversation_route_returns_502_for_provider_http_error(monkeypatch) -> None:
+    request = httpx.Request("POST", "https://provider.test/v1/chat/completions")
+    response = httpx.Response(401, request=request, text="bad key")
+
+    async def fake_capture_conversation_memories(*args, **kwargs):
+        raise httpx.HTTPStatusError("bad key", request=request, response=response)
+
+    monkeypatch.setattr(memories, "capture_conversation_memories", fake_capture_conversation_memories)
+
+    from api.models.conversation import ConversationCaptureRequest
+
+    with pytest.raises(HTTPException) as exc_info:
+        await memories.capture_conversation_route(
+            ConversationCaptureRequest(user_message="hello", assistant_response="hi"),
+            None,
+            None,
+            {"id": uuid4(), "dedup_threshold": 0.95},
+            object(),
+        )
+
+    assert exc_info.value.status_code == 502

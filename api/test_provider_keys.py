@@ -1,5 +1,6 @@
 import os
 from dataclasses import asdict
+from pathlib import Path
 
 import pytest
 from cryptography.fernet import Fernet
@@ -127,6 +128,13 @@ def test_settings_accepts_engram_prefixed_env_var(monkeypatch) -> None:
     import api.config as config_module
     importlib.reload(config_module)
     assert config_module.settings.provider_key_encryption_key
+
+
+def test_settings_env_file_is_repo_relative() -> None:
+    from api.config import settings
+
+    expected_env_file = Path(__file__).resolve().parent.parent / ".env"
+    assert Path(settings.model_config["env_file"]) == expected_env_file
 
 
 def test_summarize_provider_for_response_masks_key(monkeypatch) -> None:

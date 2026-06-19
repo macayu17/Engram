@@ -1,7 +1,7 @@
 import pytest
 from pydantic import ValidationError
 
-from api.models.user import ServiceUserKeyCreate, UserCreate, UserUpdate
+from api.models.user import ServiceUserKeyCreate, UserCreate, UserProviderConfigUpdate, UserUpdate
 
 
 def test_user_external_id_is_stripped() -> None:
@@ -13,3 +13,8 @@ def test_user_external_id_is_stripped() -> None:
 def test_user_external_id_rejects_whitespace_only() -> None:
     with pytest.raises(ValidationError):
         UserCreate(external_id="   ")
+
+
+def test_extraction_provider_config_rejects_anthropic() -> None:
+    with pytest.raises(ValidationError):
+        UserProviderConfigUpdate(extraction_provider="anthropic")

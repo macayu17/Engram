@@ -399,7 +399,6 @@ function ProviderConfigSection({ apiKey, onError }: { apiKey: string; onError: (
     if (apiKeyInput.trim()) {
       if (provider === "openai") payload.openai_api_key = apiKeyInput.trim();
       if (provider === "gemini") payload.gemini_api_key = apiKeyInput.trim();
-      if (provider === "anthropic") payload.anthropic_api_key = apiKeyInput.trim();
     }
     updateMutation.mutate(payload);
   }
@@ -408,7 +407,6 @@ function ProviderConfigSection({ apiKey, onError }: { apiKey: string; onError: (
     const payload: UserProviderConfigUpdate = { extraction_provider: provider as UserProviderConfig["extraction_provider"] };
     if (provider === "openai") payload.clear_openai_key = true;
     if (provider === "gemini") payload.clear_gemini_key = true;
-    if (provider === "anthropic") payload.clear_anthropic_key = true;
     updateMutation.mutate(payload);
   }
 
@@ -445,7 +443,6 @@ function ProviderConfigSection({ apiKey, onError }: { apiKey: string; onError: (
                 <option value="openai">OpenAI</option>
                 <option value="gemini">Gemini</option>
                 <option value="ollama">Ollama (local, no key)</option>
-                <option value="anthropic">Anthropic (chat only, no extraction yet)</option>
               </select>
             </label>
           </div>
@@ -464,7 +461,7 @@ function ProviderConfigSection({ apiKey, onError }: { apiKey: string; onError: (
             <div>
               <label className="block">
                 <span className="font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-muted">
-                  {provider === "openai" ? "OpenAI" : provider === "gemini" ? "Gemini" : "Anthropic"} API key
+                  {provider === "openai" ? "OpenAI" : "Gemini"} API key
                 </span>
                 <span className="mt-1 block font-sans text-[11px] uppercase tracking-[0.12em] text-muted/70">
                   {providerQuery.data?.user_api_key_preview

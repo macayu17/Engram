@@ -12,6 +12,4 @@ def build_extraction_provider(resolved: ResolvedProvider) -> ExtractionProvider:
         return GeminiExtractionProvider(resolved)
     if resolved.name == "ollama":
         return OllamaExtractionProvider(resolved)
-    if resolved.name == "anthropic":
-        raise RuntimeError("Anthropic is not yet supported for memory extraction")
     raise RuntimeError(f"Unsupported extraction provider: {resolved.name}")

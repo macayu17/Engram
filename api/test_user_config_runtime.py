@@ -11,11 +11,12 @@ from api.services.users import regenerate_user_key, update_user_provider_config
 async def test_proxy_uses_user_retrieval_config(monkeypatch) -> None:
     captured: dict[str, object] = {}
 
-    async def fake_retrieve_memories(user_id, query, db, limit=None, threshold=None):
+    async def fake_retrieve_memories(user_id, query, db, limit=None, threshold=None, namespace="default"):
         captured["user_id"] = user_id
         captured["query"] = query
         captured["limit"] = limit
         captured["threshold"] = threshold
+        captured["namespace"] = namespace
         return []
 
     async def fake_log_retrieval(user_id, conversation_id, query, memories, db):
@@ -85,12 +86,15 @@ async def test_extracted_memory_storage_uses_user_dedup_threshold(monkeypatch) -
         status="approved",
         category="general",
         source="manual",
+        namespace="default",
     ):
         captured["dedup_threshold"] = dedup_threshold
         captured["status"] = status
         captured["category"] = category
         captured["source"] = source
-        return {"action": "inserted", "memory": {"id": "memory-1"}}
+        captured["namespace"] = namespace
+        from uuid import uuid4 as _uuid4
+        return {"action": "inserted", "memory": {"id": _uuid4()}}
 
     def fake_embed_batch(texts):
         captured["texts"] = texts
@@ -99,7 +103,7 @@ async def test_extracted_memory_storage_uses_user_dedup_threshold(monkeypatch) -
     monkeypatch.setattr(extraction, "store_memory_with_deduplication", fake_store_memory_with_deduplication)
     monkeypatch.setattr("api.services.embedding.embed_batch", fake_embed_batch)
 
-    stored_count = await extraction.store_extracted_memories(
+    stored_count, _stored_refs = await extraction.store_extracted_memories(
         uuid4(),
         uuid4(),
         ["User prefers FastAPI"],

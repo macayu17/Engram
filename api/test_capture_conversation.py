@@ -23,7 +23,7 @@ async def test_capture_conversation_extracts_stores_and_records(monkeypatch) -> 
         captured["memories"] = memories
         captured["db"] = db
         captured["dedup_threshold"] = dedup_threshold
-        return 1
+        return 1, []
 
     async def fake_record_conversation(user_id_arg, conversation_id_arg, request_body, response_body, status, memories_extracted, db):
         captured["recorded"] = {

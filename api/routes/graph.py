@@ -14,6 +14,7 @@ from api.services.graph import (
     backfill_entities_for_user,
     get_memory_entities,
     get_memory_neighbors,
+    list_entity_edges,
     list_memories_for_entity,
     list_user_entities,
 )
@@ -29,6 +30,14 @@ async def list_entities_route(
     db: asyncpg.Connection = Depends(get_db),
 ) -> dict[str, object]:
     return {"entities": await list_user_entities(user["id"], db)}
+
+
+@router.get("/edges")
+async def list_edges_route(
+    user: asyncpg.Record = Depends(get_current_user),
+    db: asyncpg.Connection = Depends(get_db),
+) -> dict[str, object]:
+    return {"edges": await list_entity_edges(user["id"], db)}
 
 
 @router.get("/entities/{entity_type}/{entity_name}/memories", response_model=EntityMemoriesResponse)

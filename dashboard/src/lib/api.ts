@@ -139,6 +139,12 @@ export type GraphEntity = {
   memory_count: number;
 };
 
+export type GraphEdge = {
+  source: string;
+  target: string;
+  weight: number;
+};
+
 export type GraphMemoryItem = {
   id: string;
   content: string;
@@ -357,6 +363,7 @@ export const api = {
   },
   graph: {
     listEntities: () => request<{ entities: GraphEntity[] }>("GET", "/graph/entities"),
+    listEdges: () => request<{ edges: GraphEdge[] }>("GET", "/graph/edges"),
     entityMemories: (entityType: string, entityName: string) =>
       request<{ entity_name: string; entity_type: string; memories: GraphMemoryItem[] }>(
         "GET",

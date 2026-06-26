@@ -101,6 +101,21 @@ async def extract_entities_for_memory(
     return inserted
 
 
+async def list_entity_edges(user_id: UUID, db: asyncpg.Connection) -> list[dict[str, object]]:
+    rows = await db.fetch(
+        """
+        SELECT a.entity_id AS source, b.entity_id AS target, COUNT(*) AS weight
+        FROM memory_entity_links a
+        JOIN memory_entity_links b ON a.memory_id = b.memory_id AND a.entity_id < b.entity_id
+        JOIN memory_entities ea ON ea.id = a.entity_id
+        WHERE ea.user_id = $1
+        GROUP BY a.entity_id, b.entity_id
+        """,
+        user_id,
+    )
+    return [dict(row) for row in rows]
+
+
 async def list_user_entities(user_id: UUID, db: asyncpg.Connection) -> list[dict[str, object]]:
     rows = await db.fetch(
         """

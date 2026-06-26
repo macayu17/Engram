@@ -30,12 +30,31 @@ type ForceGraphProps = {
   d3AlphaDecay?: number;
   enableNodeDrag?: boolean;
   warmupTicks?: number;
+  onEngineStop?: () => void;
 };
 
 type ForceGraphHandle = {
   zoomToFit: (durationMs?: number, padding?: number) => void;
   centerAt: (x?: number, y?: number, durationMs?: number) => void;
   zoom: (zoom: number, durationMs?: number) => void;
+  d3Force: (forceName: string, force?: unknown) => unknown;
+  d3ReheatSimulation: () => void;
+  resumeAnimation: () => void;
+};
+
+type LinkForce = {
+  distance: (distance: number | ((link: ForceLink) => number)) => LinkForce;
+  strength: (strength: number | ((link: ForceLink) => number)) => LinkForce;
+};
+
+type ChargeForce = {
+  strength: (strength: number | ((node: ForceNode) => number)) => ChargeForce;
+  distanceMax: (distance: number) => ChargeForce;
+};
+
+type FloatingForce = {
+  initialize?: (nodes: ForceNode[]) => void;
+  (alpha: number): void;
 };
 
 type ForceNode = {
@@ -44,6 +63,7 @@ type ForceNode = {
   entityType: string;
   memoryCount: number;
   radius: number;
+  phase: number;
   x?: number;
   y?: number;
   vx?: number;
@@ -80,6 +100,38 @@ const BACKGROUND = "#0b0d12";
 
 function computeRadius(memoryCount: number): number {
   return 3 + Math.sqrt(memoryCount) * 2.2;
+}
+
+function stablePhase(id: string): number {
+  let hash = 0;
+  for (let index = 0; index < id.length; index += 1) {
+    hash = (hash * 31 + id.charCodeAt(index)) % 10000;
+  }
+  return (hash / 10000) * Math.PI * 2;
+}
+
+function hasForceMethod<TMethod extends string>(
+  force: unknown,
+  method: TMethod,
+): force is Record<TMethod, (...args: unknown[]) => unknown> {
+  return typeof force === "object" && force !== null && method in force && typeof force[method as keyof typeof force] === "function";
+}
+
+function createFloatingForce(): FloatingForce {
+  let nodes: ForceNode[] = [];
+  const force = ((alpha: number) => {
+    const time = performance.now() / 1000;
+    for (const node of nodes) {
+      const pulse = Math.sin(time * 0.7 + node.phase);
+      const sway = Math.cos(time * 0.55 + node.phase);
+      node.vx = (node.vx ?? 0) + sway * alpha * 0.035;
+      node.vy = (node.vy ?? 0) + pulse * alpha * 0.035;
+    }
+  }) as FloatingForce;
+  force.initialize = (forceNodes: ForceNode[]) => {
+    nodes = forceNodes;
+  };
+  return force;
 }
 
 export function MemoryGraph() {
@@ -162,12 +214,34 @@ export function MemoryGraph() {
       entityType: e.entity_type,
       memoryCount: e.memory_count,
       radius: computeRadius(e.memory_count),
+      phase: stablePhase(e.id),
     }));
     const links: ForceLink[] = edges
       .filter((edge) => filteredIdSet.has(edge.source) && filteredIdSet.has(edge.target))
       .map((edge) => ({ source: edge.source, target: edge.target, weight: edge.weight }));
     return { nodes, links };
   }, [filteredEntities, edges, filteredIdSet]);
+
+  useEffect(() => {
+    if (!fgRef.current || graphData.nodes.length === 0) return;
+    const linkForce = fgRef.current.d3Force("link");
+    if (hasForceMethod(linkForce, "distance") && hasForceMethod(linkForce, "strength")) {
+      const typedLinkForce = linkForce as LinkForce;
+      typedLinkForce.distance((link) => 118 + Math.min(90, link.weight * 18));
+      typedLinkForce.strength((link) => Math.min(0.32, 0.1 + link.weight * 0.025));
+    }
+
+    const chargeForce = fgRef.current.d3Force("charge");
+    if (hasForceMethod(chargeForce, "strength") && hasForceMethod(chargeForce, "distanceMax")) {
+      const typedChargeForce = chargeForce as ChargeForce;
+      typedChargeForce.strength((node) => -300 - node.radius * 24);
+      typedChargeForce.distanceMax(560);
+    }
+
+    fgRef.current.d3Force("float", createFloatingForce());
+    fgRef.current.d3ReheatSimulation();
+    fgRef.current.resumeAnimation();
+  }, [graphData]);
 
   const neighborMap = useMemo(() => {
     const map = new Map<string, Set<string>>();
@@ -205,16 +279,22 @@ export function MemoryGraph() {
       if (node.x === undefined || node.y === undefined) return;
       const baseColor = TYPE_COLORS[node.entityType] ?? "#94a3b8";
       const dimmed = hoveredId !== null && !isHighlighted(node.id);
+      const time = performance.now() / 1000;
+      const hoverOffsetX = Math.cos(time * 0.7 + node.phase) * 1.8;
+      const hoverOffsetY = Math.sin(time * 0.85 + node.phase) * 1.8;
+      const drawX = node.x + hoverOffsetX;
+      const drawY = node.y + hoverOffsetY;
+      const pulse = 0.5 + Math.sin(time * 1.3 + node.phase) * 0.5;
       ctx.save();
 
       ctx.beginPath();
-      ctx.arc(node.x, node.y, node.radius + 3, 0, Math.PI * 2);
+      ctx.arc(drawX, drawY, node.radius + 5 + pulse * 2, 0, Math.PI * 2);
       ctx.fillStyle = baseColor;
-      ctx.globalAlpha = dimmed ? 0.08 : 0.18;
+      ctx.globalAlpha = dimmed ? 0.06 : 0.14 + pulse * 0.08;
       ctx.fill();
 
       ctx.beginPath();
-      ctx.arc(node.x, node.y, node.radius, 0, Math.PI * 2);
+      ctx.arc(drawX, drawY, node.radius, 0, Math.PI * 2);
       ctx.fillStyle = baseColor;
       ctx.globalAlpha = dimmed ? 0.35 : 1;
       ctx.fill();
@@ -225,7 +305,7 @@ export function MemoryGraph() {
       ctx.textBaseline = "top";
       ctx.fillStyle = dimmed ? "#475569" : "#cbd5e1";
       ctx.globalAlpha = dimmed ? 0.4 : 0.9;
-      ctx.fillText(node.name, node.x, node.y + node.radius + 4);
+      ctx.fillText(node.name, drawX, drawY + node.radius + 6);
       ctx.restore();
     },
     [hoveredId, isHighlighted],
@@ -414,10 +494,11 @@ export function MemoryGraph() {
             onNodeClick={handleNodeClick}
             onNodeHover={(node) => setHoveredId(node ? node.id : null)}
             onBackgroundClick={() => setSelected(null)}
-            cooldownTicks={120}
-            warmupTicks={30}
-            d3VelocityDecay={0.35}
-            d3AlphaDecay={0.025}
+            cooldownTicks={Infinity}
+            warmupTicks={80}
+            d3VelocityDecay={0.48}
+            d3AlphaDecay={0.012}
+            onEngineStop={() => fgRef.current?.resumeAnimation()}
             enableNodeDrag={true}
           />
         )}

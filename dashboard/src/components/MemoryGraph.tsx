@@ -49,30 +49,46 @@ function memoryNodeId(memoryId: string): string {
 
 function layoutEntities(entities: GraphEntity[]): Node[] {
   const count = entities.length || 1;
-  const radius = Math.max(180, Math.min(420, count * 18));
+  if (count <= 12) {
+    const radius = Math.max(220, count * 40);
+    return entities.map((entity, index) => {
+      const angle = (index / count) * Math.PI * 2;
+      return makeEntityNode(entity, Math.cos(angle) * radius, Math.sin(angle) * radius);
+    });
+  }
+  const cols = Math.ceil(Math.sqrt(count * 1.6));
+  const spacingX = 220;
+  const spacingY = 110;
   return entities.map((entity, index) => {
-    const angle = (index / count) * Math.PI * 2;
-    return {
-      id: entityNodeId(entity),
-      position: { x: Math.cos(angle) * radius, y: Math.sin(angle) * radius },
-      data: {
-        label: `${entity.name}`,
-        sublabel: `${entity.entity_type} · ${entity.memory_count}`,
-        entity,
-      },
-      style: {
-        background: TYPE_COLORS[entity.entity_type] ?? "#94a3b8",
-        color: "#0f172a",
-        border: "1px solid rgba(15,23,42,0.25)",
-        borderRadius: 9999,
-        padding: "8px 14px",
-        fontSize: 12,
-        fontWeight: 600,
-      },
-      sourcePosition: Position.Right,
-      targetPosition: Position.Left,
-    } satisfies Node;
+    const col = index % cols;
+    const row = Math.floor(index / cols);
+    const x = (col - (cols - 1) / 2) * spacingX;
+    const y = (row - Math.ceil(count / cols) / 2) * spacingY;
+    return makeEntityNode(entity, x, y);
   });
+}
+
+function makeEntityNode(entity: GraphEntity, x: number, y: number): Node {
+  return {
+    id: entityNodeId(entity),
+    position: { x, y },
+    data: {
+      label: `${entity.name} · ${entity.memory_count}`,
+      entity,
+    },
+    style: {
+      background: TYPE_COLORS[entity.entity_type] ?? "#94a3b8",
+      color: "#0f172a",
+      border: "1px solid rgba(15,23,42,0.25)",
+      borderRadius: 9999,
+      padding: "6px 14px",
+      fontSize: 11,
+      fontWeight: 600,
+      whiteSpace: "nowrap",
+    },
+    sourcePosition: Position.Right,
+    targetPosition: Position.Left,
+  } satisfies Node;
 }
 
 function layoutMemoryChildren(parentId: string, parentPos: { x: number; y: number }, memories: GraphMemoryItem[]): { nodes: Node[]; edges: Edge[] } {
@@ -200,8 +216,9 @@ export function MemoryGraph() {
     <div className="flex h-[78vh] flex-col gap-4">
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="font-display text-3xl tracking-tight">Memory Graph</h1>
-          <p className="font-sans text-sm text-muted">
+          <p className="font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-muted">§ III — Entity weave</p>
+          <h1 className="mt-2 font-serif text-5xl font-semibold leading-tight text-ink">Memory Graph</h1>
+          <p className="mt-4 max-w-2xl font-serif text-lg leading-8 text-muted">
             Entities extracted from your memories. Click a node to expand its memories and 1-hop neighbors.
           </p>
         </div>
@@ -257,18 +274,16 @@ export function MemoryGraph() {
       </div>
 
       {selectedEntity && (
-        <aside className="rounded-lg border border-line bg-paper p-4">
-          <h2 className="font-display text-lg">
-            {selectedEntity.name}{" "}
-            <span className="font-sans text-xs font-normal uppercase tracking-[0.12em] text-muted">
-              {selectedEntity.entity_type}
-            </span>
+        <aside className="rounded-lg border border-line bg-paper p-5">
+          <p className="font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-muted">
+            {selectedEntity.entity_type}
+          </p>
+          <h2 className="mt-1 font-serif text-2xl font-semibold leading-tight text-ink">
+            {selectedEntity.name}
           </h2>
-          <ul className="mt-2 space-y-1 font-sans text-sm">
+          <ul className="mt-3 space-y-2 font-serif text-base leading-7 text-ink/80">
             {selectedMemories.map((memory) => (
-              <li key={memory.id} className="text-ink/80">
-                {memory.content}
-              </li>
+              <li key={memory.id}>{memory.content}</li>
             ))}
           </ul>
         </aside>

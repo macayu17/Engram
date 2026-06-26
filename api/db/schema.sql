@@ -76,8 +76,6 @@ CREATE INDEX IF NOT EXISTS memories_content_tsv_idx ON memories USING GIN (conte
 ALTER TABLE memories ADD COLUMN IF NOT EXISTS namespace TEXT NOT NULL DEFAULT 'default';
 CREATE INDEX IF NOT EXISTS memories_user_namespace_idx ON memories(user_id, namespace);
 
-ALTER TABLE retrieval_logs ADD COLUMN IF NOT EXISTS namespace TEXT NOT NULL DEFAULT 'default';
-
 CREATE TABLE IF NOT EXISTS user_api_keys (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -103,6 +101,8 @@ CREATE TABLE IF NOT EXISTS retrieval_logs (
 
 CREATE INDEX IF NOT EXISTS retrieval_logs_user_created_at_idx ON retrieval_logs(user_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS retrieval_logs_conversation_id_idx ON retrieval_logs(conversation_id);
+
+ALTER TABLE retrieval_logs ADD COLUMN IF NOT EXISTS namespace TEXT NOT NULL DEFAULT 'default';
 
 CREATE TABLE IF NOT EXISTS conversations (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),

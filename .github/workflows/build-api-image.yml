@@ -30,7 +30,10 @@ jobs:
       - uses: docker/build-push-action@v7
         with:
           context: ./api
+          platforms: linux/amd64
           push: true
+          provenance: false
+          sbom: false
           tags: |
             ghcr.io/${{ github.repository_owner }}/engram-api:latest
             ghcr.io/${{ github.repository_owner }}/engram-api:${{ github.sha }}

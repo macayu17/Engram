@@ -152,13 +152,19 @@ async def _run_graph_extraction(
         return
     from api.services.graph import extract_entities_for_memory
 
-    try:
-        async with get_pool().acquire() as db:
-            for memory_id, content in memory_refs:
-                try:
+    pool = get_pool()
+    semaphore = asyncio.Semaphore(3)
+
+    async def _one(memory_id: UUID, content: str) -> None:
+        async with semaphore:
+            try:
+                async with pool.acquire() as db:
                     await extract_entities_for_memory(memory_id, content, user_id, resolved, db)
-                except Exception as inner_error:
-                    logger.warning("Entity extraction failed for memory %s: %s", memory_id, inner_error)
+            except Exception as inner_error:
+                logger.warning("Entity extraction failed for memory %s: %s", memory_id, inner_error)
+
+    try:
+        await asyncio.gather(*(_one(mid, content) for mid, content in memory_refs))
     except Exception as outer_error:
         logger.warning("Graph extraction task failed: %s", outer_error)
 

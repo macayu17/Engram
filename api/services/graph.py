@@ -1,7 +1,10 @@
+import asyncio
 import logging
 from uuid import UUID
 
 import asyncpg
+
+from api.db.connection import get_pool
 
 from api.services.providers.base import ExtractionProvider
 from api.services.providers.factory import build_extraction_provider
@@ -186,6 +189,7 @@ async def backfill_entities_for_user(
     user_id: UUID,
     db: asyncpg.Connection,
     resolved: ResolvedProvider,
+    concurrency: int = 5,
 ) -> dict[str, int]:
     memories = await db.fetch(
         """
@@ -198,12 +202,22 @@ async def backfill_entities_for_user(
         """,
         user_id,
     )
-    processed = 0
-    entities_total = 0
-    for memory in memories:
-        count = await extract_entities_for_memory(
-            memory["id"], str(memory["content"]), user_id, resolved, db
-        )
-        processed += 1
-        entities_total += count
-    return {"processed": processed, "entities_created": entities_total}
+    if not memories:
+        return {"processed": 0, "entities_created": 0}
+
+    semaphore = asyncio.Semaphore(concurrency)
+    pool = get_pool()
+
+    async def _process(memory_row: asyncpg.Record) -> int:
+        async with semaphore:
+            async with pool.acquire() as conn:
+                try:
+                    return await extract_entities_for_memory(
+                        memory_row["id"], str(memory_row["content"]), user_id, resolved, conn
+                    )
+                except Exception as error:
+                    logger.warning("Backfill failed for memory %s: %s", memory_row["id"], error)
+                    return 0
+
+    results = await asyncio.gather(*(_process(memory) for memory in memories))
+    return {"processed": len(memories), "entities_created": sum(results)}

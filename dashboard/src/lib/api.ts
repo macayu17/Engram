@@ -234,8 +234,17 @@ function toQuery(params?: Record<string, string | number | undefined>): string {
   return query ? `?${query}` : "";
 }
 
+const DEFAULT_TIMEOUT_MS = 30_000;
+const LONG_TIMEOUT_MS = 300_000;
+const LONG_PATHS = ["/graph/extract", "/memories/import"];
+
 async function request<T>(method: string, path: string, body?: unknown, extraHeaders?: Record<string, string>): Promise<T> {
-  const response = await fetch(`${API_BASE_URL}${path}`, {
+  const controller = new AbortController();
+  const timeoutMs = LONG_PATHS.some((p) => path.startsWith(p)) ? LONG_TIMEOUT_MS : DEFAULT_TIMEOUT_MS;
+  const timeoutId = typeof window === "undefined" ? null : window.setTimeout(() => controller.abort(), timeoutMs);
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE_URL}${path}`, {
     method,
     headers: {
       "Content-Type": "application/json",
@@ -243,7 +252,16 @@ async function request<T>(method: string, path: string, body?: unknown, extraHea
       ...extraHeaders,
     },
     body: body === undefined ? undefined : JSON.stringify(body),
-  });
+    signal: controller.signal,
+    });
+  } catch (error) {
+    if (timeoutId !== null) window.clearTimeout(timeoutId);
+    if (error instanceof DOMException && error.name === "AbortError") {
+      throw new Error(`Request timed out after ${timeoutMs / 1000}s`);
+    }
+    throw error;
+  }
+  if (timeoutId !== null) window.clearTimeout(timeoutId);
   if (!response.ok) {
     throw new Error(await getResponseError(response, "API error"));
   }

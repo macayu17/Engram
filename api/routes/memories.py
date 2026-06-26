@@ -54,10 +54,11 @@ async def list_memories_route(
     direction: Literal["asc", "desc"] = Query(default="desc"),
     status: Literal["pending", "approved", "rejected"] | None = Query(default="approved"),
     category: str | None = Query(default=None),
+    namespace: str | None = Query(default=None),
     user: asyncpg.Record = Depends(get_current_user),
     db: asyncpg.Connection = Depends(get_db),
 ) -> dict[str, object]:
-    memories, total = await list_memories(user["id"], db, limit, offset, search, order, direction, status, category)
+    memories, total = await list_memories(user["id"], db, limit, offset, search, order, direction, status, category, namespace=namespace)
     return {"memories": memories, "total": total, "limit": limit, "offset": offset}
 
 

@@ -16,6 +16,7 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS max_memories_injected INT NOT NULL DE
 ALTER TABLE users ADD COLUMN IF NOT EXISTS retrieval_threshold DOUBLE PRECISION NOT NULL DEFAULT 0.5;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS dedup_threshold DOUBLE PRECISION NOT NULL DEFAULT 0.95;
 
+ALTER TABLE users ADD COLUMN IF NOT EXISTS retrieval_mode TEXT NOT NULL DEFAULT 'vector';
 ALTER TABLE users ADD COLUMN IF NOT EXISTS extraction_provider TEXT NOT NULL DEFAULT 'openai';
 ALTER TABLE users ADD COLUMN IF NOT EXISTS extraction_model TEXT NOT NULL DEFAULT 'gpt-4o-mini';
 ALTER TABLE users ADD COLUMN IF NOT EXISTS openai_api_key_encrypted BYTEA;
@@ -68,6 +69,15 @@ CREATE INDEX IF NOT EXISTS memories_user_access_count_idx ON memories(user_id, a
 CREATE INDEX IF NOT EXISTS memories_user_status_idx ON memories(user_id, status);
 CREATE INDEX IF NOT EXISTS memories_user_category_idx ON memories(user_id, category);
 
+ALTER TABLE memories ADD COLUMN IF NOT EXISTS content_tsv tsvector
+    GENERATED ALWAYS AS (to_tsvector('english', content)) STORED;
+CREATE INDEX IF NOT EXISTS memories_content_tsv_idx ON memories USING GIN (content_tsv);
+
+ALTER TABLE memories ADD COLUMN IF NOT EXISTS namespace TEXT NOT NULL DEFAULT 'default';
+CREATE INDEX IF NOT EXISTS memories_user_namespace_idx ON memories(user_id, namespace);
+
+ALTER TABLE retrieval_logs ADD COLUMN IF NOT EXISTS namespace TEXT NOT NULL DEFAULT 'default';
+
 CREATE TABLE IF NOT EXISTS user_api_keys (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -105,18 +115,102 @@ CREATE TABLE IF NOT EXISTS conversations (
 
 CREATE INDEX IF NOT EXISTS conversations_user_created_at_idx ON conversations(user_id, created_at DESC);
 
+CREATE TABLE IF NOT EXISTS orgs (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    name TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS org_memberships (
+    org_id UUID NOT NULL REFERENCES orgs(id) ON DELETE CASCADE,
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    role TEXT NOT NULL DEFAULT 'member',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    PRIMARY KEY (org_id, user_id)
+);
+
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'org_memberships_role_check') THEN
+        ALTER TABLE org_memberships ADD CONSTRAINT org_memberships_role_check
+            CHECK (role IN ('owner', 'admin', 'member'));
+    END IF;
+END;
+$$;
+
+CREATE INDEX IF NOT EXISTS org_memberships_user_id_idx ON org_memberships(user_id);
+
+ALTER TABLE memories ADD COLUMN IF NOT EXISTS org_id UUID REFERENCES orgs(id) ON DELETE SET NULL;
+CREATE INDEX IF NOT EXISTS memories_org_id_idx ON memories(org_id);
+
+CREATE TABLE IF NOT EXISTS memory_entities (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    entity_type TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (user_id, name, entity_type)
+);
+
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'memory_entities_type_check') THEN
+        ALTER TABLE memory_entities ADD CONSTRAINT memory_entities_type_check
+            CHECK (entity_type IN ('person', 'project', 'skill', 'technology', 'preference', 'topic', 'organization'));
+    END IF;
+END;
+$$;
+
+CREATE INDEX IF NOT EXISTS memory_entities_user_idx ON memory_entities(user_id);
+
+CREATE TABLE IF NOT EXISTS memory_entity_links (
+    memory_id UUID NOT NULL REFERENCES memories(id) ON DELETE CASCADE,
+    entity_id UUID NOT NULL REFERENCES memory_entities(id) ON DELETE CASCADE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    PRIMARY KEY (memory_id, entity_id)
+);
+CREATE INDEX IF NOT EXISTS memory_entity_links_entity_idx ON memory_entity_links(entity_id);
+
+CREATE TABLE IF NOT EXISTS memory_relationships (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    source_memory_id UUID NOT NULL REFERENCES memories(id) ON DELETE CASCADE,
+    target_memory_id UUID NOT NULL REFERENCES memories(id) ON DELETE CASCADE,
+    relationship_type TEXT NOT NULL,
+    strength DOUBLE PRECISION NOT NULL DEFAULT 0.8,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (source_memory_id, target_memory_id, relationship_type)
+);
+
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'memory_relationships_type_check') THEN
+        ALTER TABLE memory_relationships ADD CONSTRAINT memory_relationships_type_check
+            CHECK (relationship_type IN ('related_to', 'contradicts', 'refines', 'supports', 'mentions'));
+    END IF;
+END;
+$$;
+
+CREATE INDEX IF NOT EXISTS memory_relationships_source_idx ON memory_relationships(source_memory_id);
+CREATE INDEX IF NOT EXISTS memory_relationships_target_idx ON memory_relationships(target_memory_id);
+
 ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.memories ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.user_api_keys ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.retrieval_logs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.conversations ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.orgs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.org_memberships ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.memory_entities ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.memory_entity_links ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.memory_relationships ENABLE ROW LEVEL SECURITY;
 
 DO $$
 DECLARE
     target_table TEXT;
     target_role TEXT;
 BEGIN
-    FOREACH target_table IN ARRAY ARRAY['users', 'memories', 'user_api_keys', 'retrieval_logs', 'conversations'] LOOP
+    FOREACH target_table IN ARRAY ARRAY['users', 'memories', 'user_api_keys', 'retrieval_logs', 'conversations', 'orgs', 'org_memberships', 'memory_entities', 'memory_entity_links', 'memory_relationships'] LOOP
         EXECUTE format('DROP POLICY IF EXISTS engram_server_access ON public.%I', target_table);
         EXECUTE format(
             'CREATE POLICY engram_server_access ON public.%I FOR ALL TO %I USING (true) WITH CHECK (true)',

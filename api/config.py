@@ -27,6 +27,9 @@ class Settings(BaseSettings):
     retrieval_threshold: float = 0.5
     dedup_threshold: float = 0.95
     memory_refinement_threshold: float = 0.8
+    retrieval_mode: str = "vector"
+    enable_reranker: bool = False
+    enable_graph: bool = False
     log_level: str = "info"
     cors_origins: str = "http://localhost:3001"
     engram_service_key: str = ""

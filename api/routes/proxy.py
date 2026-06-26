@@ -1,14 +1,15 @@
 import asyncio
-from collections.abc import Mapping
+from collections.abc import AsyncIterator, Mapping
 import json
 import logging
 
 import asyncpg
 from fastapi import APIRouter, Header, HTTPException, Request, Response
+from fastapi.responses import StreamingResponse
 
 from api.db.connection import get_pool
 from api.services.extraction import run_extraction_task
-from api.services.proxy import ProxyResult, build_proxy_passthrough_result, build_proxy_result
+from api.services.proxy import ProxyResult, build_proxy_passthrough_result, build_proxy_result, build_proxy_stream_result
 from api.services.users import get_cached_user_by_api_key, get_user_by_api_key
 
 
@@ -25,8 +26,21 @@ async def proxy_chat(
     x_engram_disable_injection: bool = Header(default=False),
     x_engram_disable_extraction: bool = Header(default=False),
     x_engram_provider_key: str | None = Header(default=None, alias="X-Engram-Provider-Key"),
+    x_engram_namespace: str = Header(default="default"),
 ) -> Response:
     body = await parse_request_body(request)
+    if body.get("stream") is True:
+        return await build_streaming_proxy_response(
+            x_engram_key,
+            x_engram_user_id,
+            x_engram_provider,
+            x_engram_disable_injection,
+            x_engram_disable_extraction,
+            x_engram_provider_key,
+            body,
+            request.headers,
+            x_engram_namespace,
+        )
     result = await build_proxy_response_with_available_auth(
         x_engram_key,
         x_engram_user_id,
@@ -36,6 +50,7 @@ async def proxy_chat(
         x_engram_provider_key,
         body,
         request.headers,
+        x_engram_namespace,
     )
     return create_response(result)
 
@@ -49,6 +64,7 @@ async def build_proxy_response_with_available_auth(
     override_provider_key: str | None,
     body: dict[str, object],
     headers: Mapping[str, str],
+    namespace: str = "default",
 ) -> ProxyResult:
     try:
         pool = get_pool()
@@ -82,6 +98,8 @@ async def build_proxy_response_with_available_auth(
             float(user["retrieval_threshold"]),
             override_provider=provider,
             override_provider_key=override_provider_key,
+            retrieval_mode=str(user.get("retrieval_mode") or "vector"),
+            namespace=namespace,
         )
     except PermissionError as error:
         raise HTTPException(status_code=403, detail=str(error)) from error
@@ -105,11 +123,111 @@ async def build_proxy_response_with_available_auth(
                     float(user["dedup_threshold"]),
                     override_provider=provider,
                     override_provider_key=override_provider_key,
+                    namespace=namespace,
                 )
             )
         except Exception as error:
             logger.warning("Failed to schedule extraction: %s", error)
     return result
+
+
+async def build_streaming_proxy_response(
+    api_key: str,
+    requested_external_id: str,
+    provider: str,
+    disable_injection: bool,
+    disable_extraction: bool,
+    override_provider_key: str | None,
+    body: dict[str, object],
+    headers: Mapping[str, str],
+    namespace: str = "default",
+) -> StreamingResponse:
+    try:
+        pool = get_pool()
+    except RuntimeError as error:
+        logger.warning("Database pool unavailable for streaming request: %s", error)
+        raise HTTPException(status_code=503, detail="Database unavailable") from error
+    acquire_context = pool.acquire()
+    try:
+        db = await acquire_context.__aenter__()
+    except (asyncpg.PostgresError, OSError, ConnectionError, RuntimeError) as error:
+        logger.warning("Database unavailable for streaming request: %s", error)
+        raise HTTPException(status_code=503, detail="Database unavailable") from error
+    try:
+        try:
+            user = await get_user_by_api_key(api_key, db)
+        except (asyncpg.PostgresError, OSError, ConnectionError) as error:
+            logger.warning("Database auth unavailable for streaming request: %s", error)
+            raise HTTPException(status_code=503, detail="Database unavailable") from error
+        if user is None:
+            raise HTTPException(status_code=401, detail="Invalid API key")
+        try:
+            generator, conversation_id, injected_count = await build_proxy_stream_result(
+                user["id"],
+                user["external_id"],
+                requested_external_id,
+                body,
+                provider,
+                disable_injection,
+                headers,
+                db,
+                int(user["max_memories_injected"]),
+                float(user["retrieval_threshold"]),
+                override_provider=provider,
+                override_provider_key=override_provider_key,
+                retrieval_mode=str(user.get("retrieval_mode") or "vector"),
+                namespace=namespace,
+            )
+        except PermissionError as error:
+            raise HTTPException(status_code=403, detail=str(error)) from error
+        except ValueError as error:
+            raise HTTPException(status_code=422, detail=str(error)) from error
+        except RuntimeError as error:
+            raise HTTPException(status_code=502, detail=str(error)) from error
+    finally:
+        try:
+            await acquire_context.__aexit__(None, None, None)
+        except (asyncpg.PostgresError, OSError, ConnectionError) as error:
+            logger.warning("Database connection release failed: %s", error)
+
+    user_id = user["id"]
+    dedup_threshold = float(user["dedup_threshold"])
+
+    async def stream_and_extract() -> AsyncIterator[bytes]:
+        chunks: list[bytes] = []
+        try:
+            async for chunk in generator:
+                chunks.append(chunk)
+                yield chunk
+        finally:
+            if not disable_extraction and chunks:
+                content = b"".join(chunks)
+                try:
+                    asyncio.create_task(
+                        run_extraction_task(
+                            user_id,
+                            conversation_id,
+                            body,
+                            content,
+                            dedup_threshold,
+                            override_provider=provider,
+                            override_provider_key=override_provider_key,
+                            namespace=namespace,
+                        )
+                    )
+                except Exception as error:
+                    logger.warning("Failed to schedule extraction after streaming: %s", error)
+
+    return StreamingResponse(
+        stream_and_extract(),
+        media_type="text/event-stream",
+        headers={
+            "X-Engram-Conversation-ID": str(conversation_id),
+            "X-Engram-Memories-Injected": str(injected_count),
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 async def build_cached_proxy_response(

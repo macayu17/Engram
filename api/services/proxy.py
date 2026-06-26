@@ -1,6 +1,6 @@
 import copy
 import logging
-from collections.abc import Mapping
+from collections.abc import AsyncIterator, Mapping
 from uuid import UUID, uuid4
 
 import asyncpg
@@ -10,7 +10,7 @@ from api.config import settings
 from api.services.extraction import run_extraction_task
 from api.services.providers.base import build_chat_completions_url
 from api.services.provider_keys import ProviderConfigError, ResolvedProvider, resolve_user_provider
-from api.services.retrieval import get_retrieval_query, log_retrieval, retrieve_memories
+from api.services.retrieval import get_retrieval_query, log_retrieval, retrieve_memories, retrieve_memories_graph, retrieve_memories_hybrid
 
 
 logger = logging.getLogger(__name__)
@@ -32,6 +32,22 @@ class ProxyResult:
         self.injected_count = injected_count
 
 
+async def _dispatch_retrieve(
+    user_id: UUID,
+    query: str,
+    db: asyncpg.Connection,
+    retrieval_mode: str,
+    max_memories_injected: int | None,
+    retrieval_threshold: float | None,
+    namespace: str = "default",
+) -> list[dict[str, object]]:
+    if retrieval_mode == "hybrid":
+        return await retrieve_memories_hybrid(user_id, query, db, max_memories_injected, retrieval_threshold, namespace=namespace)
+    if retrieval_mode == "graph":
+        return await retrieve_memories_graph(user_id, query, db, max_memories_injected, retrieval_threshold, namespace=namespace)
+    return await retrieve_memories(user_id, query, db, max_memories_injected, retrieval_threshold, namespace=namespace)
+
+
 async def build_proxy_result(
     user_id: UUID,
     external_id: str,
@@ -45,6 +61,8 @@ async def build_proxy_result(
     retrieval_threshold: float | None = None,
     override_provider: str | None = None,
     override_provider_key: str | None = None,
+    retrieval_mode: str = "vector",
+    namespace: str = "default",
 ) -> ProxyResult:
     if external_id != requested_external_id:
         raise PermissionError("X-Engram-User-ID does not match the authenticated user")
@@ -54,7 +72,7 @@ async def build_proxy_result(
     query = get_retrieval_query(body)
     if not disable_injection:
         try:
-            memories = await retrieve_memories(user_id, query, db, max_memories_injected, retrieval_threshold)
+            memories = await _dispatch_retrieve(user_id, query, db, retrieval_mode, max_memories_injected, retrieval_threshold, namespace=namespace)
             injected_count = len(memories)
             body = inject_memories(body, memories)
             await log_retrieval(user_id, str(conversation_id), query, memories, db)
@@ -177,6 +195,106 @@ async def forward_to_anthropic(body: dict[str, object], resolved: ResolvedProvid
     except httpx.HTTPError as error:
         raise RuntimeError(f"Provider request failed: {error}") from error
     return ProviderResponse(response.content, response.status_code, get_response_media_type(response))
+
+
+async def forward_to_provider_streaming(
+    body: dict[str, object],
+    resolved: ResolvedProvider,
+    incoming_headers: Mapping[str, str],
+) -> AsyncIterator[bytes]:
+    if resolved.name == "anthropic":
+        async for chunk in forward_to_anthropic_streaming(body, resolved, incoming_headers):
+            yield chunk
+        return
+    url = build_chat_completions_url(resolved.base_url)
+    headers = build_provider_headers(resolved, incoming_headers)
+    try:
+        async with httpx.AsyncClient(timeout=120) as client:
+            async with client.stream("POST", url, headers=headers, json=body) as response:
+                async for chunk in response.aiter_bytes():
+                    yield chunk
+    except httpx.HTTPError as error:
+        raise RuntimeError(f"Provider request failed: {error}") from error
+
+
+async def forward_to_anthropic_streaming(
+    body: dict[str, object],
+    resolved: ResolvedProvider,
+    incoming_headers: Mapping[str, str],
+) -> AsyncIterator[bytes]:
+    if not resolved.api_key:
+        raise RuntimeError("Anthropic API key is required for Anthropic proxy requests")
+    headers = sanitize_passthrough_headers(incoming_headers)
+    headers["x-api-key"] = resolved.api_key
+    headers["anthropic-version"] = "2023-06-01"
+    headers["content-type"] = "application/json"
+    payload = convert_openai_body_to_anthropic(body)
+    payload["stream"] = True
+    try:
+        async with httpx.AsyncClient(timeout=120) as client:
+            async with client.stream(
+                "POST",
+                f"{settings.anthropic_base_url.rstrip('/')}/messages",
+                headers=headers,
+                json=payload,
+            ) as response:
+                async for chunk in response.aiter_bytes():
+                    yield chunk
+    except httpx.HTTPError as error:
+        raise RuntimeError(f"Provider request failed: {error}") from error
+
+
+async def build_proxy_stream_result(
+    user_id: UUID,
+    external_id: str,
+    requested_external_id: str,
+    request_body: dict[str, object],
+    provider: str,
+    disable_injection: bool,
+    incoming_headers: Mapping[str, str],
+    db: asyncpg.Connection,
+    max_memories_injected: int | None = None,
+    retrieval_threshold: float | None = None,
+    override_provider: str | None = None,
+    override_provider_key: str | None = None,
+    retrieval_mode: str = "vector",
+    namespace: str = "default",
+) -> tuple[AsyncIterator[bytes], UUID, int]:
+    if external_id != requested_external_id:
+        raise PermissionError("X-Engram-User-ID does not match the authenticated user")
+    conversation_id = uuid4()
+    body = copy.deepcopy(request_body)
+    injected_count = 0
+    query = get_retrieval_query(body)
+    if not disable_injection:
+        try:
+            memories = await _dispatch_retrieve(user_id, query, db, retrieval_mode, max_memories_injected, retrieval_threshold, namespace=namespace)
+            injected_count = len(memories)
+            body = inject_memories(body, memories)
+            await log_retrieval(user_id, str(conversation_id), query, memories, db)
+        except Exception as error:
+            injected_count = 0
+            logger.warning("Retrieval failed, proceeding without memories: %s", error)
+    user_row = await db.fetchrow(
+        """SELECT id, external_id, extraction_provider,
+                  extraction_model,
+                  openai_api_key_encrypted, gemini_api_key_encrypted, anthropic_api_key_encrypted
+           FROM users WHERE id = $1""",
+        user_id,
+    )
+    if user_row is None:
+        raise PermissionError("Authenticated user no longer exists")
+    try:
+        resolved = resolve_user_provider(
+            user_row,
+            override_provider=override_provider or provider,
+            override_key=override_provider_key,
+        )
+    except ProviderConfigError as error:
+        raise RuntimeError(str(error)) from error
+    body["stream"] = True
+    generator = forward_to_provider_streaming(body, resolved, incoming_headers)
+    return generator, conversation_id, injected_count
 
 
 def get_openai_compatible_url(provider: str) -> str:

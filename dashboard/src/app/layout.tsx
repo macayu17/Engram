@@ -57,6 +57,9 @@ function DashboardShell({ authEnabled, children }: { authEnabled: boolean; child
                 <Link className="hover:text-signal" href="/logs">
                   Logs
                 </Link>
+                <Link className="hover:text-signal" href="/graph">
+                  Graph
+                </Link>
                 <Link className="hover:text-signal" href="/docs">
                   Docs
                 </Link>
@@ -77,7 +80,7 @@ function DashboardShell({ authEnabled, children }: { authEnabled: boolean; child
             Copyright (c) 2026 Ayush
           </p>
         </footer>
-        <nav className="fixed bottom-0 left-0 z-40 grid w-screen max-w-[100vw] grid-cols-5 overflow-hidden border-t border-line bg-paper/95 px-2 py-3 text-center font-sans text-[10px] font-medium uppercase tracking-[0.08em] text-muted backdrop-blur xl:hidden">
+        <nav className="fixed bottom-0 left-0 z-40 grid w-screen max-w-[100vw] grid-cols-6 overflow-hidden border-t border-line bg-paper/95 px-2 py-3 text-center font-sans text-[10px] font-medium uppercase tracking-[0.08em] text-muted backdrop-blur xl:hidden">
           <Link className="hover:text-signal" href="/">
             Memories
           </Link>
@@ -86,6 +89,9 @@ function DashboardShell({ authEnabled, children }: { authEnabled: boolean; child
           </Link>
           <Link className="hover:text-signal" href="/logs">
             Logs
+          </Link>
+          <Link className="hover:text-signal" href="/graph">
+            Graph
           </Link>
           <Link className="hover:text-signal" href="/docs">
             Docs

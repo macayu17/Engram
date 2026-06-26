@@ -1,3 +1,4 @@
+import asyncio
 import json
 import logging
 from uuid import UUID
@@ -5,6 +6,7 @@ from uuid import uuid4
 
 import asyncpg
 
+from api.config import settings
 from api.services.users import _USER_COLUMNS
 from api.db.connection import get_pool
 from api.services.deduplication import store_memory_with_deduplication
@@ -56,6 +58,7 @@ async def run_extraction_task(
     dedup_threshold: float | None = None,
     override_provider: str | None = None,
     override_provider_key: str | None = None,
+    namespace: str = "default",
 ) -> None:
     try:
         conversation = build_conversation_text(request_body, response_body)
@@ -80,7 +83,9 @@ async def run_extraction_task(
             except ProviderConfigError as error:
                 raise RuntimeError(str(error)) from error
             extracted = await extract_memories(conversation, resolved)
-            inserted_count = await store_extracted_memories(user_id, conversation_id, extracted, db, dedup_threshold)
+            inserted_count, stored_refs = await store_extracted_memories(
+                user_id, conversation_id, extracted, db, dedup_threshold, namespace=namespace
+            )
             await record_conversation(
                 user_id,
                 conversation_id,
@@ -90,6 +95,8 @@ async def run_extraction_task(
                 inserted_count,
                 db,
             )
+        if settings.enable_graph and stored_refs:
+            asyncio.create_task(_run_graph_extraction(user_id, stored_refs, resolved))
     except Exception as error:
         logger.warning("Memory extraction failed: %s", error)
         try:
@@ -105,13 +112,15 @@ async def store_extracted_memories(
     memories: list[str],
     db: asyncpg.Connection,
     dedup_threshold: float | None = None,
-) -> int:
+    namespace: str = "default",
+) -> tuple[int, list[tuple[UUID, str]]]:
     if not memories:
-        return 0
+        return 0, []
     from api.services.embedding import embed_batch
 
     embeddings = embed_batch(memories)
     stored_count = 0
+    stored_refs: list[tuple[UUID, str]] = []
     for index, content in enumerate(memories):
         result = await store_memory_with_deduplication(
             user_id,
@@ -124,10 +133,34 @@ async def store_extracted_memories(
             "pending",
             infer_category(content),
             "extraction",
+            namespace=namespace,
         )
-        if result["action"] in {"inserted", "updated"}:
+        if result["action"] in {"inserted", "updated"} and result["memory"] is not None:
             stored_count += 1
-    return stored_count
+            memory_id = result["memory"].get("id")
+            if isinstance(memory_id, UUID):
+                stored_refs.append((memory_id, content))
+    return stored_count, stored_refs
+
+
+async def _run_graph_extraction(
+    user_id: UUID,
+    memory_refs: list[tuple[UUID, str]],
+    resolved: ResolvedProvider,
+) -> None:
+    if not memory_refs:
+        return
+    from api.services.graph import extract_entities_for_memory
+
+    try:
+        async with get_pool().acquire() as db:
+            for memory_id, content in memory_refs:
+                try:
+                    await extract_entities_for_memory(memory_id, content, user_id, resolved, db)
+                except Exception as inner_error:
+                    logger.warning("Entity extraction failed for memory %s: %s", memory_id, inner_error)
+    except Exception as outer_error:
+        logger.warning("Graph extraction task failed: %s", outer_error)
 
 
 async def capture_conversation_memories(
@@ -165,9 +198,14 @@ async def capture_conversation_memories(
         raise RuntimeError(str(error)) from error
     extracted_memories = await extract_memories(conversation, resolved)
     memories_extracted = 0
+    stored_refs: list[tuple[UUID, str]] = []
     if extracted_memories:
-        memories_extracted = await store_extracted_memories(user_id, conversation_id, extracted_memories, db, dedup_threshold)
+        memories_extracted, stored_refs = await store_extracted_memories(
+            user_id, conversation_id, extracted_memories, db, dedup_threshold
+        )
     await record_conversation(user_id, conversation_id, request_body, response_body, "completed", memories_extracted, db)
+    if settings.enable_graph and stored_refs:
+        asyncio.create_task(_run_graph_extraction(user_id, stored_refs, resolved))
     return {
         "conversation_id": conversation_id,
         "memories_extracted": memories_extracted,

@@ -8,8 +8,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from api.config import settings
 from api.db.connection import check_database, close_pool, init_pool
 from api.db.schema import apply_schema
-from api.routes import logs, memories, proxy, users
-from api.services.embedding import is_model_loaded, load_model
+from api.routes import graph, logs, memories, orgs, proxy, users
+from api.services.embedding import is_model_loaded, is_reranker_loaded, load_model, load_reranker
 
 
 logging.basicConfig(level=settings.log_level.upper())
@@ -20,6 +20,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     await apply_schema()
     await init_pool()
     load_model()
+    if settings.enable_reranker:
+        load_reranker()
     yield
     await close_pool()
 
@@ -39,6 +41,8 @@ app.include_router(proxy.router, tags=["proxy"])
 app.include_router(memories.router, prefix="/memories", tags=["memories"])
 app.include_router(users.router, prefix="/users", tags=["users"])
 app.include_router(logs.router, prefix="/logs", tags=["logs"])
+app.include_router(orgs.router, prefix="/orgs", tags=["orgs"])
+app.include_router(graph.router, prefix="/graph", tags=["graph"])
 
 
 @app.get("/health")
@@ -53,5 +57,6 @@ async def health() -> dict[str, str]:
         "status": "ok",
         "database": "connected",
         "embedding_model": "loaded" if is_model_loaded() else "not_loaded",
+        "reranker": "loaded" if is_reranker_loaded() else "disabled",
         "version": "1.0.0",
     }

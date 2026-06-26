@@ -132,6 +132,22 @@ export type ChatResponse = {
 
 const API_BASE_URL = (process.env.NEXT_PUBLIC_API_URL?.trim() || "http://localhost:8000").replace(/\/+$/, "");
 const ACTIVE_API_KEY_STORAGE_KEY = "engram_api_key";
+export type GraphEntity = {
+  id: string;
+  name: string;
+  entity_type: string;
+  memory_count: number;
+};
+
+export type GraphMemoryItem = {
+  id: string;
+  content: string;
+  confidence: number;
+  category: string;
+  pinned: boolean;
+  created_at: string;
+};
+
 export const CLERK_API_KEY_STORAGE_PREFIX = "engram_api_key:clerk:";
 export const ACTIVE_API_KEY_CHANGED_EVENT = "engram-api-key-changed";
 
@@ -320,6 +336,20 @@ export const api = {
     list: (params?: { limit?: number; offset?: number; conversation_id?: string }) =>
       request<LogListResponse>("GET", `/logs${toQuery(params)}`),
     clients: () => request<{ clients: ClientRegistryItem[] }>("GET", "/logs/clients"),
+  },
+  graph: {
+    listEntities: () => request<{ entities: GraphEntity[] }>("GET", "/graph/entities"),
+    entityMemories: (entityType: string, entityName: string) =>
+      request<{ entity_name: string; entity_type: string; memories: GraphMemoryItem[] }>(
+        "GET",
+        `/graph/entities/${encodeURIComponent(entityType)}/${encodeURIComponent(entityName)}/memories`,
+      ),
+    neighbors: (memoryId: string) =>
+      request<{ memory_id: string; neighbors: GraphMemoryItem[]; entities: GraphEntity[] }>(
+        "GET",
+        `/graph/memories/${memoryId}/neighbors`,
+      ),
+    extract: () => request<{ processed: number; entities_created: number }>("POST", "/graph/extract"),
   },
   users: {
     create: (externalId: string) => requestInternal<UserCreateResponse>("POST", "/api/engram/users", { external_id: externalId }),

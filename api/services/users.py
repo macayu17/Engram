@@ -10,7 +10,7 @@ from api.services.security import api_key_hashes_match, encrypt_provider_key, ge
 
 _USER_COLUMNS: str = (
     "id, external_id, api_key_hash, created_at, max_memories_injected, "
-    "retrieval_threshold, dedup_threshold, extraction_provider, "
+    "retrieval_threshold, dedup_threshold, retrieval_mode, extraction_provider, "
     "extraction_model, openai_api_key_encrypted, gemini_api_key_encrypted, anthropic_api_key_encrypted"
 )
 

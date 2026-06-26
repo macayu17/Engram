@@ -61,15 +61,18 @@ async def list_memories(
     direction: SortDirection,
     status: MemoryStatus | None = "approved",
     category: str | None = None,
+    namespace: str | None = None,
 ) -> tuple[list[dict[str, object]], int]:
     if search:
         filtered = await search_memory_rows_for_listing(user_id, search, db, status, category)
+        if namespace is not None:
+            filtered = [r for r in filtered if r.get("namespace") == namespace]
         page = filtered[offset : offset + limit]
         await mark_memories_accessed(user_id, [row["id"] for row in page], db)
         return [strip_score(row) for row in page], len(filtered)
     order_column = validate_order_column(order)
     sort_direction = validate_sort_direction(direction)
-    status_clause, category_clause, params = build_memory_filters(user_id, status, category)
+    status_clause, category_clause, params = build_memory_filters(user_id, status, category, namespace=namespace)
     rows = await db.fetch(
         f"""
         SELECT {MEMORY_COLUMNS}
@@ -445,7 +448,12 @@ async def lock_memory(user_id: object, memory_id: object, db: asyncpg.Connection
     return dict(row) if row is not None else None
 
 
-def build_memory_filters(user_id: object, status: MemoryStatus | None, category: str | None) -> tuple[str, str, list[object]]:
+def build_memory_filters(
+    user_id: object,
+    status: MemoryStatus | None,
+    category: str | None,
+    namespace: str | None = None,
+) -> tuple[str, str, list[object]]:
     params = [user_id]
     status_clause = "user_id = $1"
     category_clause = ""
@@ -455,6 +463,9 @@ def build_memory_filters(user_id: object, status: MemoryStatus | None, category:
     if category:
         params.append(normalize_category(category))
         category_clause = f"AND category = ${len(params)}"
+    if namespace is not None:
+        params.append(namespace)
+        category_clause += f" AND namespace = ${len(params)}"
     return status_clause, category_clause, params
 
 

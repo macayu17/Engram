@@ -1,0 +1,209 @@
+import logging
+from uuid import UUID
+
+import asyncpg
+
+from api.services.providers.base import ExtractionProvider
+from api.services.providers.factory import build_extraction_provider
+from api.services.provider_keys import ResolvedProvider
+
+
+logger = logging.getLogger(__name__)
+
+VALID_ENTITY_TYPES = {"person", "project", "skill", "technology", "preference", "topic", "organization"}
+
+ENTITY_EXTRACTION_PROMPT = """Extract named entities from this memory. For each entity, return a string formatted as "name|type" where type is one of: person, project, skill, technology, preference, topic, organization.
+
+RULES:
+1. Only extract concrete named entities (e.g. "FastAPI", "Engram", "Alice"). Skip generic terms.
+2. Use the most specific type that fits.
+3. Maximum 5 entities per memory.
+4. Return ONLY a valid JSON array of strings, no preamble.
+
+Examples:
+Memory: "User prefers FastAPI over Flask for Python backends"
+Output: ["FastAPI|technology", "Flask|technology", "Python|technology"]
+
+Memory: "User is building Engram, an open-source memory layer"
+Output: ["Engram|project"]
+
+Memory: "User dislikes early mornings"
+Output: []
+
+MEMORY:
+{content}
+
+ENTITIES (JSON array only):"""
+
+
+def _parse_entity_strings(raw: list[str]) -> list[dict[str, str]]:
+    parsed: list[dict[str, str]] = []
+    seen: set[tuple[str, str]] = set()
+    for item in raw:
+        if "|" not in item:
+            continue
+        name_part, _, type_part = item.partition("|")
+        name = name_part.strip()
+        entity_type = type_part.strip().lower()
+        if not name or entity_type not in VALID_ENTITY_TYPES:
+            continue
+        key = (name.lower(), entity_type)
+        if key in seen:
+            continue
+        seen.add(key)
+        parsed.append({"name": name, "type": entity_type})
+    return parsed
+
+
+async def extract_entities_for_memory(
+    memory_id: UUID,
+    content: str,
+    user_id: UUID,
+    resolved: ResolvedProvider,
+    db: asyncpg.Connection,
+) -> int:
+    provider: ExtractionProvider = build_extraction_provider(resolved)
+    try:
+        raw = await provider.extract(ENTITY_EXTRACTION_PROMPT.format(content=content))
+    except Exception as error:
+        logger.warning("Entity extraction failed for memory %s: %s", memory_id, error)
+        return 0
+    entities = _parse_entity_strings(raw)
+    inserted = 0
+    for entity in entities:
+        row = await db.fetchrow(
+            """
+            INSERT INTO memory_entities (user_id, name, entity_type)
+            VALUES ($1, $2, $3)
+            ON CONFLICT (user_id, name, entity_type)
+            DO UPDATE SET name = EXCLUDED.name
+            RETURNING id
+            """,
+            user_id,
+            entity["name"],
+            entity["type"],
+        )
+        if row is None:
+            continue
+        await db.execute(
+            """
+            INSERT INTO memory_entity_links (memory_id, entity_id)
+            VALUES ($1, $2)
+            ON CONFLICT DO NOTHING
+            """,
+            memory_id,
+            row["id"],
+        )
+        inserted += 1
+    return inserted
+
+
+async def list_user_entities(user_id: UUID, db: asyncpg.Connection) -> list[dict[str, object]]:
+    rows = await db.fetch(
+        """
+        SELECT e.id, e.name, e.entity_type, COUNT(mel.memory_id) AS memory_count
+        FROM memory_entities e
+        LEFT JOIN memory_entity_links mel ON mel.entity_id = e.id
+        WHERE e.user_id = $1
+        GROUP BY e.id, e.name, e.entity_type
+        ORDER BY memory_count DESC, e.name ASC
+        """,
+        user_id,
+    )
+    return [dict(row) for row in rows]
+
+
+async def list_memories_for_entity(
+    entity_type: str,
+    entity_name: str,
+    user_id: UUID,
+    db: asyncpg.Connection,
+) -> list[dict[str, object]]:
+    rows = await db.fetch(
+        """
+        SELECT m.id, m.content, m.confidence, m.category, m.created_at, m.pinned
+        FROM memories m
+        JOIN memory_entity_links mel ON mel.memory_id = m.id
+        JOIN memory_entities e ON e.id = mel.entity_id
+        WHERE e.user_id = $1 AND e.name = $2 AND e.entity_type = $3
+          AND m.status = 'approved'
+        ORDER BY m.confidence DESC, m.created_at DESC
+        """,
+        user_id,
+        entity_name,
+        entity_type,
+    )
+    return [dict(row) for row in rows]
+
+
+async def get_memory_neighbors(
+    memory_id: UUID,
+    user_id: UUID,
+    db: asyncpg.Connection,
+    limit: int = 20,
+) -> list[dict[str, object]]:
+    rows = await db.fetch(
+        """
+        SELECT DISTINCT m.id, m.content, m.confidence, m.category, m.created_at, m.pinned
+        FROM memories m
+        JOIN memory_entity_links mel ON mel.memory_id = m.id
+        WHERE mel.entity_id IN (
+            SELECT entity_id FROM memory_entity_links WHERE memory_id = $1
+        )
+        AND m.id != $1
+        AND m.user_id = $2
+        AND m.status = 'approved'
+        ORDER BY m.confidence DESC
+        LIMIT $3
+        """,
+        memory_id,
+        user_id,
+        limit,
+    )
+    return [dict(row) for row in rows]
+
+
+async def get_memory_entities(
+    memory_id: UUID,
+    user_id: UUID,
+    db: asyncpg.Connection,
+) -> list[dict[str, object]]:
+    rows = await db.fetch(
+        """
+        SELECT e.id, e.name, e.entity_type
+        FROM memory_entities e
+        JOIN memory_entity_links mel ON mel.entity_id = e.id
+        WHERE mel.memory_id = $1 AND e.user_id = $2
+        ORDER BY e.name ASC
+        """,
+        memory_id,
+        user_id,
+    )
+    return [dict(row) for row in rows]
+
+
+async def backfill_entities_for_user(
+    user_id: UUID,
+    db: asyncpg.Connection,
+    resolved: ResolvedProvider,
+) -> dict[str, int]:
+    memories = await db.fetch(
+        """
+        SELECT m.id, m.content
+        FROM memories m
+        WHERE m.user_id = $1 AND m.status = 'approved'
+          AND NOT EXISTS (
+            SELECT 1 FROM memory_entity_links mel WHERE mel.memory_id = m.id
+          )
+        """,
+        user_id,
+    )
+    processed = 0
+    entities_total = 0
+    for memory in memories:
+        count = await extract_entities_for_memory(
+            memory["id"], str(memory["content"]), user_id, resolved, db
+        )
+        processed += 1
+        entities_total += count
+    return {"processed": processed, "entities_created": entities_total}

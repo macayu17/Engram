@@ -1,0 +1,67 @@
+[
+  {
+    "id": "tech-stack-preference",
+    "memory": "User prefers FastAPI over Flask for Python backend development",
+    "queries": [
+      "what backend framework does the user prefer",
+      "what should I use for my Python API",
+      "FastAPI or Flask"
+    ],
+    "non_queries": [
+      "what does the user eat for breakfast",
+      "user hobby on weekends"
+    ]
+  },
+  {
+    "id": "frontend-preference",
+    "memory": "User prefers TypeScript over JavaScript for all new frontend projects",
+    "queries": [
+      "what does the user prefer for frontend work",
+      "TypeScript vs JavaScript preference",
+      "which language for new projects"
+    ],
+    "non_queries": [
+      "user database preference",
+      "user favorite food"
+    ]
+  },
+  {
+    "id": "current-project",
+    "memory": "User is building a market microstructure simulator called SENTINEL",
+    "queries": [
+      "what project is the user working on",
+      "what is the user building",
+      "tell me about SENTINEL"
+    ],
+    "non_queries": [
+      "user frontend framework preference",
+      "what language does the user use"
+    ]
+  },
+  {
+    "id": "education",
+    "memory": "User is a third year CS student at RVITM Bengaluru",
+    "queries": [
+      "where does the user study",
+      "what year is the user in",
+      "user university"
+    ],
+    "non_queries": [
+      "user project stack",
+      "user database choice"
+    ]
+  },
+  {
+    "id": "db-preference",
+    "memory": "User prefers PostgreSQL with pgvector for vector storage over external vector databases",
+    "queries": [
+      "what database does the user prefer",
+      "user vector database choice",
+      "pgvector or pinecone"
+    ],
+    "non_queries": [
+      "user frontend language",
+      "user study year"
+    ]
+  }
+]

@@ -98,7 +98,7 @@ export function MemoryGraph() {
   const [extractStatus, setExtractStatus] = useState<string | null>(null);
   const [size, setSize] = useState<{ width: number; height: number }>({ width: 800, height: 600 });
 
-  const containerRef = useRef<HTMLDivElement | null>(null);
+  const canvasRef = useRef<HTMLDivElement | null>(null);
   const fgRef = useRef<ForceGraphHandle | null>(null);
 
   const load = useCallback(async () => {
@@ -119,7 +119,7 @@ export function MemoryGraph() {
       setEdges(edgeRes.edges);
     } catch {
       setEdges([]);
-      setExtractStatus("Edges endpoint unavailable — showing entities without connections. Update the API to get co-occurrence edges.");
+      setExtractStatus("Edges endpoint unavailable. Update the API to see connections.");
     } finally {
       setLoading(false);
     }
@@ -136,8 +136,8 @@ export function MemoryGraph() {
   }, [extractStatus]);
 
   useEffect(() => {
-    if (!containerRef.current) return;
-    const el = containerRef.current;
+    if (!canvasRef.current) return;
+    const el = canvasRef.current;
     const updateSize = () => {
       const rect = el.getBoundingClientRect();
       setSize({ width: Math.max(320, rect.width), height: Math.max(400, rect.height) });
@@ -292,6 +292,9 @@ export function MemoryGraph() {
     });
   };
 
+  const handleSelectAll = () => setActiveTypes(new Set(ENTITY_TYPES));
+  const handleSelectNone = () => setActiveTypes(new Set());
+
   const linkColor = useCallback(
     (link: ForceLink): string => {
       if (isLinkHighlighted(link)) return "rgba(148, 163, 184, 0.75)";
@@ -306,99 +309,121 @@ export function MemoryGraph() {
     [isLinkHighlighted],
   );
 
+  const typeCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const e of entities) counts[e.entity_type] = (counts[e.entity_type] ?? 0) + 1;
+    return counts;
+  }, [entities]);
+
   return (
-    <div className="flex flex-col gap-5">
-      <header className="flex flex-wrap items-end justify-between gap-4">
+    <div
+      className="-mx-4 -mt-10 flex flex-col gap-0 border-y border-line bg-paper sm:-mx-6 md:-mt-16 lg:h-[calc(100vh-6rem)] lg:flex-row"
+      style={{ background: BACKGROUND }}
+    >
+      <aside className="flex w-full shrink-0 flex-col gap-5 border-b border-line/40 bg-[rgba(11,13,18,0.92)] p-5 lg:w-72 lg:border-b-0 lg:border-r">
         <div>
           <p className="font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-muted">§ III — Entity weave</p>
-          <h1 className="mt-2 font-serif text-5xl font-semibold leading-tight text-ink">Memory Graph</h1>
-          <p className="mt-4 max-w-2xl font-serif text-lg leading-8 text-muted">
-            Entities extracted from your memories, connected when they co-occur. Hover to highlight neighborhood, click a node for details.
+          <h1 className="mt-2 font-serif text-3xl font-semibold leading-tight text-ink">Memory Graph</h1>
+          <p className="mt-2 font-serif text-sm leading-6 text-muted">
+            Entities extracted from your memories, connected when they co-occur. Hover to highlight a neighborhood, click for details.
           </p>
         </div>
-        <div className="flex items-center gap-3">
-          {extractStatus && <span className="max-w-xs font-sans text-xs text-muted">{extractStatus}</span>}
+
+        <div className="grid grid-cols-3 gap-2 border-y border-line/40 py-3">
+          <Stat label="Entities" value={filteredEntities.length} sub={`/ ${entities.length}`} />
+          <Stat label="Edges" value={graphData.links.length} />
+          <Stat label="Types" value={Object.keys(typeCounts).length} sub={`/ ${ENTITY_TYPES.length}`} />
+        </div>
+
+        <div>
+          <div className="mb-2 flex items-center justify-between">
+            <span className="font-sans text-[10px] font-medium uppercase tracking-[0.12em] text-muted">Filter</span>
+            <div className="flex gap-2 font-sans text-[10px] uppercase tracking-[0.12em] text-muted">
+              <button type="button" onClick={handleSelectAll} className="hover:text-signal">All</button>
+              <span aria-hidden>·</span>
+              <button type="button" onClick={handleSelectNone} className="hover:text-signal">None</button>
+            </div>
+          </div>
+          <ul className="space-y-1">
+            {ENTITY_TYPES.map((type) => {
+              const active = activeTypes.has(type);
+              const count = typeCounts[type] ?? 0;
+              return (
+                <li key={type}>
+                  <button
+                    type="button"
+                    onClick={() => handleToggleType(type)}
+                    aria-pressed={active}
+                    className="flex w-full items-center justify-between gap-3 rounded-md border border-transparent px-2 py-1.5 font-sans text-[11px] font-medium uppercase tracking-[0.1em] transition hover:border-line/60"
+                    style={{ opacity: active ? 1 : 0.45, color: active ? "#cbd5e1" : "#64748b" }}
+                  >
+                    <span className="flex items-center gap-2">
+                      <span
+                        className="inline-block h-2.5 w-2.5 rounded-full"
+                        style={{ background: TYPE_COLORS[type], opacity: active ? 1 : 0.5 }}
+                      />
+                      {type}
+                    </span>
+                    <span className="font-sans text-[10px] tabular-nums text-muted">{count}</span>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+
+        <div className="mt-auto space-y-2">
           <button
             type="button"
             onClick={handleExtract}
             disabled={extracting}
-            className="rounded-md border border-line bg-paper px-3 py-1.5 font-sans text-[11px] font-medium uppercase tracking-[0.12em] hover:bg-line/40 disabled:opacity-50"
+            className="w-full rounded-md border border-line bg-paper/10 px-3 py-2 font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-ink hover:bg-paper/20 disabled:opacity-50"
           >
             {extracting ? "Extracting…" : "Backfill entities"}
           </button>
-        </div>
-      </header>
-
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="mr-1 font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-muted">Filter:</span>
-        {ENTITY_TYPES.map((type) => {
-          const active = activeTypes.has(type);
-          return (
-            <button
-              key={type}
-              type="button"
-              onClick={() => handleToggleType(type)}
-              className="rounded-full border px-3 py-1 font-sans text-[11px] font-medium uppercase tracking-[0.12em] transition"
-              style={{
-                background: active ? TYPE_COLORS[type] : "transparent",
-                color: active ? "#0f172a" : TYPE_COLORS[type],
-                borderColor: TYPE_COLORS[type],
-                opacity: active ? 1 : 0.45,
-              }}
-              aria-pressed={active}
-            >
-              {type}
-            </button>
-          );
-        })}
-        <span className="ml-auto font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-muted">
-          {filteredEntities.length} of {entities.length} entities · {graphData.links.length} edges
-        </span>
-      </div>
-
-      <div className="flex flex-col gap-4 lg:flex-row">
-        <div
-          ref={containerRef}
-          className="relative h-[70vh] flex-1 overflow-hidden rounded-lg border border-line"
-          style={{ background: BACKGROUND }}
-        >
-          {loading ? (
-            <div className="flex h-full items-center justify-center font-serif text-base text-muted">Loading graph…</div>
-          ) : error ? (
-            <div className="flex h-full items-center justify-center font-serif text-base text-rose-500">{error}</div>
-          ) : entities.length === 0 ? (
-            <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center font-serif text-base text-muted">
-              <p>No entities yet. Click <em>Backfill entities</em> above to extract them from your existing memories.</p>
-            </div>
-          ) : filteredEntities.length === 0 ? (
-            <div className="flex h-full items-center justify-center font-serif text-base text-muted">
-              No entities match the active filters.
-            </div>
-          ) : (
-            <ForceGraph2D
-              ref={fgRef}
-              graphData={graphData}
-              width={size.width}
-              height={size.height}
-              backgroundColor={BACKGROUND}
-              nodeCanvasObject={drawNode}
-              nodePointerAreaPaint={drawNodePointerArea}
-              linkColor={linkColor}
-              linkWidth={linkWidth}
-              onNodeClick={handleNodeClick}
-              onNodeHover={(node) => setHoveredId(node ? node.id : null)}
-              onBackgroundClick={() => setSelected(null)}
-              cooldownTicks={120}
-              warmupTicks={30}
-              d3VelocityDecay={0.35}
-              d3AlphaDecay={0.025}
-              enableNodeDrag={true}
-            />
+          {extractStatus && (
+            <p className="font-sans text-[11px] leading-5 text-muted">{extractStatus}</p>
           )}
         </div>
+      </aside>
+
+      <div ref={canvasRef} className="relative h-[70vh] flex-1 lg:h-auto" style={{ background: BACKGROUND }}>
+        {loading ? (
+          <div className="flex h-full items-center justify-center font-serif text-base text-muted">Loading graph…</div>
+        ) : error ? (
+          <div className="flex h-full items-center justify-center font-serif text-base text-rose-500">{error}</div>
+        ) : entities.length === 0 ? (
+          <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center font-serif text-base text-muted">
+            <p>No entities yet. Click <em>Backfill entities</em> in the sidebar to extract them from your existing memories.</p>
+          </div>
+        ) : filteredEntities.length === 0 ? (
+          <div className="flex h-full items-center justify-center font-serif text-base text-muted">
+            No entities match the active filters.
+          </div>
+        ) : (
+          <ForceGraph2D
+            ref={fgRef}
+            graphData={graphData}
+            width={size.width}
+            height={size.height}
+            backgroundColor={BACKGROUND}
+            nodeCanvasObject={drawNode}
+            nodePointerAreaPaint={drawNodePointerArea}
+            linkColor={linkColor}
+            linkWidth={linkWidth}
+            onNodeClick={handleNodeClick}
+            onNodeHover={(node) => setHoveredId(node ? node.id : null)}
+            onBackgroundClick={() => setSelected(null)}
+            cooldownTicks={120}
+            warmupTicks={30}
+            d3VelocityDecay={0.35}
+            d3AlphaDecay={0.025}
+            enableNodeDrag={true}
+          />
+        )}
 
         {selected && (
-          <aside className="relative max-h-[70vh] w-full overflow-auto rounded-lg border border-line bg-paper p-5 lg:w-[22rem]">
+          <aside className="absolute right-4 top-4 max-h-[calc(100%-2rem)] w-[22rem] max-w-[calc(100%-2rem)] overflow-auto rounded-lg border border-line/60 bg-paper p-5 shadow-2xl">
             <button
               type="button"
               onClick={() => setSelected(null)}
@@ -477,6 +502,18 @@ export function MemoryGraph() {
           </aside>
         )}
       </div>
+    </div>
+  );
+}
+
+function Stat({ label, value, sub }: { label: string; value: number; sub?: string }) {
+  return (
+    <div>
+      <p className="font-sans text-[10px] font-medium uppercase tracking-[0.12em] text-muted">{label}</p>
+      <p className="mt-1 font-serif text-xl font-semibold text-ink tabular-nums">
+        {value.toLocaleString()}
+        {sub && <span className="ml-1 font-sans text-[10px] font-normal text-muted">{sub}</span>}
+      </p>
     </div>
   );
 }

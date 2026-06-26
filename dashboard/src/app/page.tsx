@@ -1,5 +1,5 @@
-import { MemoryWorkspace } from "@/components/MemoryWorkspace";
+import { HomeDashboard } from "@/components/HomeDashboard";
 
-export default function MemoriesPage() {
-  return <MemoryWorkspace />;
+export default function HomePage() {
+  return <HomeDashboard />;
 }

@@ -48,7 +48,7 @@ function DashboardShell({ authEnabled, children }: { authEnabled: boolean; child
             </div>
             <nav className="flex items-center justify-end gap-3 font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-muted">
               <div className="hidden items-center gap-5 xl:flex">
-                <Link className="hover:text-signal" href="/">
+                <Link className="hover:text-signal" href="/memories">
                   Memories
                 </Link>
                 <Link className="hover:text-signal" href="/chat">
@@ -81,7 +81,7 @@ function DashboardShell({ authEnabled, children }: { authEnabled: boolean; child
           </p>
         </footer>
         <nav className="fixed bottom-0 left-0 z-40 grid w-screen max-w-[100vw] grid-cols-6 overflow-hidden border-t border-line bg-paper/95 px-2 py-3 text-center font-sans text-[10px] font-medium uppercase tracking-[0.08em] text-muted backdrop-blur xl:hidden">
-          <Link className="hover:text-signal" href="/">
+          <Link className="hover:text-signal" href="/memories">
             Memories
           </Link>
           <Link className="hover:text-signal" href="/chat">

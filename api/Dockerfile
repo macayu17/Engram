@@ -7,7 +7,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends gcc libpq-dev &
 COPY requirements.txt .
 RUN pip install --no-cache-dir --index-url https://download.pytorch.org/whl/cpu torch==2.3.1
 RUN pip install --no-cache-dir -r requirements.txt
-RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('all-MiniLM-L6-v2')"
+RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('BAAI/bge-small-en-v1.5')"
 
 COPY . /app/api
 

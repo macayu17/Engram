@@ -13,6 +13,9 @@ const quickLinks = [
   { href: "#mcp", label: "MCP clients" },
   { href: "#auto-capture", label: "Auto capture" },
   { href: "#proxy", label: "Proxy API" },
+  { href: "#retrieval", label: "Retrieval modes" },
+  { href: "#graph", label: "Graph memory" },
+  { href: "#namespaces", label: "Namespaces & orgs" },
   { href: "#rest", label: "REST API" },
   { href: "#deploy", label: "Deploy" },
   { href: "#troubleshooting", label: "Troubleshooting" },
@@ -31,7 +34,9 @@ const endpoints = [
   ["Search", "POST /memories/search"],
   ["Capture", "POST /memories/capture"],
   ["Logs", "GET /logs, GET /logs/{id}"],
-  ["Proxy", "POST /v1/chat"],
+  ["Proxy", "POST /v1/chat (supports stream: true)"],
+  ["Graph", "GET /graph/entities, GET /graph/edges, GET /graph/memories/{id}/neighbors, POST /graph/extract"],
+  ["Orgs", "POST /orgs, GET /orgs, POST /orgs/{id}/members, DELETE /orgs/{id}/members/{ext_id}"],
 ];
 
 export default function DocsPage() {
@@ -80,15 +85,24 @@ curl -X POST http://localhost:8000/users \\
       </DocsSection>
 
       <DocsSection id="dashboard" eyebrow="02" title="Dashboard workflow">
-        <div className="grid gap-4 md:grid-cols-3">
-          <DocCard title="Settings">
-            Save an Engram API key, generate a new key, and verify the current user before inspecting data.
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          <DocCard title="Home">
+            Land on the overview: total memories, pending reviews, entity count, recent activity timeline, top connected entities, and latest retrievals.
           </DocCard>
           <DocCard title="Memories">
-            Search, add, edit, delete, and inspect durable user memories with confidence and access metadata.
+            The full ledger at <InlineCode>/memories</InlineCode>. Search, add, edit, approve pending extractions, merge duplicates, export, import, and decay confidence.
+          </DocCard>
+          <DocCard title="Graph">
+            <InlineCode>/graph</InlineCode> renders entities extracted from memories as a force-directed graph. Hover to highlight neighborhoods, click for memory lists, filter by type.
+          </DocCard>
+          <DocCard title="Chat">
+            <InlineCode>/chat</InlineCode> talks to your configured provider through the proxy. Memories are injected automatically, new ones extracted in the background.
           </DocCard>
           <DocCard title="Logs">
-            Review retrieval events to see which memories were injected for a query and why they matched.
+            Every retrieval event: which memories were surfaced, their scores, and the conversation that caused it.
+          </DocCard>
+          <DocCard title="Settings">
+            Engram API key, provider config, encrypted provider keys, retrieval thresholds, retrieval mode (vector / hybrid / graph), and dedup tuning.
           </DocCard>
         </div>
       </DocsSection>
@@ -149,19 +163,113 @@ curl -X POST http://localhost:8000/users \\
               Proxy mode is the fully automatic path. Your app sends OpenAI-style chat requests to Engram, Engram injects relevant memory, forwards the request, returns the provider response, and extracts new facts in the background.
             </p>
             <p>
-              Use this when you control the app or can set a custom OpenAI-compatible base URL.
+              Set <InlineCode>stream: true</InlineCode> in the body for SSE streaming — tokens flow to the client as they arrive and extraction fires once the stream closes.
+            </p>
+            <p>
+              Add <InlineCode>X-Engram-Namespace</InlineCode> to scope retrieval and storage to a sub-store (e.g. <InlineCode>work</InlineCode> vs <InlineCode>personal</InlineCode>). Defaults to <InlineCode>default</InlineCode>.
             </p>
           </div>
-          <DocsCodeBlock>{`curl -X POST http://localhost:8000/v1/chat \\
+          <DocsCodeBlock>{`curl -N -X POST http://localhost:8000/v1/chat \\
   -H "Content-Type: application/json" \\
   -H "X-Engram-Key: ek_your_key_here" \\
   -H "X-Engram-User-ID: test_user_1" \\
   -H "X-Engram-Provider: openai" \\
-  -d '{"model":"gpt-4o-mini","messages":[{"role":"user","content":"What stack should I use?"}]}'`}</DocsCodeBlock>
+  -H "X-Engram-Namespace: work" \\
+  -d '{"model":"gpt-4o-mini","stream":true,
+       "messages":[{"role":"user","content":"What stack should I use?"}]}'`}</DocsCodeBlock>
         </div>
       </DocsSection>
 
-      <DocsSection id="rest" eyebrow="06" title="REST surface">
+      <DocsSection id="retrieval" eyebrow="06" title="Retrieval modes">
+        <div className="space-y-4 font-serif text-base leading-7 text-muted">
+          <p>
+            Each user can pick the retrieval strategy used when memories get injected into the system prompt. Set it via <InlineCode>PATCH /users/me/config</InlineCode> with a <InlineCode>retrieval_mode</InlineCode> field, or from the Settings page.
+          </p>
+        </div>
+        <div className="grid gap-4 md:grid-cols-3">
+          <DocCard title="vector (default)">
+            Pure pgvector cosine similarity over the 384-dim embeddings. Fast, single SQL round trip. Best when queries paraphrase memory content.
+          </DocCard>
+          <DocCard title="hybrid">
+            Runs vector and Postgres full-text (<InlineCode>tsvector</InlineCode>) searches in parallel, then merges with Reciprocal Rank Fusion (k=60). Better recall when queries name specific terms the embedding may not weight highly.
+          </DocCard>
+          <DocCard title="graph">
+            Vector seed plus 1-hop expansion through the entity graph (memories sharing entities with the seed are pulled in). Requires <InlineCode>ENABLE_GRAPH=true</InlineCode> and a backfilled entity set.
+          </DocCard>
+        </div>
+        <div className="border-y border-line py-5">
+          <p className="font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-muted">Reranker (optional)</p>
+          <p className="mt-3 font-serif text-base leading-7 text-muted">
+            Set <InlineCode>ENABLE_RERANKER=true</InlineCode> on the API to load a cross-encoder (<InlineCode>cross-encoder/ms-marco-MiniLM-L-6-v2</InlineCode>) at startup. When loaded, all retrieval modes re-rank their candidate set before returning. Adds ~400 MB to API memory and a small per-query CPU cost.
+          </p>
+        </div>
+      </DocsSection>
+
+      <DocsSection id="graph" eyebrow="07" title="Graph memory">
+        <div className="grid gap-8 lg:grid-cols-[0.9fr_1.1fr]">
+          <div className="space-y-4 font-serif text-base leading-7 text-muted">
+            <p>
+              Engram extracts named entities (people, projects, skills, technologies, preferences, topics, organizations) from each memory and stores them as a graph in Postgres — no Neo4j required.
+            </p>
+            <p>
+              Set <InlineCode>ENABLE_GRAPH=true</InlineCode> on the API. New memories trigger entity extraction asynchronously (uses your configured extraction provider). Call <InlineCode>POST /graph/extract</InlineCode> to backfill entities on memories that pre-dated the flag.
+            </p>
+            <p>
+              The dashboard <InlineCode>/graph</InlineCode> page renders this as a force-directed graph (Obsidian-style): dots sized by mention count, edges between entities that co-occur in memories, hover to highlight 1-hop neighborhood, click for memory list.
+            </p>
+          </div>
+          <DocsCodeBlock>{`# 1. Enable on the API
+ENABLE_GRAPH=true
+
+# 2. Backfill entities for existing memories
+curl -X POST http://localhost:8000/graph/extract \\
+  -H "X-Engram-Key: ek_..."
+
+# 3. List entities with mention counts
+curl http://localhost:8000/graph/entities \\
+  -H "X-Engram-Key: ek_..."
+
+# 4. Co-occurrence edges (entities sharing memories)
+curl http://localhost:8000/graph/edges \\
+  -H "X-Engram-Key: ek_..."
+
+# 5. Switch retrieval to graph mode
+curl -X PATCH http://localhost:8000/users/me/config \\
+  -H "X-Engram-Key: ek_..." \\
+  -H "Content-Type: application/json" \\
+  -d '{"retrieval_mode":"graph"}'`}</DocsCodeBlock>
+        </div>
+      </DocsSection>
+
+      <DocsSection id="namespaces" eyebrow="08" title="Namespaces & organizations">
+        <div className="grid gap-8 lg:grid-cols-[1fr_1fr]">
+          <div className="space-y-4 font-serif text-base leading-7 text-muted">
+            <p>
+              <strong className="text-ink">Namespaces</strong> partition a single user's memories. Pass <InlineCode>X-Engram-Namespace: &lt;name&gt;</InlineCode> on proxy requests; pass <InlineCode>?namespace=&lt;name&gt;</InlineCode> when listing memories. Default is <InlineCode>default</InlineCode>. Useful for separating work/personal contexts under one Engram key.
+            </p>
+            <p>
+              <strong className="text-ink">Organizations</strong> group users with role-based access (owner / admin / member). Memories tagged with <InlineCode>org_id</InlineCode> are visible to all org members.
+            </p>
+          </div>
+          <DocsCodeBlock>{`# Create an org (you become owner)
+curl -X POST http://localhost:8000/orgs \\
+  -H "X-Engram-Key: ek_..." \\
+  -H "Content-Type: application/json" \\
+  -d '{"name":"Acme"}'
+
+# Add a member by external_id
+curl -X POST http://localhost:8000/orgs/<org_id>/members \\
+  -H "X-Engram-Key: ek_..." \\
+  -H "Content-Type: application/json" \\
+  -d '{"external_id":"teammate_42","role":"member"}'
+
+# List the orgs you belong to
+curl http://localhost:8000/orgs \\
+  -H "X-Engram-Key: ek_..."`}</DocsCodeBlock>
+        </div>
+      </DocsSection>
+
+      <DocsSection id="rest" eyebrow="09" title="REST surface">
         <div className="overflow-hidden border-y border-line">
           {endpoints.map(([name, routes]) => (
             <div key={name} className="grid gap-3 border-b border-line py-4 last:border-b-0 md:grid-cols-[12rem_1fr]">
@@ -172,24 +280,30 @@ curl -X POST http://localhost:8000/users \\
         </div>
       </DocsSection>
 
-      <DocsSection id="deploy" eyebrow="07" title="Deployment checklist">
+      <DocsSection id="deploy" eyebrow="10" title="Deployment checklist">
         <div className="grid gap-4 md:grid-cols-2">
           <DocCard title="API">
-            Deploy the FastAPI service on a container host and set database, provider, CORS, and service-key environment variables.
+            Deploy the FastAPI service on a container host (Azure Container Apps, Fly.io, Render, Railway). Set <InlineCode>DATABASE_URL</InlineCode>, provider keys, <InlineCode>CORS_ORIGINS</InlineCode>, <InlineCode>ENGRAM_SERVICE_KEY</InlineCode>, <InlineCode>ENGRAM_PROVIDER_KEY_ENCRYPTION_KEY</InlineCode>.
           </DocCard>
           <DocCard title="Database">
-            Use PostgreSQL with pgvector enabled. Local Docker Postgres and Supabase Postgres are both supported.
+            PostgreSQL with the <InlineCode>vector</InlineCode> extension enabled. Local Docker Postgres and Supabase Postgres both supported. Schema migrates on API startup.
           </DocCard>
           <DocCard title="Dashboard">
-            Deploy the Next.js dashboard with root directory set to <InlineCode>dashboard</InlineCode> and <InlineCode>NEXT_PUBLIC_API_URL</InlineCode> pointing at the API.
+            Vercel with Root Directory <InlineCode>dashboard</InlineCode> and <InlineCode>NEXT_PUBLIC_API_URL</InlineCode> pointing at the API. Add the Vercel origin to API <InlineCode>CORS_ORIGINS</InlineCode>.
           </DocCard>
           <DocCard title="MCP">
             Run MCP locally for desktop clients, or expose SSE from a reachable host for clients that support remote MCP.
           </DocCard>
+          <DocCard title="Feature flags">
+            Optional API env vars: <InlineCode>ENABLE_GRAPH=true</InlineCode> for entity extraction + graph retrieval, <InlineCode>ENABLE_RERANKER=true</InlineCode> for the cross-encoder reranker (adds ~400 MB memory).
+          </DocCard>
+          <DocCard title="GHCR image">
+            Pushing to <InlineCode>main</InlineCode> auto-builds <InlineCode>ghcr.io/&lt;owner&gt;/engram-api:latest</InlineCode>. Container Apps caches by tag — create a new revision (or pin to <InlineCode>:&lt;sha&gt;</InlineCode>) to pull a fresh image.
+          </DocCard>
         </div>
       </DocsSection>
 
-      <DocsSection id="troubleshooting" eyebrow="08" title="Troubleshooting">
+      <DocsSection id="troubleshooting" eyebrow="11" title="Troubleshooting">
         <div className="grid gap-4 md:grid-cols-2">
           <Trouble title="Dashboard says invalid key">
             Confirm the browser saved the same <InlineCode>ek_...</InlineCode> key as your MCP client and that API CORS includes the dashboard origin.
@@ -203,12 +317,24 @@ curl -X POST http://localhost:8000/users \\
           <Trouble title="Proxy fails provider requests">
             Check provider keys in server environment variables and verify <InlineCode>X-Engram-Provider</InlineCode> matches the configured provider.
           </Trouble>
+          <Trouble title="Graph page shows Not Found">
+            The deployed API doesn't have the <InlineCode>/graph/*</InlineCode> routes yet. Update the container to the latest image and create a new revision so it actually pulls.
+          </Trouble>
+          <Trouble title="Backfill returns 0 entity links">
+            Either <InlineCode>ENABLE_GRAPH</InlineCode> isn't set on the API, your extraction provider key is missing, or there are no approved memories yet. Check API logs during the call.
+          </Trouble>
+          <Trouble title="Streaming requests hang">
+            Behind a reverse proxy, ensure SSE buffering is disabled. The proxy already sends <InlineCode>X-Accel-Buffering: no</InlineCode> for nginx; for Cloudflare enable streaming on the route.
+          </Trouble>
+          <Trouble title="Hybrid retrieval returns empty">
+            Verify the <InlineCode>memories.content_tsv</InlineCode> column exists (auto-generated by the schema). Run <InlineCode>apply_schema</InlineCode> against the database if you upgraded from an older version.
+          </Trouble>
         </div>
       </DocsSection>
 
       <div className="border-y border-line py-8">
         <p className="font-serif text-xl leading-8 text-ink">
-          Start with <Link href="/settings" className="text-signal hover:text-ink">Settings</Link> to save a key, then inspect the <Link href="/" className="text-signal hover:text-ink">memory ledger</Link> as clients begin writing context.
+          Start with <Link href="/settings" className="text-signal hover:text-ink">Settings</Link> to save a key. Land on the <Link href="/" className="text-signal hover:text-ink">home dashboard</Link> for system state, dive into the <Link href="/memories" className="text-signal hover:text-ink">memory ledger</Link> to browse entries, or open the <Link href="/graph" className="text-signal hover:text-ink">entity graph</Link> to see how they connect.
         </p>
       </div>
     </section>

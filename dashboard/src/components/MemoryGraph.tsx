@@ -105,11 +105,21 @@ export function MemoryGraph() {
     setLoading(true);
     setError(null);
     try {
-      const [entityRes, edgeRes] = await Promise.all([api.graph.listEntities(), api.graph.listEdges()]);
+      const entityRes = await api.graph.listEntities();
       setEntities(entityRes.entities);
-      setEdges(edgeRes.edges);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load graph");
+      setEntities([]);
+      setEdges([]);
+      setLoading(false);
+      return;
+    }
+    try {
+      const edgeRes = await api.graph.listEdges();
+      setEdges(edgeRes.edges);
+    } catch {
+      setEdges([]);
+      setExtractStatus("Edges endpoint unavailable — showing entities without connections. Update the API to get co-occurrence edges.");
     } finally {
       setLoading(false);
     }

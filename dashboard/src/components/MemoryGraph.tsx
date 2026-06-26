@@ -111,9 +111,67 @@ const TYPE_COLORS: Record<string, string> = {
   organization: "#22d3ee",
 };
 
-const BACKGROUND = "#0b0d12";
 const LABEL_FULL_ZOOM = 1.6;
 const LABEL_FADE_ZOOM = 0.55;
+
+type ThemePalette = {
+  canvasBg: string;
+  sidebarBg: string;
+  dotGrid: string;
+  labelColor: string;
+  labelDimColor: string;
+  selectedRingColor: string;
+  pinnedDotColor: string;
+  edgeBaseAlpha: number;
+  edgeHighlightAlpha: number;
+  edgeFadeAlpha: number;
+  haloAlphaBase: number;
+  haloAlphaDim: number;
+};
+
+const DARK_PALETTE: ThemePalette = {
+  canvasBg: "#0b0d12",
+  sidebarBg: "rgba(11,13,18,0.92)",
+  dotGrid: "rgba(148, 163, 184, 0.08)",
+  labelColor: "#cbd5e1",
+  labelDimColor: "#475569",
+  selectedRingColor: "#f8fafc",
+  pinnedDotColor: "#0f172a",
+  edgeBaseAlpha: 0.32,
+  edgeHighlightAlpha: 0.7,
+  edgeFadeAlpha: 0.15,
+  haloAlphaBase: 0.14,
+  haloAlphaDim: 0.05,
+};
+
+const LIGHT_PALETTE: ThemePalette = {
+  canvasBg: "#f4efe5",
+  sidebarBg: "rgba(244,239,229,0.94)",
+  dotGrid: "rgba(15, 23, 42, 0.07)",
+  labelColor: "#1f2937",
+  labelDimColor: "#94a3b8",
+  selectedRingColor: "#1a1a18",
+  pinnedDotColor: "#fafafa",
+  edgeBaseAlpha: 0.45,
+  edgeHighlightAlpha: 0.85,
+  edgeFadeAlpha: 0.18,
+  haloAlphaBase: 0.18,
+  haloAlphaDim: 0.06,
+};
+
+function useTheme(): "dark" | "light" {
+  const [theme, setTheme] = useState<"dark" | "light">("dark");
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    const read = (): "dark" | "light" =>
+      document.documentElement.dataset.theme === "light" ? "light" : "dark";
+    setTheme(read());
+    const observer = new MutationObserver(() => setTheme(read()));
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+    return () => observer.disconnect();
+  }, []);
+  return theme;
+}
 
 function computeRadius(memoryCount: number): number {
   return 3 + Math.sqrt(memoryCount) * 2.2;
@@ -202,6 +260,9 @@ export function MemoryGraph() {
   const searchInputRef = useRef<HTMLInputElement | null>(null);
   const autoFitRef = useRef(false);
   const minimapNodesRef = useRef<ForceNode[]>([]);
+
+  const themeMode = useTheme();
+  const palette = themeMode === "light" ? LIGHT_PALETTE : DARK_PALETTE;
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -416,8 +477,9 @@ export function MemoryGraph() {
       const sColor = getNodeColor(link.source);
       const tColor = getNodeColor(link.target);
       const gradient = ctx.createLinearGradient(sx, sy, tx, ty);
-      gradient.addColorStop(0, withAlpha(sColor, (highlighted ? 0.7 : 0.32) * fade));
-      gradient.addColorStop(1, withAlpha(tColor, (highlighted ? 0.7 : 0.32) * fade));
+      const baseAlpha = highlighted ? palette.edgeHighlightAlpha : palette.edgeBaseAlpha;
+      gradient.addColorStop(0, withAlpha(sColor, baseAlpha * fade));
+      gradient.addColorStop(1, withAlpha(tColor, baseAlpha * fade));
 
       ctx.save();
       ctx.strokeStyle = gradient;
@@ -428,7 +490,7 @@ export function MemoryGraph() {
       ctx.stroke();
       ctx.restore();
     },
-    [isLinkHighlighted, hoveredId],
+    [isLinkHighlighted, hoveredId, palette],
   );
 
   const drawNode = useCallback(
@@ -473,7 +535,7 @@ export function MemoryGraph() {
       ctx.beginPath();
       ctx.arc(drawX, drawY, node.radius + 5 + pulse * 2, 0, Math.PI * 2);
       ctx.fillStyle = baseColor;
-      ctx.globalAlpha = dimmed ? 0.05 : 0.14 + pulse * 0.08;
+      ctx.globalAlpha = dimmed ? palette.haloAlphaDim : palette.haloAlphaBase + pulse * 0.08;
       ctx.fill();
 
       // Main dot
@@ -487,7 +549,7 @@ export function MemoryGraph() {
       if (isSelected) {
         ctx.beginPath();
         ctx.arc(drawX, drawY, node.radius + 3, 0, Math.PI * 2);
-        ctx.strokeStyle = "#f8fafc";
+        ctx.strokeStyle = palette.selectedRingColor;
         ctx.lineWidth = 1.6;
         ctx.globalAlpha = 0.9;
         ctx.stroke();
@@ -497,7 +559,7 @@ export function MemoryGraph() {
       if (isPinned) {
         ctx.beginPath();
         ctx.arc(drawX, drawY, Math.max(1.2, node.radius * 0.3), 0, Math.PI * 2);
-        ctx.fillStyle = "#0f172a";
+        ctx.fillStyle = palette.pinnedDotColor;
         ctx.globalAlpha = 0.9;
         ctx.fill();
       }
@@ -515,13 +577,13 @@ export function MemoryGraph() {
         ctx.font = `${fontSize}px ui-sans-serif, system-ui, sans-serif`;
         ctx.textAlign = "center";
         ctx.textBaseline = "top";
-        ctx.fillStyle = dimmed ? "#475569" : "#cbd5e1";
+        ctx.fillStyle = dimmed ? palette.labelDimColor : palette.labelColor;
         ctx.globalAlpha = dimmed ? labelAlpha * 0.4 : labelAlpha;
         ctx.fillText(node.name, drawX, drawY + node.radius + 6);
       }
       ctx.restore();
     },
-    [isDimmed, searchMatches, pinnedIds, selectedNodeId, hoveredId],
+    [isDimmed, searchMatches, pinnedIds, selectedNodeId, hoveredId, palette],
   );
 
   const drawNodePointerArea = useCallback(
@@ -694,10 +756,13 @@ export function MemoryGraph() {
 
   return (
     <div
-      className="-mx-4 -mt-10 flex flex-col gap-0 border-y border-line bg-paper sm:-mx-6 md:-mt-16 lg:h-[calc(100vh-6rem)] lg:flex-row"
-      style={{ background: BACKGROUND }}
+      className="-mx-4 -mt-10 flex flex-col gap-0 border-y border-line sm:-mx-6 md:-mt-16 lg:h-[calc(100vh-6rem)] lg:flex-row"
+      style={{ background: palette.canvasBg }}
     >
-      <aside className="flex w-full shrink-0 flex-col gap-5 border-b border-line/40 bg-[rgba(11,13,18,0.92)] p-5 lg:w-72 lg:border-b-0 lg:border-r">
+      <aside
+        className="flex w-full shrink-0 flex-col gap-5 border-b border-line/40 p-5 lg:w-72 lg:border-b-0 lg:border-r"
+        style={{ background: palette.sidebarBg }}
+      >
         <div>
           <p className="font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-muted">§ III — Entity weave</p>
           <h1 className="mt-2 font-serif text-3xl font-semibold leading-tight text-ink">Memory Graph</h1>
@@ -803,8 +868,8 @@ export function MemoryGraph() {
         ref={canvasRef}
         className="relative h-[70vh] flex-1 lg:h-auto"
         style={{
-          background: BACKGROUND,
-          backgroundImage: "radial-gradient(rgba(148, 163, 184, 0.08) 1px, transparent 1px)",
+          background: palette.canvasBg,
+          backgroundImage: `radial-gradient(${palette.dotGrid} 1px, transparent 1px)`,
           backgroundSize: "24px 24px",
         }}
       >
@@ -887,7 +952,7 @@ export function MemoryGraph() {
             </div>
 
             {/* Minimap */}
-            <Minimap nodes={minimapNodesRef.current} size={{ width: size.width, height: size.height }} />
+            <Minimap nodes={minimapNodesRef.current} size={{ width: size.width, height: size.height }} palette={palette} />
 
             {/* Right-click context menu */}
             {contextMenu && (
@@ -1052,7 +1117,7 @@ function ContextMenuItem({ label, onClick }: { label: string; onClick: () => voi
   );
 }
 
-function Minimap({ nodes, size }: { nodes: ForceNode[]; size: { width: number; height: number } }) {
+function Minimap({ nodes, size, palette }: { nodes: ForceNode[]; size: { width: number; height: number }; palette: ThemePalette }) {
   const positioned = nodes.filter((n) => n.x !== undefined && n.y !== undefined);
   if (positioned.length === 0) return null;
   let minX = Infinity;
@@ -1074,7 +1139,10 @@ function Minimap({ nodes, size }: { nodes: ForceNode[]; size: { width: number; h
   const scaleY = miniH / h;
   void size;
   return (
-    <div className="pointer-events-none absolute bottom-4 right-4 rounded-md border border-line/40 bg-[rgba(11,13,18,0.85)] p-2">
+    <div
+      className="pointer-events-none absolute bottom-4 right-4 rounded-md border border-line/40 p-2"
+      style={{ background: palette.sidebarBg }}
+    >
       <svg width={miniW} height={miniH}>
         {positioned.map((n) => (
           <circle

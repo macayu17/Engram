@@ -19,12 +19,25 @@ type ForceGraphProps = {
   height?: number;
   backgroundColor?: string;
   nodeCanvasObject?: (node: ForceNode, ctx: CanvasRenderingContext2D, globalScale: number) => void;
+  nodeCanvasObjectMode?: () => "before" | "after" | "replace";
   nodePointerAreaPaint?: (node: ForceNode, color: string, ctx: CanvasRenderingContext2D) => void;
   linkColor?: (link: ForceLink) => string;
   linkWidth?: (link: ForceLink) => number;
-  onNodeClick?: (node: ForceNode) => void;
+  linkCurvature?: number | ((link: ForceLink) => number);
+  linkCanvasObject?: (link: ForceLink, ctx: CanvasRenderingContext2D, globalScale: number) => void;
+  linkCanvasObjectMode?: () => "before" | "after" | "replace";
+  linkDirectionalParticles?: number | ((link: ForceLink) => number);
+  linkDirectionalParticleSpeed?: number | ((link: ForceLink) => number);
+  linkDirectionalParticleColor?: (link: ForceLink) => string;
+  linkDirectionalParticleWidth?: number | ((link: ForceLink) => number);
+  onNodeClick?: (node: ForceNode, event: MouseEvent) => void;
+  onNodeRightClick?: (node: ForceNode, event: MouseEvent) => void;
   onNodeHover?: (node: ForceNode | null) => void;
   onBackgroundClick?: () => void;
+  onBackgroundRightClick?: () => void;
+  onZoom?: (transform: { k: number; x: number; y: number }) => void;
+  onRenderFramePre?: (ctx: CanvasRenderingContext2D, globalScale: number) => void;
+  onRenderFramePost?: (ctx: CanvasRenderingContext2D, globalScale: number) => void;
   cooldownTicks?: number;
   d3VelocityDecay?: number;
   d3AlphaDecay?: number;
@@ -68,6 +81,8 @@ type ForceNode = {
   y?: number;
   vx?: number;
   vy?: number;
+  fx?: number | null;
+  fy?: number | null;
 };
 
 type ForceLink = {
@@ -97,6 +112,8 @@ const TYPE_COLORS: Record<string, string> = {
 };
 
 const BACKGROUND = "#0b0d12";
+const LABEL_FULL_ZOOM = 1.6;
+const LABEL_FADE_ZOOM = 0.55;
 
 function computeRadius(memoryCount: number): number {
   return 3 + Math.sqrt(memoryCount) * 2.2;
@@ -122,6 +139,7 @@ function createFloatingForce(): FloatingForce {
   const force = ((alpha: number) => {
     const time = performance.now() / 1000;
     for (const node of nodes) {
+      if (node.fx != null || node.fy != null) continue;
       const pulse = Math.sin(time * 0.7 + node.phase);
       const sway = Math.cos(time * 0.55 + node.phase);
       node.vx = (node.vx ?? 0) + sway * alpha * 0.035;
@@ -134,6 +152,27 @@ function createFloatingForce(): FloatingForce {
   return force;
 }
 
+function withAlpha(hex: string, alpha: number): string {
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
+function getNodeX(end: string | ForceNode): number | undefined {
+  return typeof end === "string" ? undefined : end.x;
+}
+function getNodeY(end: string | ForceNode): number | undefined {
+  return typeof end === "string" ? undefined : end.y;
+}
+function getNodeColor(end: string | ForceNode): string {
+  if (typeof end === "string") return "#94a3b8";
+  return TYPE_COLORS[end.entityType] ?? "#94a3b8";
+}
+function getNodeId(end: string | ForceNode): string {
+  return typeof end === "string" ? end : end.id;
+}
+
 export function MemoryGraph() {
   const [entities, setEntities] = useState<GraphEntity[]>([]);
   const [edges, setEdges] = useState<GraphEdge[]>([]);
@@ -141,6 +180,14 @@ export function MemoryGraph() {
   const [error, setError] = useState<string | null>(null);
   const [activeTypes, setActiveTypes] = useState<Set<string>>(new Set(ENTITY_TYPES));
   const [hoveredId, setHoveredId] = useState<string | null>(null);
+  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+  const [pinnedIds, setPinnedIds] = useState<Set<string>>(new Set());
+  const [searchQuery, setSearchQuery] = useState("");
+  const [zoom, setZoom] = useState(1);
+  const [contextMenu, setContextMenu] = useState<
+    | { x: number; y: number; node: ForceNode }
+    | null
+  >(null);
   const [selected, setSelected] = useState<
     | { kind: "entity"; entity: GraphEntity; memories: GraphMemoryItem[] }
     | { kind: "memory"; memory: GraphMemoryItem; neighbors: GraphMemoryItem[]; entities: GraphEntity[] }
@@ -152,6 +199,9 @@ export function MemoryGraph() {
 
   const canvasRef = useRef<HTMLDivElement | null>(null);
   const fgRef = useRef<ForceGraphHandle | null>(null);
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
+  const autoFitRef = useRef(false);
+  const minimapNodesRef = useRef<ForceNode[]>([]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -207,6 +257,16 @@ export function MemoryGraph() {
 
   const filteredIdSet = useMemo(() => new Set(filteredEntities.map((e) => e.id)), [filteredEntities]);
 
+  const searchMatches = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return null;
+    const matches = new Set<string>();
+    for (const e of filteredEntities) {
+      if (e.name.toLowerCase().includes(q)) matches.add(e.id);
+    }
+    return matches;
+  }, [searchQuery, filteredEntities]);
+
   const graphData = useMemo(() => {
     const nodes: ForceNode[] = filteredEntities.map((e) => ({
       id: e.id,
@@ -221,6 +281,11 @@ export function MemoryGraph() {
       .map((edge) => ({ source: edge.source, target: edge.target, weight: edge.weight }));
     return { nodes, links };
   }, [filteredEntities, edges, filteredIdSet]);
+
+  useEffect(() => {
+    minimapNodesRef.current = graphData.nodes;
+    autoFitRef.current = false;
+  }, [graphData]);
 
   useEffect(() => {
     if (!fgRef.current || graphData.nodes.length === 0) return;
@@ -267,48 +332,196 @@ export function MemoryGraph() {
   const isLinkHighlighted = useCallback(
     (link: ForceLink): boolean => {
       if (!hoveredId) return false;
-      const s = typeof link.source === "string" ? link.source : link.source.id;
-      const t = typeof link.target === "string" ? link.target : link.target.id;
+      const s = getNodeId(link.source);
+      const t = getNodeId(link.target);
       return s === hoveredId || t === hoveredId;
     },
     [hoveredId],
+  );
+
+  const isDimmed = useCallback(
+    (id: string): boolean => {
+      if (searchMatches && !searchMatches.has(id)) return true;
+      if (hoveredId !== null && !isHighlighted(id)) return true;
+      return false;
+    },
+    [searchMatches, hoveredId, isHighlighted],
+  );
+
+  // Cluster hulls: per-type centroid + bounding radius, drawn before nodes.
+  const renderFramePre = useCallback(
+    (ctx: CanvasRenderingContext2D) => {
+      const positionedNodes = graphData.nodes.filter(
+        (n) => n.x !== undefined && n.y !== undefined,
+      );
+      if (positionedNodes.length === 0) return;
+      const byType = new Map<string, ForceNode[]>();
+      for (const node of positionedNodes) {
+        if (!byType.has(node.entityType)) byType.set(node.entityType, []);
+        byType.get(node.entityType)!.push(node);
+      }
+      ctx.save();
+      for (const [type, group] of byType.entries()) {
+        if (group.length < 2) continue;
+        const cx = group.reduce((s, n) => s + (n.x ?? 0), 0) / group.length;
+        const cy = group.reduce((s, n) => s + (n.y ?? 0), 0) / group.length;
+        let maxDist = 0;
+        for (const n of group) {
+          const dx = (n.x ?? 0) - cx;
+          const dy = (n.y ?? 0) - cy;
+          const d = Math.sqrt(dx * dx + dy * dy) + n.radius;
+          if (d > maxDist) maxDist = d;
+        }
+        const radius = maxDist + 14;
+        const color = TYPE_COLORS[type] ?? "#94a3b8";
+        const gradient = ctx.createRadialGradient(cx, cy, 0, cx, cy, radius);
+        gradient.addColorStop(0, withAlpha(color, 0.08));
+        gradient.addColorStop(0.7, withAlpha(color, 0.03));
+        gradient.addColorStop(1, withAlpha(color, 0));
+        ctx.beginPath();
+        ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+        ctx.fillStyle = gradient;
+        ctx.fill();
+      }
+      ctx.restore();
+    },
+    [graphData.nodes],
+  );
+
+  const drawLink = useCallback(
+    (link: ForceLink, ctx: CanvasRenderingContext2D) => {
+      const sx = getNodeX(link.source);
+      const sy = getNodeY(link.source);
+      const tx = getNodeX(link.target);
+      const ty = getNodeY(link.target);
+      if (sx === undefined || sy === undefined || tx === undefined || ty === undefined) return;
+
+      const highlighted = isLinkHighlighted(link);
+      const fade = hoveredId && !highlighted ? 0.15 : 1;
+      const weightThickness = Math.min(2.4, 0.5 + Math.sqrt(link.weight) * 0.55);
+      const thickness = highlighted ? weightThickness + 1 : weightThickness;
+
+      // Bezier control for curved edge
+      const dx = tx - sx;
+      const dy = ty - sy;
+      const mx = (sx + tx) / 2;
+      const my = (sy + ty) / 2;
+      const offset = Math.sqrt(dx * dx + dy * dy) * 0.12;
+      const nx = -dy;
+      const ny = dx;
+      const len = Math.sqrt(nx * nx + ny * ny) || 1;
+      const cx = mx + (nx / len) * offset;
+      const cy = my + (ny / len) * offset;
+
+      const sColor = getNodeColor(link.source);
+      const tColor = getNodeColor(link.target);
+      const gradient = ctx.createLinearGradient(sx, sy, tx, ty);
+      gradient.addColorStop(0, withAlpha(sColor, (highlighted ? 0.7 : 0.32) * fade));
+      gradient.addColorStop(1, withAlpha(tColor, (highlighted ? 0.7 : 0.32) * fade));
+
+      ctx.save();
+      ctx.strokeStyle = gradient;
+      ctx.lineWidth = thickness;
+      ctx.beginPath();
+      ctx.moveTo(sx, sy);
+      ctx.quadraticCurveTo(cx, cy, tx, ty);
+      ctx.stroke();
+      ctx.restore();
+    },
+    [isLinkHighlighted, hoveredId],
   );
 
   const drawNode = useCallback(
     (node: ForceNode, ctx: CanvasRenderingContext2D, globalScale: number) => {
       if (node.x === undefined || node.y === undefined) return;
       const baseColor = TYPE_COLORS[node.entityType] ?? "#94a3b8";
-      const dimmed = hoveredId !== null && !isHighlighted(node.id);
+      const dimmed = isDimmed(node.id);
+      const isSearchMatch = searchMatches !== null && searchMatches.has(node.id);
+      const isPinned = pinnedIds.has(node.id);
+      const isSelected = selectedNodeId === node.id;
+      const isHovered = hoveredId === node.id;
       const time = performance.now() / 1000;
-      const hoverOffsetX = Math.cos(time * 0.7 + node.phase) * 1.8;
-      const hoverOffsetY = Math.sin(time * 0.85 + node.phase) * 1.8;
+      const hoverOffsetX = (node.fx != null) ? 0 : Math.cos(time * 0.7 + node.phase) * 1.8;
+      const hoverOffsetY = (node.fy != null) ? 0 : Math.sin(time * 0.85 + node.phase) * 1.8;
       const drawX = node.x + hoverOffsetX;
       const drawY = node.y + hoverOffsetY;
       const pulse = 0.5 + Math.sin(time * 1.3 + node.phase) * 0.5;
       ctx.save();
 
+      // Hover spotlight glow
+      if (isHovered) {
+        const glowRadius = node.radius + 18;
+        const glow = ctx.createRadialGradient(drawX, drawY, 0, drawX, drawY, glowRadius);
+        glow.addColorStop(0, withAlpha(baseColor, 0.5));
+        glow.addColorStop(0.6, withAlpha(baseColor, 0.15));
+        glow.addColorStop(1, withAlpha(baseColor, 0));
+        ctx.beginPath();
+        ctx.arc(drawX, drawY, glowRadius, 0, Math.PI * 2);
+        ctx.fillStyle = glow;
+        ctx.fill();
+      }
+
+      // Search match emphasis ring
+      if (isSearchMatch && !isHovered) {
+        ctx.beginPath();
+        ctx.arc(drawX, drawY, node.radius + 6, 0, Math.PI * 2);
+        ctx.fillStyle = withAlpha(baseColor, 0.2);
+        ctx.fill();
+      }
+
+      // Ambient halo
       ctx.beginPath();
       ctx.arc(drawX, drawY, node.radius + 5 + pulse * 2, 0, Math.PI * 2);
       ctx.fillStyle = baseColor;
-      ctx.globalAlpha = dimmed ? 0.06 : 0.14 + pulse * 0.08;
+      ctx.globalAlpha = dimmed ? 0.05 : 0.14 + pulse * 0.08;
       ctx.fill();
 
+      // Main dot
       ctx.beginPath();
       ctx.arc(drawX, drawY, node.radius, 0, Math.PI * 2);
       ctx.fillStyle = baseColor;
-      ctx.globalAlpha = dimmed ? 0.35 : 1;
+      ctx.globalAlpha = dimmed ? 0.3 : 1;
       ctx.fill();
 
-      const fontSize = Math.max(10, 12 / Math.sqrt(globalScale));
-      ctx.font = `${fontSize}px ui-sans-serif, system-ui, sans-serif`;
-      ctx.textAlign = "center";
-      ctx.textBaseline = "top";
-      ctx.fillStyle = dimmed ? "#475569" : "#cbd5e1";
-      ctx.globalAlpha = dimmed ? 0.4 : 0.9;
-      ctx.fillText(node.name, drawX, drawY + node.radius + 6);
+      // Selected ring
+      if (isSelected) {
+        ctx.beginPath();
+        ctx.arc(drawX, drawY, node.radius + 3, 0, Math.PI * 2);
+        ctx.strokeStyle = "#f8fafc";
+        ctx.lineWidth = 1.6;
+        ctx.globalAlpha = 0.9;
+        ctx.stroke();
+      }
+
+      // Pinned indicator (small inner dot)
+      if (isPinned) {
+        ctx.beginPath();
+        ctx.arc(drawX, drawY, Math.max(1.2, node.radius * 0.3), 0, Math.PI * 2);
+        ctx.fillStyle = "#0f172a";
+        ctx.globalAlpha = 0.9;
+        ctx.fill();
+      }
+
+      // Zoom-aware label
+      const labelOpacityFromZoom = globalScale <= LABEL_FADE_ZOOM
+        ? 0
+        : globalScale >= LABEL_FULL_ZOOM
+          ? 1
+          : (globalScale - LABEL_FADE_ZOOM) / (LABEL_FULL_ZOOM - LABEL_FADE_ZOOM);
+      const showLabel = isHovered || isSelected || isSearchMatch || labelOpacityFromZoom > 0.05;
+      if (showLabel) {
+        const labelAlpha = (isHovered || isSelected || isSearchMatch) ? 0.95 : labelOpacityFromZoom * 0.85;
+        const fontSize = Math.max(10, 12 / Math.sqrt(globalScale));
+        ctx.font = `${fontSize}px ui-sans-serif, system-ui, sans-serif`;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "top";
+        ctx.fillStyle = dimmed ? "#475569" : "#cbd5e1";
+        ctx.globalAlpha = dimmed ? labelAlpha * 0.4 : labelAlpha;
+        ctx.fillText(node.name, drawX, drawY + node.radius + 6);
+      }
       ctx.restore();
     },
-    [hoveredId, isHighlighted],
+    [isDimmed, searchMatches, pinnedIds, selectedNodeId, hoveredId],
   );
 
   const drawNodePointerArea = useCallback(
@@ -323,7 +536,27 @@ export function MemoryGraph() {
   );
 
   const handleNodeClick = useCallback(
-    async (node: ForceNode) => {
+    async (node: ForceNode, event: MouseEvent) => {
+      // Shift+click pins/unpins
+      if (event.shiftKey) {
+        setPinnedIds((prev) => {
+          const next = new Set(prev);
+          if (next.has(node.id)) {
+            next.delete(node.id);
+            node.fx = null;
+            node.fy = null;
+            fgRef.current?.d3ReheatSimulation();
+          } else {
+            next.add(node.id);
+            node.fx = node.x ?? 0;
+            node.fy = node.y ?? 0;
+          }
+          return next;
+        });
+        return;
+      }
+      setContextMenu(null);
+      setSelectedNodeId(node.id);
       const entity = entities.find((e) => e.id === node.id);
       if (!entity) return;
       try {
@@ -338,6 +571,17 @@ export function MemoryGraph() {
       }
     },
     [entities],
+  );
+
+  const handleNodeRightClick = useCallback(
+    (node: ForceNode, event: MouseEvent) => {
+      event.preventDefault?.();
+      const rect = canvasRef.current?.getBoundingClientRect();
+      const x = rect ? event.clientX - rect.left : event.clientX;
+      const y = rect ? event.clientY - rect.top : event.clientY;
+      setContextMenu({ x, y, node });
+    },
+    [],
   );
 
   const handleMemoryRowClick = useCallback(async (memory: GraphMemoryItem) => {
@@ -375,18 +619,69 @@ export function MemoryGraph() {
   const handleSelectAll = () => setActiveTypes(new Set(ENTITY_TYPES));
   const handleSelectNone = () => setActiveTypes(new Set());
 
-  const linkColor = useCallback(
-    (link: ForceLink): string => {
-      if (isLinkHighlighted(link)) return "rgba(148, 163, 184, 0.75)";
-      if (hoveredId) return "rgba(71, 85, 105, 0.18)";
-      return "rgba(100, 116, 139, 0.35)";
-    },
-    [isLinkHighlighted, hoveredId],
+  const handleResetView = useCallback(() => {
+    for (const node of graphData.nodes) {
+      node.fx = null;
+      node.fy = null;
+    }
+    setPinnedIds(new Set());
+    setSelectedNodeId(null);
+    setSelected(null);
+    setSearchQuery("");
+    fgRef.current?.d3ReheatSimulation();
+    fgRef.current?.zoomToFit(600, 60);
+  }, [graphData.nodes]);
+
+  const handleFitView = useCallback(() => {
+    fgRef.current?.zoomToFit(600, 60);
+  }, []);
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handler = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      const isInput = target?.tagName === "INPUT" || target?.tagName === "TEXTAREA";
+      if (event.key === "Escape") {
+        setSelected(null);
+        setSelectedNodeId(null);
+        setContextMenu(null);
+        if (isInput && target instanceof HTMLInputElement) {
+          setSearchQuery("");
+          target.blur();
+        }
+        return;
+      }
+      if (isInput) return;
+      if (event.key === "/") {
+        event.preventDefault();
+        searchInputRef.current?.focus();
+        searchInputRef.current?.select();
+      } else if (event.key === "r" || event.key === "R") {
+        handleResetView();
+      } else if (event.key === "f" || event.key === "F") {
+        handleFitView();
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [handleResetView, handleFitView]);
+
+  // Dismiss context menu on outside click
+  useEffect(() => {
+    if (!contextMenu) return;
+    const handler = () => setContextMenu(null);
+    window.addEventListener("click", handler);
+    return () => window.removeEventListener("click", handler);
+  }, [contextMenu]);
+
+  const linkParticles = useCallback(
+    (link: ForceLink): number => (isLinkHighlighted(link) ? Math.min(3, 1 + Math.floor(link.weight / 2)) : 0),
+    [isLinkHighlighted],
   );
 
-  const linkWidth = useCallback(
-    (link: ForceLink): number => (isLinkHighlighted(link) ? 1.4 : 0.6),
-    [isLinkHighlighted],
+  const linkParticleColor = useCallback(
+    (link: ForceLink): string => getNodeColor(link.source),
+    [],
   );
 
   const typeCounts = useMemo(() => {
@@ -394,6 +689,8 @@ export function MemoryGraph() {
     for (const e of entities) counts[e.entity_type] = (counts[e.entity_type] ?? 0) + 1;
     return counts;
   }, [entities]);
+
+  const visibleTypeCount = Object.values(typeCounts).filter((c) => c > 0).length;
 
   return (
     <div
@@ -405,14 +702,33 @@ export function MemoryGraph() {
           <p className="font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-muted">§ III — Entity weave</p>
           <h1 className="mt-2 font-serif text-3xl font-semibold leading-tight text-ink">Memory Graph</h1>
           <p className="mt-2 font-serif text-sm leading-6 text-muted">
-            Entities extracted from your memories, connected when they co-occur. Hover to highlight a neighborhood, click for details.
+            Entities extracted from your memories. Hover to highlight a neighborhood. Shift-click to pin. Right-click for actions.
           </p>
+        </div>
+
+        <div>
+          <label className="block">
+            <span className="sr-only">Search entities</span>
+            <input
+              ref={searchInputRef}
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search entities  ( / )"
+              className="w-full rounded-md border border-line/40 bg-[rgba(255,255,255,0.03)] px-3 py-2 font-sans text-[11px] text-ink placeholder:text-muted focus:border-line focus:outline-none"
+            />
+          </label>
+          {searchMatches !== null && (
+            <p className="mt-1 font-sans text-[10px] uppercase tracking-[0.12em] text-muted">
+              {searchMatches.size} match{searchMatches.size === 1 ? "" : "es"}
+            </p>
+          )}
         </div>
 
         <div className="grid grid-cols-3 gap-2 border-y border-line/40 py-3">
           <Stat label="Entities" value={filteredEntities.length} sub={`/ ${entities.length}`} />
           <Stat label="Edges" value={graphData.links.length} />
-          <Stat label="Types" value={Object.keys(typeCounts).length} sub={`/ ${ENTITY_TYPES.length}`} />
+          <Stat label="Types" value={visibleTypeCount} sub={`/ ${ENTITY_TYPES.length}`} />
         </div>
 
         <div>
@@ -452,6 +768,22 @@ export function MemoryGraph() {
           </ul>
         </div>
 
+        <div className="border-t border-line/40 pt-3">
+          <p className="mb-2 font-sans text-[10px] font-medium uppercase tracking-[0.12em] text-muted">Shortcuts</p>
+          <ul className="space-y-1 font-sans text-[10px] text-muted">
+            <li><kbd className="rounded bg-line/30 px-1.5 py-0.5 text-ink/70">/</kbd>  search</li>
+            <li><kbd className="rounded bg-line/30 px-1.5 py-0.5 text-ink/70">F</kbd>  fit to view</li>
+            <li><kbd className="rounded bg-line/30 px-1.5 py-0.5 text-ink/70">R</kbd>  reset (unpin + zoom)</li>
+            <li><kbd className="rounded bg-line/30 px-1.5 py-0.5 text-ink/70">Esc</kbd>  close panel</li>
+            <li><kbd className="rounded bg-line/30 px-1.5 py-0.5 text-ink/70">Shift</kbd> + click  pin</li>
+          </ul>
+          {pinnedIds.size > 0 && (
+            <p className="mt-2 font-sans text-[10px] uppercase tracking-[0.12em] text-muted">
+              {pinnedIds.size} pinned
+            </p>
+          )}
+        </div>
+
         <div className="mt-auto space-y-2">
           <button
             type="button"
@@ -467,7 +799,15 @@ export function MemoryGraph() {
         </div>
       </aside>
 
-      <div ref={canvasRef} className="relative h-[70vh] flex-1 lg:h-auto" style={{ background: BACKGROUND }}>
+      <div
+        ref={canvasRef}
+        className="relative h-[70vh] flex-1 lg:h-auto"
+        style={{
+          background: BACKGROUND,
+          backgroundImage: "radial-gradient(rgba(148, 163, 184, 0.08) 1px, transparent 1px)",
+          backgroundSize: "24px 24px",
+        }}
+      >
         {loading ? (
           <div className="flex h-full items-center justify-center font-serif text-base text-muted">Loading graph…</div>
         ) : error ? (
@@ -481,33 +821,134 @@ export function MemoryGraph() {
             No entities match the active filters.
           </div>
         ) : (
-          <ForceGraph2D
-            ref={fgRef}
-            graphData={graphData}
-            width={size.width}
-            height={size.height}
-            backgroundColor={BACKGROUND}
-            nodeCanvasObject={drawNode}
-            nodePointerAreaPaint={drawNodePointerArea}
-            linkColor={linkColor}
-            linkWidth={linkWidth}
-            onNodeClick={handleNodeClick}
-            onNodeHover={(node) => setHoveredId(node ? node.id : null)}
-            onBackgroundClick={() => setSelected(null)}
-            cooldownTicks={Infinity}
-            warmupTicks={80}
-            d3VelocityDecay={0.48}
-            d3AlphaDecay={0.012}
-            onEngineStop={() => fgRef.current?.resumeAnimation()}
-            enableNodeDrag={true}
-          />
+          <>
+            <ForceGraph2D
+              ref={fgRef}
+              graphData={graphData}
+              width={size.width}
+              height={size.height}
+              backgroundColor="rgba(0,0,0,0)"
+              nodeCanvasObject={drawNode}
+              nodeCanvasObjectMode={() => "replace"}
+              nodePointerAreaPaint={drawNodePointerArea}
+              linkColor={() => "rgba(0,0,0,0)"}
+              linkWidth={() => 0}
+              linkCanvasObject={drawLink}
+              linkCanvasObjectMode={() => "replace"}
+              linkCurvature={0.12}
+              linkDirectionalParticles={linkParticles}
+              linkDirectionalParticleSpeed={0.006}
+              linkDirectionalParticleColor={linkParticleColor}
+              linkDirectionalParticleWidth={2}
+              onNodeClick={handleNodeClick}
+              onNodeRightClick={handleNodeRightClick}
+              onNodeHover={(node) => setHoveredId(node ? node.id : null)}
+              onBackgroundClick={() => {
+                setSelected(null);
+                setSelectedNodeId(null);
+                setContextMenu(null);
+              }}
+              onZoom={(t) => setZoom(t.k)}
+              onRenderFramePre={renderFramePre}
+              cooldownTicks={Infinity}
+              warmupTicks={80}
+              d3VelocityDecay={0.48}
+              d3AlphaDecay={0.012}
+              onEngineStop={() => {
+                if (!autoFitRef.current && fgRef.current) {
+                  autoFitRef.current = true;
+                  fgRef.current.zoomToFit(700, 60);
+                }
+                fgRef.current?.resumeAnimation();
+              }}
+              enableNodeDrag={true}
+            />
+
+            {/* Floating type legend */}
+            <div className="pointer-events-none absolute left-4 top-4 flex flex-wrap gap-1.5">
+              {ENTITY_TYPES.filter((t) => activeTypes.has(t) && (typeCounts[t] ?? 0) > 0).map((type) => (
+                <span
+                  key={type}
+                  className="rounded-full px-2.5 py-1 font-sans text-[10px] font-medium uppercase tracking-[0.12em]"
+                  style={{
+                    background: withAlpha(TYPE_COLORS[type], 0.18),
+                    color: TYPE_COLORS[type],
+                    border: `1px solid ${withAlpha(TYPE_COLORS[type], 0.35)}`,
+                  }}
+                >
+                  {type}
+                </span>
+              ))}
+            </div>
+
+            {/* Zoom indicator */}
+            <div className="pointer-events-none absolute bottom-4 left-4 font-sans text-[10px] uppercase tracking-[0.12em] text-muted">
+              zoom · {zoom.toFixed(2)}×
+            </div>
+
+            {/* Minimap */}
+            <Minimap nodes={minimapNodesRef.current} size={{ width: size.width, height: size.height }} />
+
+            {/* Right-click context menu */}
+            {contextMenu && (
+              <div
+                className="absolute z-30 min-w-[12rem] overflow-hidden rounded-md border border-line/60 bg-paper shadow-2xl"
+                style={{ left: contextMenu.x, top: contextMenu.y }}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <ContextMenuItem
+                  label={pinnedIds.has(contextMenu.node.id) ? "Unpin node" : "Pin node"}
+                  onClick={() => {
+                    setPinnedIds((prev) => {
+                      const next = new Set(prev);
+                      const node = contextMenu.node;
+                      if (next.has(node.id)) {
+                        next.delete(node.id);
+                        node.fx = null;
+                        node.fy = null;
+                        fgRef.current?.d3ReheatSimulation();
+                      } else {
+                        next.add(node.id);
+                        node.fx = node.x ?? 0;
+                        node.fy = node.y ?? 0;
+                      }
+                      return next;
+                    });
+                    setContextMenu(null);
+                  }}
+                />
+                <ContextMenuItem
+                  label="Center on node"
+                  onClick={() => {
+                    const node = contextMenu.node;
+                    if (fgRef.current && node.x !== undefined && node.y !== undefined) {
+                      fgRef.current.centerAt(node.x, node.y, 600);
+                      fgRef.current.zoom(2.4, 600);
+                    }
+                    setContextMenu(null);
+                  }}
+                />
+                <ContextMenuItem
+                  label="Hide entity type"
+                  onClick={() => {
+                    setActiveTypes((prev) => {
+                      const next = new Set(prev);
+                      next.delete(contextMenu.node.entityType);
+                      return next;
+                    });
+                    setContextMenu(null);
+                  }}
+                />
+              </div>
+            )}
+          </>
         )}
 
         {selected && (
-          <aside className="absolute right-4 top-4 max-h-[calc(100%-2rem)] w-[22rem] max-w-[calc(100%-2rem)] overflow-auto rounded-lg border border-line/60 bg-paper p-5 shadow-2xl">
+          <aside className="absolute right-4 top-4 z-20 max-h-[calc(100%-2rem)] w-[22rem] max-w-[calc(100%-2rem)] overflow-auto rounded-lg border border-line/60 bg-paper p-5 shadow-2xl">
             <button
               type="button"
-              onClick={() => setSelected(null)}
+              onClick={() => { setSelected(null); setSelectedNodeId(null); }}
               aria-label="Close details"
               className="absolute right-3 top-3 rounded-md p-1 font-sans text-xs text-muted hover:bg-line/30 hover:text-ink"
             >
@@ -595,6 +1036,58 @@ function Stat({ label, value, sub }: { label: string; value: number; sub?: strin
         {value.toLocaleString()}
         {sub && <span className="ml-1 font-sans text-[10px] font-normal text-muted">{sub}</span>}
       </p>
+    </div>
+  );
+}
+
+function ContextMenuItem({ label, onClick }: { label: string; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="block w-full px-3 py-2 text-left font-sans text-[11px] font-medium uppercase tracking-[0.1em] text-ink/80 hover:bg-line/30 hover:text-ink"
+    >
+      {label}
+    </button>
+  );
+}
+
+function Minimap({ nodes, size }: { nodes: ForceNode[]; size: { width: number; height: number } }) {
+  const positioned = nodes.filter((n) => n.x !== undefined && n.y !== undefined);
+  if (positioned.length === 0) return null;
+  let minX = Infinity;
+  let maxX = -Infinity;
+  let minY = Infinity;
+  let maxY = -Infinity;
+  for (const n of positioned) {
+    if ((n.x ?? 0) < minX) minX = n.x ?? 0;
+    if ((n.x ?? 0) > maxX) maxX = n.x ?? 0;
+    if ((n.y ?? 0) < minY) minY = n.y ?? 0;
+    if ((n.y ?? 0) > maxY) maxY = n.y ?? 0;
+  }
+  const padding = 20;
+  const w = Math.max(1, maxX - minX + padding * 2);
+  const h = Math.max(1, maxY - minY + padding * 2);
+  const miniW = 140;
+  const miniH = Math.max(70, Math.min(110, (miniW * h) / w));
+  const scaleX = miniW / w;
+  const scaleY = miniH / h;
+  void size;
+  return (
+    <div className="pointer-events-none absolute bottom-4 right-4 rounded-md border border-line/40 bg-[rgba(11,13,18,0.85)] p-2">
+      <svg width={miniW} height={miniH}>
+        {positioned.map((n) => (
+          <circle
+            key={n.id}
+            cx={((n.x ?? 0) - minX + padding) * scaleX}
+            cy={((n.y ?? 0) - minY + padding) * scaleY}
+            r={Math.max(1, Math.min(3, n.radius * 0.35))}
+            fill={TYPE_COLORS[n.entityType] ?? "#94a3b8"}
+            opacity={0.85}
+          />
+        ))}
+      </svg>
+      <p className="mt-1 text-center font-sans text-[9px] uppercase tracking-[0.12em] text-muted">overview</p>
     </div>
   );
 }

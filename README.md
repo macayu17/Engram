@@ -164,6 +164,10 @@ The hot path is designed to stay simple:
 
 Retrieval logs record the query, returned memory IDs, scores, and conversation ID so developers can inspect why a memory appeared.
 
+Retrieval ranking blends cosine similarity with a recency boost (exponential decay, `RETRIEVAL_RECENCY_HALF_LIFE_DAYS`, default 30) and a usage boost from `access_count`. The similarity threshold still applies to the raw cosine score, so the boosts reorder results without admitting weak matches. Weights are tunable via `RETRIEVAL_RECENCY_WEIGHT` and `RETRIEVAL_ACCESS_WEIGHT`.
+
+Extraction reconciles new facts against existing memories before storing them. When a new fact lands near an existing memory (cosine between `RECONCILE_THRESHOLD`, default 0.6, and the refinement threshold), one extra LLM call decides per fact: add it, update the existing memory it supersedes or contradicts, or discard it as redundant. Any failure falls back to storing all facts. Disable with `ENABLE_RECONCILIATION=false`.
+
 ## REST API
 
 All authenticated endpoints use:
@@ -201,9 +205,24 @@ Retrieval log endpoints:
 - `GET /logs`
 - `GET /logs/{log_id}`
 
-Proxy endpoint:
+Proxy endpoints:
 
 - `POST /v1/chat`
+- `POST /v1/chat/completions` (OpenAI-compatible)
+
+The OpenAI-compatible route lets existing OpenAI SDKs use Engram by changing only the base URL — the Engram key goes in the standard `Authorization` header:
+
+```python
+from openai import OpenAI
+
+client = OpenAI(base_url="https://your-engram-host", api_key="ek_...")
+response = client.chat.completions.create(
+    model="gpt-4o-mini",
+    messages=[{"role": "user", "content": "What stack should I use?"}],
+)
+```
+
+Streaming (`stream: true`) works on both routes. Memory extraction runs after the stream completes.
 
 The proxy accepts OpenAI-style chat bodies. Engram-specific headers are:
 

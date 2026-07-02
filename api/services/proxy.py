@@ -51,7 +51,7 @@ async def _dispatch_retrieve(
 async def build_proxy_result(
     user_id: UUID,
     external_id: str,
-    requested_external_id: str,
+    requested_external_id: str | None,
     request_body: dict[str, object],
     provider: str,
     disable_injection: bool,
@@ -64,7 +64,7 @@ async def build_proxy_result(
     retrieval_mode: str = "vector",
     namespace: str = "default",
 ) -> ProxyResult:
-    if external_id != requested_external_id:
+    if requested_external_id is not None and external_id != requested_external_id:
         raise PermissionError("X-Engram-User-ID does not match the authenticated user")
     conversation_id = uuid4()
     body = copy.deepcopy(request_body)
@@ -109,12 +109,12 @@ async def build_proxy_result(
 
 async def build_proxy_passthrough_result(
     external_id: str,
-    requested_external_id: str,
+    requested_external_id: str | None,
     request_body: dict[str, object],
     provider: str,
     incoming_headers: Mapping[str, str],
 ) -> ProxyResult:
-    if external_id != requested_external_id:
+    if requested_external_id is not None and external_id != requested_external_id:
         raise PermissionError("X-Engram-User-ID does not match the authenticated user")
     conversation_id = uuid4()
     from api.services.provider_keys import resolve_user_provider
@@ -247,7 +247,7 @@ async def forward_to_anthropic_streaming(
 async def build_proxy_stream_result(
     user_id: UUID,
     external_id: str,
-    requested_external_id: str,
+    requested_external_id: str | None,
     request_body: dict[str, object],
     provider: str,
     disable_injection: bool,
@@ -260,7 +260,7 @@ async def build_proxy_stream_result(
     retrieval_mode: str = "vector",
     namespace: str = "default",
 ) -> tuple[AsyncIterator[bytes], UUID, int]:
-    if external_id != requested_external_id:
+    if requested_external_id is not None and external_id != requested_external_id:
         raise PermissionError("X-Engram-User-ID does not match the authenticated user")
     conversation_id = uuid4()
     body = copy.deepcopy(request_body)

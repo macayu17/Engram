@@ -108,6 +108,9 @@ def wait_for_memories(api_key: str, minimum_count: int, timeout_seconds: int) ->
     headers = {"X-Engram-Key": api_key}
     last_payload: dict[str, Any] = {}
     while time.time() < deadline:
+        _, pending_payload, _ = json_request("GET", f"{API_URL}/memories?limit=20&offset=0&status=pending", headers=headers)
+        for memory in pending_payload.get("memories", []):
+            json_request("PATCH", f"{API_URL}/memories/{memory['id']}", {"status": "approved"}, headers)
         _, payload, _ = json_request("GET", f"{API_URL}/memories?limit=20&offset=0", headers=headers)
         last_payload = payload
         if len(payload.get("memories", [])) >= minimum_count:
@@ -200,6 +203,18 @@ def main() -> None:
         _, second_payload, second_headers = json_request("POST", f"{API_URL}/v1/chat", second_body, auth_headers)
         injected_count = int(get_header(second_headers, "X-Engram-Memories-Injected", "0"))
         assert_true(injected_count == 1, "Second proxy call did not respect max_memories_injected user config")
+        completions_headers = {"Authorization": f"Bearer {api_key}"}
+        _, completions_payload, completions_response_headers = json_request(
+            "POST", f"{API_URL}/v1/chat/completions", second_body, completions_headers
+        )
+        assert_true(
+            completions_payload["choices"][0]["message"]["content"] == "I recorded your preferences.",
+            "OpenAI-compatible route did not return mock provider response",
+        )
+        assert_true(
+            int(get_header(completions_response_headers, "X-Engram-Memories-Injected", "0")) == 1,
+            "OpenAI-compatible route did not inject memories",
+        )
         run_command(["docker", "compose", "stop", "postgres"], ROOT, compose_env)
         postgres_stopped = True
         wait_for_database_unavailable(60)
@@ -215,7 +230,7 @@ def main() -> None:
         postgres_stopped = False
         wait_for_api(180)
         _, logs_payload, _ = json_request("GET", f"{API_URL}/logs?limit=20&offset=0", headers={"X-Engram-Key": api_key})
-        assert_true(logs_payload["total"] == 2, "Database fallback proxy call should not create a retrieval log")
+        assert_true(logs_payload["total"] == 3, "Database fallback proxy call should not create a retrieval log")
         run_command([command_name("npm"), "run", "build"], ROOT / "mcp")
         mcp_env = os.environ.copy()
         mcp_env.update({"ENGRAM_API_URL": API_URL, "ENGRAM_API_KEY": api_key})

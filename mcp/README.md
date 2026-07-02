@@ -75,6 +75,13 @@ env = { "ENGRAM_API_KEY" = "ek_your_key_here" }
 - `delete_memory` — remove a memory by ID
 - `get_retrieval_log` — inspect what was retrieved and why
 
+## Resources
+
+Clients that support MCP resources can read these without a tool call:
+
+- `engram://memories/recent` — the 20 most recent memories
+- `engram://logs/recent` — the 10 most recent retrieval events
+
 ## License
 
 MIT

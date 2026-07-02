@@ -17,7 +17,7 @@ async def test_capture_conversation_extracts_stores_and_records(monkeypatch) -> 
         captured["conversation"] = conversation
         return ["User prefers automatic Engram memory capture"]
 
-    async def fake_store_extracted_memories(user_id_arg, conversation_id_arg, memories, db, dedup_threshold=None):
+    async def fake_store_extracted_memories(user_id_arg, conversation_id_arg, memories, db, dedup_threshold=None, namespace="default", resolved=None):
         captured["user_id"] = user_id_arg
         captured["conversation_id"] = conversation_id_arg
         captured["memories"] = memories
@@ -97,7 +97,7 @@ async def test_capture_conversation_records_zero_when_nothing_extracted(monkeypa
     async def fake_extract_memories(conversation: str, resolved) -> list[str]:
         return []
 
-    async def fake_store_extracted_memories(user_id_arg, conversation_id_arg, memories, db, dedup_threshold=None):
+    async def fake_store_extracted_memories(user_id_arg, conversation_id_arg, memories, db, dedup_threshold=None, namespace="default", resolved=None):
         raise AssertionError("store should not run when no memories are extracted")
 
     async def fake_record_conversation(user_id_arg, conversation_id_arg, request_body, response_body, status, memories_extracted, db):

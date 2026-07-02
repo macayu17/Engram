@@ -55,9 +55,58 @@ async def proxy_chat(
     return create_response(result)
 
 
+@router.post("/v1/chat/completions")
+async def proxy_chat_completions(
+    request: Request,
+    authorization: str | None = Header(default=None),
+    x_engram_key: str | None = Header(default=None),
+    x_engram_provider: str = Header(default="openai"),
+    x_engram_disable_injection: bool = Header(default=False),
+    x_engram_disable_extraction: bool = Header(default=False),
+    x_engram_provider_key: str | None = Header(default=None, alias="X-Engram-Provider-Key"),
+    x_engram_namespace: str = Header(default="default"),
+) -> Response:
+    api_key = resolve_bearer_api_key(x_engram_key, authorization)
+    if not api_key:
+        raise HTTPException(status_code=401, detail="Provide an Engram API key via Authorization: Bearer or X-Engram-Key")
+    body = await parse_request_body(request)
+    if body.get("stream") is True:
+        return await build_streaming_proxy_response(
+            api_key,
+            None,
+            x_engram_provider,
+            x_engram_disable_injection,
+            x_engram_disable_extraction,
+            x_engram_provider_key,
+            body,
+            request.headers,
+            x_engram_namespace,
+        )
+    result = await build_proxy_response_with_available_auth(
+        api_key,
+        None,
+        x_engram_provider,
+        x_engram_disable_injection,
+        x_engram_disable_extraction,
+        x_engram_provider_key,
+        body,
+        request.headers,
+        x_engram_namespace,
+    )
+    return create_response(result)
+
+
+def resolve_bearer_api_key(x_engram_key: str | None, authorization: str | None) -> str:
+    if x_engram_key:
+        return x_engram_key
+    if authorization and authorization.lower().startswith("bearer "):
+        return authorization[7:].strip()
+    return ""
+
+
 async def build_proxy_response_with_available_auth(
     api_key: str,
-    requested_external_id: str,
+    requested_external_id: str | None,
     provider: str,
     disable_injection: bool,
     disable_extraction: bool,
@@ -133,7 +182,7 @@ async def build_proxy_response_with_available_auth(
 
 async def build_streaming_proxy_response(
     api_key: str,
-    requested_external_id: str,
+    requested_external_id: str | None,
     provider: str,
     disable_injection: bool,
     disable_extraction: bool,
@@ -232,7 +281,7 @@ async def build_streaming_proxy_response(
 
 async def build_cached_proxy_response(
     api_key: str,
-    requested_external_id: str,
+    requested_external_id: str | None,
     provider: str,
     body: dict[str, object],
     headers: Mapping[str, str],

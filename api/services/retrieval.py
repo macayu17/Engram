@@ -107,7 +107,10 @@ async def retrieve_memories(
             """
             SELECT id, content, confidence, access_count, last_accessed, created_at, source_conversation_id,
                    status, category, pinned, source, last_confirmed,
-                   1 - (embedding <=> $1::vector) + CASE WHEN pinned THEN 0.08 ELSE 0 END AS score
+                   1 - (embedding <=> $1::vector)
+                     + CASE WHEN pinned THEN 0.08 ELSE 0 END
+                     + $6 * exp(-0.6931471805599453 * GREATEST(extract(epoch FROM now() - COALESCE(last_accessed, created_at)), 0) / ($7 * 86400.0))
+                     + $8 * LEAST(access_count, 20) / 20.0 AS score
             FROM memories
             WHERE user_id = $2
               AND status = 'approved'
@@ -121,6 +124,9 @@ async def retrieve_memories(
             threshold_value,
             limit_value,
             namespace,
+            settings.retrieval_recency_weight,
+            settings.retrieval_recency_half_life_days,
+            settings.retrieval_access_weight,
         )
         for row in rows:
             memory = dict(row)

@@ -6,8 +6,14 @@ import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
-import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
+import {
+  CallToolRequestSchema,
+  ListResourcesRequestSchema,
+  ListToolsRequestSchema,
+  ReadResourceRequestSchema,
+} from "@modelcontextprotocol/sdk/types.js";
 
+import { engramClient } from "./client.js";
 import { config, type McpTransport } from "./config.js";
 import { addMemoryTool } from "./tools/add.js";
 import { captureConversationTool } from "./tools/capture.js";
@@ -22,11 +28,46 @@ const packageJson = createRequire(import.meta.url)("../package.json") as {
   version: string;
 };
 
+const RESOURCES = [
+  {
+    uri: "engram://memories/recent",
+    name: "Recent memories",
+    description: "The 20 most recent memories stored for this user",
+    mimeType: "application/json",
+  },
+  {
+    uri: "engram://logs/recent",
+    name: "Recent retrieval logs",
+    description: "The 10 most recent memory retrieval events",
+    mimeType: "application/json",
+  },
+];
+
+async function readResource(uri: string): Promise<unknown> {
+  if (uri === "engram://memories/recent") {
+    return engramClient.listMemories({ limit: 20, offset: 0 });
+  }
+  if (uri === "engram://logs/recent") {
+    return engramClient.getRetrievalLog({ limit: 10 });
+  }
+  throw new Error(`Unknown resource: ${uri}`);
+}
+
 function createEngramServer(): Server {
   const server = new Server(
     { name: "engram", version: packageJson.version },
-    { capabilities: { tools: {} } },
+    { capabilities: { tools: {}, resources: {} } },
   );
+  server.setRequestHandler(ListResourcesRequestSchema, async () => ({ resources: RESOURCES }));
+  server.setRequestHandler(ReadResourceRequestSchema, async (request) => ({
+    contents: [
+      {
+        uri: request.params.uri,
+        mimeType: "application/json",
+        text: JSON.stringify(await readResource(request.params.uri), null, 2),
+      },
+    ],
+  }));
   server.setRequestHandler(ListToolsRequestSchema, async () => ({
     tools: [
       searchMemoriesTool.definition,

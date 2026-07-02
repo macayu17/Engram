@@ -28,6 +28,11 @@ class Settings(BaseSettings):
     dedup_threshold: float = 0.95
     memory_refinement_threshold: float = 0.8
     retrieval_mode: str = "vector"
+    retrieval_recency_weight: float = 0.05
+    retrieval_recency_half_life_days: float = 30.0
+    retrieval_access_weight: float = 0.03
+    enable_reconciliation: bool = True
+    reconcile_threshold: float = 0.6
     enable_reranker: bool = False
     enable_graph: bool = False
     log_level: str = "info"

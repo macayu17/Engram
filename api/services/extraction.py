@@ -41,6 +41,27 @@ CONVERSATION:
 MEMORIES (JSON array only):"""
 
 
+RECONCILE_PROMPT = """You are a memory reconciliation system. New facts were extracted from a conversation. For each NEW FACT, decide how it relates to the user's EXISTING MEMORIES listed below it.
+
+Decide one action per new fact:
+- "ADD" if the fact is genuinely new information not covered by existing memories
+- "UPDATE <memory_id>" if the fact supersedes, corrects, or contradicts that existing memory (the new fact will replace its content)
+- "DISCARD" if existing memories already fully cover this fact
+
+RULES:
+1. Prefer UPDATE over ADD when the fact is a newer version of an existing memory (changed preference, corrected detail, progressed situation)
+2. Only DISCARD when the fact adds nothing at all
+3. Use the exact memory_id shown in the existing memory listing
+
+OUTPUT FORMAT:
+Return ONLY a valid JSON array of strings, one per new fact, in the same order as the facts. No preamble, no markdown.
+Example: ["ADD", "UPDATE 3f2b8c9e-1a2b-4c5d-8e9f-0a1b2c3d4e5f", "DISCARD"]
+
+{sections}
+
+DECISIONS (JSON array only):"""
+
+
 def get_extraction_provider(resolved: ResolvedProvider) -> ExtractionProvider:
     return build_extraction_provider(resolved)
 
@@ -84,7 +105,7 @@ async def run_extraction_task(
                 raise RuntimeError(str(error)) from error
             extracted = await extract_memories(conversation, resolved)
             inserted_count, stored_refs = await store_extracted_memories(
-                user_id, conversation_id, extracted, db, dedup_threshold, namespace=namespace
+                user_id, conversation_id, extracted, db, dedup_threshold, namespace=namespace, resolved=resolved
             )
             await record_conversation(
                 user_id,
@@ -113,15 +134,28 @@ async def store_extracted_memories(
     db: asyncpg.Connection,
     dedup_threshold: float | None = None,
     namespace: str = "default",
+    resolved: ResolvedProvider | None = None,
 ) -> tuple[int, list[tuple[UUID, str]]]:
     if not memories:
         return 0, []
     from api.services.embedding import embed_batch
 
     embeddings = embed_batch(memories)
+    decisions = await reconcile_memories(user_id, memories, embeddings, db, resolved, namespace)
     stored_count = 0
     stored_refs: list[tuple[UUID, str]] = []
     for index, content in enumerate(memories):
+        action, target_id = decisions[index]
+        if action == "discard":
+            continue
+        if action == "update" and target_id is not None:
+            updated = await apply_memory_update(
+                user_id, target_id, content, embeddings[index], conversation_id, db
+            )
+            if updated is not None:
+                stored_count += 1
+                stored_refs.append((target_id, content))
+            continue
         result = await store_memory_with_deduplication(
             user_id,
             content,
@@ -141,6 +175,123 @@ async def store_extracted_memories(
             if isinstance(memory_id, UUID):
                 stored_refs.append((memory_id, content))
     return stored_count, stored_refs
+
+
+async def reconcile_memories(
+    user_id: UUID,
+    memories: list[str],
+    embeddings: list[list[float]],
+    db: asyncpg.Connection,
+    resolved: ResolvedProvider | None,
+    namespace: str = "default",
+) -> list[tuple[str, UUID | None]]:
+    add_all: list[tuple[str, UUID | None]] = [("add", None) for _ in memories]
+    if not settings.enable_reconciliation or resolved is None:
+        return add_all
+    from api.services.embedding import format_embedding_for_pgvector
+
+    candidates_per_fact: list[list[dict[str, object]]] = []
+    for embedding in embeddings:
+        rows = await db.fetch(
+            """
+            SELECT id, content, 1 - (embedding <=> $1::vector) AS score
+            FROM memories
+            WHERE user_id = $2
+              AND namespace = $3
+              AND status IN ('approved', 'pending')
+              AND 1 - (embedding <=> $1::vector) >= $4
+              AND 1 - (embedding <=> $1::vector) < $5
+            ORDER BY score DESC
+            LIMIT 3
+            """,
+            format_embedding_for_pgvector(embedding),
+            user_id,
+            namespace,
+            settings.reconcile_threshold,
+            settings.memory_refinement_threshold,
+        )
+        candidates_per_fact.append([dict(row) for row in rows])
+    if not any(candidates_per_fact):
+        return add_all
+    sections: list[str] = []
+    for index, content in enumerate(memories):
+        sections.append(f"NEW FACT {index + 1}: {content}")
+        if candidates_per_fact[index]:
+            sections.append("EXISTING MEMORIES:")
+            sections.extend(f"  {row['id']}: {row['content']}" for row in candidates_per_fact[index])
+        else:
+            sections.append("EXISTING MEMORIES: none")
+    try:
+        provider = get_extraction_provider(resolved)
+        raw_decisions = await provider.extract(RECONCILE_PROMPT.format(sections="\n".join(sections)))
+        return parse_reconcile_decisions(raw_decisions, candidates_per_fact)
+    except Exception as error:
+        logger.warning("Memory reconciliation failed, storing all facts: %s", error)
+        return add_all
+
+
+def parse_reconcile_decisions(
+    raw_decisions: list[str],
+    candidates_per_fact: list[list[dict[str, object]]],
+) -> list[tuple[str, UUID | None]]:
+    decisions: list[tuple[str, UUID | None]] = []
+    for index in range(len(candidates_per_fact)):
+        raw = raw_decisions[index].strip() if index < len(raw_decisions) else "ADD"
+        normalized = raw.upper()
+        if normalized == "DISCARD":
+            decisions.append(("discard", None))
+            continue
+        if normalized.startswith("UPDATE"):
+            target = parse_update_target(raw, candidates_per_fact[index])
+            if target is not None:
+                decisions.append(("update", target))
+                continue
+        decisions.append(("add", None))
+    return decisions
+
+
+def parse_update_target(raw_decision: str, candidates: list[dict[str, object]]) -> UUID | None:
+    parts = raw_decision.split()
+    if len(parts) < 2:
+        return None
+    try:
+        target = UUID(parts[1])
+    except ValueError:
+        return None
+    candidate_ids = {row["id"] for row in candidates}
+    return target if target in candidate_ids else None
+
+
+async def apply_memory_update(
+    user_id: UUID,
+    memory_id: UUID,
+    content: str,
+    embedding: list[float],
+    conversation_id: UUID,
+    db: asyncpg.Connection,
+) -> dict[str, object] | None:
+    from api.services.embedding import format_embedding_for_pgvector
+
+    row = await db.fetchrow(
+        """
+        UPDATE memories
+        SET content = $1,
+            embedding = $2::vector,
+            source_conversation_id = $3,
+            category = $4,
+            source = 'extraction'
+        WHERE user_id = $5
+          AND id = $6
+        RETURNING id
+        """,
+        content,
+        format_embedding_for_pgvector(embedding),
+        conversation_id,
+        infer_category(content),
+        user_id,
+        memory_id,
+    )
+    return dict(row) if row is not None else None
 
 
 async def _run_graph_extraction(
@@ -207,7 +358,7 @@ async def capture_conversation_memories(
     stored_refs: list[tuple[UUID, str]] = []
     if extracted_memories:
         memories_extracted, stored_refs = await store_extracted_memories(
-            user_id, conversation_id, extracted_memories, db, dedup_threshold
+            user_id, conversation_id, extracted_memories, db, dedup_threshold, resolved=resolved
         )
     await record_conversation(user_id, conversation_id, request_body, response_body, "completed", memories_extracted, db)
     if settings.enable_graph and stored_refs:

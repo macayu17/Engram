@@ -1,6 +1,6 @@
 {
   "name": "engramd",
-  "version": "1.0.3",
+  "version": "1.1.0",
   "description": "MCP server for Engram — self-hostable AI memory layer. Search, add, update, and capture memories from any MCP client.",
   "type": "module",
   "main": "dist/index.js",

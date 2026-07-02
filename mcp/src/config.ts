@@ -1,4 +1,4 @@
-export type McpTransport = "sse" | "stdio";
+export type McpTransport = "stdio" | "sse" | "http";
 
 function readString(name: string, fallback: string): string {
   const value = process.env[name];
@@ -12,7 +12,7 @@ function readPort(name: string, fallback: number): number {
 
 function readTransport(name: string, fallback: McpTransport): McpTransport {
   const value = process.env[name];
-  return value === "stdio" || value === "sse" ? value : fallback;
+  return value === "stdio" || value === "sse" || value === "http" ? value : fallback;
 }
 
 export const config = {

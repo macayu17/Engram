@@ -1,6 +1,12 @@
 # Engram
 
+[![CI](https://github.com/macayu17/Engram/actions/workflows/ci.yml/badge.svg)](https://github.com/macayu17/Engram/actions/workflows/ci.yml)
+[![npm](https://img.shields.io/npm/v/engramd)](https://www.npmjs.com/package/engramd)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
 Engram is a self-hostable AI memory layer. It sits between an application and an LLM provider, retrieves relevant user memories from pgvector, injects them into chat prompts, forwards the request, and extracts new durable memories after the response returns.
+
+Website: [engram.ayushh.in](https://engram.ayushh.in) · MCP server on npm: [`engramd`](https://www.npmjs.com/package/engramd)
 
 It ships four services:
 
@@ -236,9 +242,29 @@ Suggested MCP client instruction:
 Always use Engram memory. Before answering when user context may matter, search Engram for relevant memories. After each meaningful exchange, call capture_conversation with the user message, assistant response, source client name, and session id. Store durable user facts, preferences, project context, and corrections. Do not store greetings, one-off questions, temporary details, or assistant-only claims.
 ```
 
-SSE transport runs on `http://localhost:3000/sse`.
+The MCP server is published on npm as [`engramd`](https://www.npmjs.com/package/engramd). To connect an MCP client to a running Engram API:
 
-For stdio:
+```bash
+claude mcp add engram -e ENGRAM_API_KEY=ek_your_key -- npx -y engramd
+```
+
+Or in a Claude Desktop / MCP client config:
+
+```json
+{
+  "mcpServers": {
+    "engram": {
+      "command": "npx",
+      "args": ["-y", "engramd"],
+      "env": { "ENGRAM_API_KEY": "ek_your_key" }
+    }
+  }
+}
+```
+
+Transports: stdio is the default. `--transport http` (or `MCP_TRANSPORT=http`) starts an HTTP server on `MCP_PORT` (default 3000) serving Streamable HTTP at `/mcp`, legacy SSE at `/sse`, and a health check at `/health`. The Docker service runs in this mode. Set `ENGRAM_API_URL` to point the server at your own API instead of the hosted one.
+
+To run from source:
 
 ```bash
 cd mcp

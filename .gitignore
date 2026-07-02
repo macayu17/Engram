@@ -14,3 +14,6 @@ htmlcov/
 *.log
 pgdata/
 .vercel/
+
+Improvements.txt
+taste-skill/

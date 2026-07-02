@@ -26,6 +26,12 @@ jobs:
       - run: npm ci
       - run: npm run build
       - run: node ../scripts/verify_mcp_tool_defaults.mjs
-      - run: npm publish --provenance --access public
+      - run: |
+          version=$(node -p "require('./package.json').version")
+          if npm view "engramd@$version" version >/dev/null 2>&1; then
+            echo "engramd@$version already published, skipping"
+          else
+            npm publish --provenance --access public
+          fi
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

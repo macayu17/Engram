@@ -1,3 +1,4 @@
+#!/usr/bin/env node
 import http, { type IncomingMessage, type ServerResponse } from "node:http";
 
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
@@ -59,26 +60,31 @@ async function startStdio(): Promise<void> {
 }
 
 async function startSse(): Promise<void> {
-  const server = createEngramServer();
-  let transport: SSEServerTransport | null = null;
+  const transports = new Map<string, SSEServerTransport>();
   const httpServer = http.createServer(async (request: IncomingMessage, response: ServerResponse) => {
     try {
-      const pathname = new URL(request.url ?? "/", "http://localhost").pathname;
-      if (request.method === "GET" && pathname === "/sse") {
-        transport = new SSEServerTransport("/messages", response);
-        await server.connect(transport);
+      const url = new URL(request.url ?? "/", "http://localhost");
+      if (request.method === "GET" && url.pathname === "/sse") {
+        const transport = new SSEServerTransport("/messages", response);
+        transports.set(transport.sessionId, transport);
+        transport.onclose = () => {
+          transports.delete(transport.sessionId);
+        };
+        await createEngramServer().connect(transport);
         return;
       }
-      if (request.method === "POST" && pathname === "/messages") {
-        if (transport === null) {
-          response.statusCode = 503;
-          response.end("SSE transport is not connected");
+      if (request.method === "POST" && url.pathname === "/messages") {
+        const sessionId = url.searchParams.get("sessionId");
+        const transport = sessionId ? transports.get(sessionId) : undefined;
+        if (!transport) {
+          response.statusCode = 404;
+          response.end("Unknown or expired sessionId");
           return;
         }
         await transport.handlePostMessage(request, response);
         return;
       }
-      if (request.method === "GET" && pathname === "/health") {
+      if (request.method === "GET" && url.pathname === "/health") {
         response.statusCode = 200;
         response.setHeader("content-type", "application/json");
         response.end(JSON.stringify({ status: "ok", version: "1.0.0" }));
@@ -87,7 +93,9 @@ async function startSse(): Promise<void> {
       response.statusCode = 404;
       response.end("Not found");
     } catch (error) {
-      response.statusCode = 500;
+      if (!response.headersSent) {
+        response.statusCode = 500;
+      }
       response.end(error instanceof Error ? error.message : String(error));
     }
   });
@@ -106,6 +114,9 @@ function getRequestedTransport(): McpTransport {
 }
 
 async function main(): Promise<void> {
+  if (!config.engramApiKey) {
+    process.stderr.write("ENGRAM_API_KEY is not set — API calls will fail with 401\n");
+  }
   const transport = getRequestedTransport();
   if (transport === "stdio") {
     await startStdio();

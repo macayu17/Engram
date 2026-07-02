@@ -8,4 +8,6 @@ RUN npm ci
 COPY . .
 RUN npm run build
 
+ENV MCP_TRANSPORT=sse
+
 CMD ["node", "dist/index.js"]

@@ -1,10 +1,35 @@
 {
-  "name": "engram-mcp",
+  "name": "engramd",
   "version": "1.0.0",
+  "description": "MCP server for Engram — self-hostable AI memory layer. Search, add, update, and capture memories from any MCP client.",
   "type": "module",
   "main": "dist/index.js",
+  "bin": {
+    "engramd": "dist/index.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/macayu17/engram.git",
+    "directory": "mcp"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "memory",
+    "ai",
+    "engram",
+    "claude"
+  ],
   "scripts": {
     "build": "tsc",
+    "prepublishOnly": "npm run build",
     "start": "node dist/index.js",
     "dev": "tsx src/index.ts",
     "verify:defaults": "npm run build && node ../scripts/verify_mcp_tool_defaults.mjs"

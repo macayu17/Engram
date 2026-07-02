@@ -50,6 +50,21 @@ Or with Claude Code:
 claude mcp add engram -e ENGRAM_API_KEY=ek_your_key_here -- npx -y engramd
 ```
 
+## Codex CLI
+
+```bash
+codex mcp add engram --env ENGRAM_API_KEY=ek_your_key_here -- npx -y engramd
+```
+
+Or in `~/.codex/config.toml`:
+
+```toml
+[mcp_servers.engram]
+command = "npx"
+args = ["-y", "engramd"]
+env = { "ENGRAM_API_KEY" = "ek_your_key_here" }
+```
+
 ## Tools
 
 - `search_memories` — semantic search over stored memories

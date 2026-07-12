@@ -7,7 +7,7 @@ import { useMemo } from "react";
 
 import { api } from "@/lib/api";
 import { useActiveApiKey } from "@/lib/useActiveApiKey";
-import { MemoryConstellation } from "./MemoryConstellation";
+import { RetrievalTrace } from "./RetrievalTrace";
 
 const TYPE_COLORS: Record<string, string> = {
   person: "#fb7185",
@@ -66,79 +66,40 @@ export function HomeDashboard() {
   }, [entitiesQuery.data]);
 
   return (
-    <div className="flex flex-col gap-12">
-      <div className="memory-hero-frame relative -mx-4 -mt-10 min-h-[35rem] overflow-hidden border-b border-line px-4 py-16 sm:-mx-6 sm:px-6 md:-mt-16 md:min-h-[38rem] md:py-20">
-        <MemoryConstellation />
-        <div className="memory-hero-orbit" aria-hidden="true">
-          <div className="memory-hero-orbit__halo" />
-          <div className="memory-hero-orbit__halo memory-hero-orbit__halo--inner" />
-          <div className="memory-hero-orbit__cross memory-hero-orbit__cross--x" />
-          <div className="memory-hero-orbit__cross memory-hero-orbit__cross--y" />
-          <div className="memory-hero-orbit__beacon" />
-          <div className="memory-hero-orbit__needle memory-hero-orbit__needle--one" />
-          <div className="memory-hero-orbit__needle memory-hero-orbit__needle--two" />
-          <div className="memory-hero-orbit__needle memory-hero-orbit__needle--three" />
-          <div className="memory-hero-orbit__chip memory-hero-orbit__chip--one">
-            <span>fact</span>
-            <strong>0.84</strong>
-          </div>
-          <div className="memory-hero-orbit__chip memory-hero-orbit__chip--two">
-            <span>rank</span>
-            <strong>pgv</strong>
-          </div>
-          <div className="memory-hero-orbit__chip memory-hero-orbit__chip--three">
-            <span>inject</span>
-            <strong>ctx</strong>
-          </div>
-          <div className="memory-hero-orbit__rail">
-            <span>embed</span>
-            <span>search</span>
-            <span>merge</span>
-          </div>
-        </div>
-        <div className="relative z-10 mx-auto flex max-w-7xl items-center">
-          <div className="w-full min-w-0 max-w-3xl">
-            <p className="font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-muted">The Engram memory ledger · Vol. 01</p>
-            <h1 className="mt-6 max-w-full font-serif text-[2.8rem] font-bold leading-tight text-ink sm:text-5xl md:text-7xl">
-              Every durable <span className="italic text-signal">memory.</span>
+    <div className="flex flex-col gap-10 md:gap-12">
+      <section className="memory-hero-frame -mx-4 -mt-10 border-b border-line px-4 pt-10 sm:-mx-6 sm:px-6 md:-mt-16 md:pt-14">
+        <div className="mx-auto grid min-h-[26rem] min-w-0 max-w-7xl gap-10 pb-10 lg:grid-cols-[minmax(0,0.9fr)_minmax(28rem,1.1fr)] lg:items-center lg:gap-16 lg:pb-12">
+          <div className="min-w-0 max-w-xl">
+            <p className="font-sans text-[10px] font-medium uppercase tracking-[0.14em] text-signal">Memory infrastructure you can audit</p>
+            <h1 className="mt-5 font-serif text-[2.7rem] font-bold leading-[1.02] text-ink sm:text-5xl lg:text-6xl">
+              Memory that
               <br />
-              Inspectable.
+              <span className="italic text-signal">explains itself.</span>
             </h1>
-            <p className="mt-6 max-w-[20rem] font-serif text-lg leading-8 text-muted sm:max-w-[min(38rem,100%)]">
-              Watch user facts move from conversation to vector retrieval, then inspect exactly what Engram injected.
+            <p className="mt-5 max-w-[36rem] font-serif text-lg leading-8 text-muted">
+              Retrieve durable user context, inspect every match, and control exactly what reaches the model.
             </p>
-            <div className="mt-8 flex flex-wrap gap-3">
+            <div className="mt-7 flex flex-wrap items-center gap-4">
               <Link
                 href={connected ? "/memories" : "/settings"}
-                className="group inline-flex items-center gap-3 rounded-full bg-signal px-4 py-2.5 font-sans text-[11px] font-semibold uppercase tracking-[0.12em] text-paper shadow-[0_18px_44px_rgb(var(--color-signal)_/_0.22)] transition hover:-translate-y-0.5 hover:bg-ink hover:text-paper focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-signal active:translate-y-0"
+                className="group inline-flex min-h-11 items-center gap-2.5 rounded-md bg-signal px-4 font-sans text-[11px] font-semibold uppercase tracking-[0.12em] text-paper transition hover:bg-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-signal active:translate-y-px"
               >
-                <span className="flex h-7 w-7 items-center justify-center rounded-full bg-paper/12 text-paper transition group-hover:bg-signal">
-                  <Plus size={15} aria-hidden="true" />
-                </span>
-                {connected ? "Add Memory" : "Connect Engram"}
+                <Plus size={15} aria-hidden="true" />
+                {connected ? "Add memory" : "Connect Engram"}
               </Link>
               <Link
                 href="/chat"
-                className="group inline-flex items-center gap-3 py-2.5 font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-muted transition hover:text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-signal"
+                className="inline-flex min-h-11 items-center gap-2.5 border-b border-line px-1 font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-muted transition hover:border-signal hover:text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-signal"
               >
-                <span className="flex h-8 w-8 items-center justify-center rounded-full border border-line bg-tag/35 text-muted transition group-hover:border-signal group-hover:bg-signal/10 group-hover:text-signal">
-                  <MessageSquare size={15} aria-hidden="true" />
-                </span>
-                <span className="border-b border-line pb-1 transition group-hover:border-signal">Test Chat</span>
+                <MessageSquare size={15} aria-hidden="true" />
+                Test chat
               </Link>
             </div>
-            <div className="mt-8 grid w-full max-w-lg grid-cols-1 gap-3 border-y border-line py-4 font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-muted sm:grid-cols-3 sm:gap-0">
-              <span>{totalApproved.toLocaleString()} memories</span>
-              <span>pgvector</span>
-              <span>async extract</span>
-            </div>
           </div>
+          <RetrievalTrace />
         </div>
-      </div>
 
-      <section>
-        <p className="font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-muted">§ I — The numbers</p>
-        <div className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-4">
+        <div className="mx-auto grid max-w-7xl grid-cols-2 border-t border-line sm:grid-cols-4">
           <StatTile label="Approved memories" value={totalApproved} loading={connected && approvedQuery.isLoading} href="/memories" />
           <StatTile label="Pending review" value={totalPending} loading={connected && pendingQuery.isLoading} accent={totalPending > 0} href="/memories" />
           <StatTile label="Entities" value={totalEntities} loading={connected && entitiesQuery.isLoading} href="/graph" />
@@ -148,7 +109,7 @@ export function HomeDashboard() {
 
       <section className="grid gap-6 lg:grid-cols-[3fr_2fr]">
         <div>
-          <p className="font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-muted">§ II — Recent activity</p>
+          <p className="font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-muted">§ I — Recent activity</p>
           <h2 className="mt-2 font-serif text-3xl font-semibold leading-tight text-ink">Timeline</h2>
           <ul className="mt-4 divide-y divide-line border-y border-line">
             {connected && timelineQuery.isLoading && (
@@ -175,7 +136,7 @@ export function HomeDashboard() {
         </div>
 
         <div>
-          <p className="font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-muted">§ III — Most connected</p>
+          <p className="font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-muted">§ II — Most connected</p>
           <h2 className="mt-2 font-serif text-3xl font-semibold leading-tight text-ink">Top entities</h2>
           <ul className="mt-4 space-y-2">
             {connected && entitiesQuery.isLoading && (
@@ -207,7 +168,7 @@ export function HomeDashboard() {
       </section>
 
       <section>
-        <p className="font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-muted">§ IV — Latest retrievals</p>
+        <p className="font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-muted">§ III — Latest retrievals</p>
         <h2 className="mt-2 font-serif text-3xl font-semibold leading-tight text-ink">What your assistant just looked up</h2>
         <ul className="mt-4 divide-y divide-line border-y border-line">
           {connected && logsQuery.isLoading && <li className="py-4 font-serif text-base text-muted">Loading…</li>}
@@ -236,7 +197,7 @@ export function HomeDashboard() {
       </section>
 
       <section>
-        <p className="font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-muted">§ V — Go anywhere</p>
+        <p className="font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-muted">§ IV — Go anywhere</p>
         <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           {QUICK_LINKS.map((link) => (
             <Link
@@ -271,14 +232,10 @@ function StatTile({
 }) {
   const inner = (
     <div
-      className={`rounded-lg border p-4 transition ${
-        accent
-          ? "border-signal/60 bg-paper hover:border-signal"
-          : "border-line bg-paper hover:border-ink/40"
-      }`}
+      className={`min-h-20 border-b border-line px-3 py-4 transition sm:border-b-0 sm:border-r sm:px-5 ${accent ? "bg-signal/5" : "hover:bg-tag/20"}`}
     >
       <p className="font-sans text-[10px] font-medium uppercase tracking-[0.12em] text-muted">{label}</p>
-      <p className={`mt-2 font-serif text-3xl font-semibold ${accent ? "text-signal" : "text-ink"}`}>
+      <p className={`mt-1 font-serif text-2xl font-semibold tabular-nums ${accent ? "text-signal" : "text-ink"}`}>
         {loading ? "—" : value.toLocaleString()}
       </p>
     </div>

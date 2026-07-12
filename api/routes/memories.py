@@ -153,7 +153,6 @@ async def capture_conversation_route(
     x_engram_provider: str | None = Header(default=None),
     x_engram_provider_key: str | None = Header(default=None, alias="X-Engram-Provider-Key"),
     user: asyncpg.Record = Depends(get_current_user),
-    db: asyncpg.Connection = Depends(get_db),
 ) -> dict[str, object]:
     try:
         return await capture_conversation_memories(
@@ -163,7 +162,6 @@ async def capture_conversation_route(
             payload.assistant_response,
             payload.source,
             payload.session_id,
-            db,
             float(user["dedup_threshold"]),
             override_provider=x_engram_provider,
             override_provider_key=x_engram_provider_key,

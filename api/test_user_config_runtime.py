@@ -3,7 +3,6 @@ from uuid import uuid4
 import pytest
 
 from api.services import extraction, proxy
-from api.services.proxy import ProviderResponse
 from api.services.users import regenerate_user_key, update_user_provider_config
 
 
@@ -22,9 +21,6 @@ async def test_proxy_uses_user_retrieval_config(monkeypatch) -> None:
 
     async def fake_log_retrieval(user_id, org_id, conversation_id, query, memories, db):
         captured["logged"] = True
-
-    async def fake_forward_to_provider(body, resolved, incoming_headers):
-        return ProviderResponse(b"{}", 200, "application/json")
 
     def fake_resolve_user_provider(user, override_provider=None, override_key=None):
         from api.services.provider_keys import ResolvedProvider
@@ -49,12 +45,11 @@ async def test_proxy_uses_user_retrieval_config(monkeypatch) -> None:
 
     monkeypatch.setattr(proxy, "retrieve_memories", fake_retrieve_memories)
     monkeypatch.setattr(proxy, "log_retrieval", fake_log_retrieval)
-    monkeypatch.setattr(proxy, "forward_to_provider", fake_forward_to_provider)
     monkeypatch.setattr(proxy, "resolve_user_provider", fake_resolve_user_provider)
 
     user_id = uuid4()
     org_id = uuid4()
-    await proxy.build_proxy_result(
+    await proxy.prepare_proxy_request(
         user_id,
         org_id,
         "external-user",
@@ -62,7 +57,6 @@ async def test_proxy_uses_user_retrieval_config(monkeypatch) -> None:
         {"messages": [{"role": "user", "content": "What stack should I use?"}]},
         "openai",
         False,
-        {},
         FakeDb(),
         2,
         0.72,

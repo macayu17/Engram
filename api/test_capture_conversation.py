@@ -8,6 +8,25 @@ from api.routes import memories
 from api.services import extraction
 
 
+class FakeAcquire:
+    def __init__(self, db: object) -> None:
+        self.db = db
+
+    async def __aenter__(self) -> object:
+        return self.db
+
+    async def __aexit__(self, exc_type, exc, traceback) -> None:
+        return None
+
+
+class FakePool:
+    def __init__(self, db: object) -> None:
+        self.db = db
+
+    def acquire(self) -> FakeAcquire:
+        return FakeAcquire(self.db)
+
+
 @pytest.mark.asyncio
 async def test_capture_conversation_extracts_stores_and_records(monkeypatch) -> None:
     captured: dict[str, object] = {}
@@ -18,7 +37,7 @@ async def test_capture_conversation_extracts_stores_and_records(monkeypatch) -> 
         captured["conversation"] = conversation
         return ["User prefers automatic Engram memory capture"]
 
-    async def fake_store_extracted_memories(user_id_arg, org_id_arg, conversation_id_arg, memories, db, dedup_threshold=None, namespace="default", resolved=None):
+    async def fake_store_extracted_memories(user_id_arg, org_id_arg, conversation_id_arg, memories, db, dedup_threshold=None, namespace="default", resolved=None, embeddings=None, decisions=None):
         captured["user_id"] = user_id_arg
         captured["org_id"] = org_id_arg
         captured["conversation_id"] = conversation_id_arg
@@ -39,9 +58,18 @@ async def test_capture_conversation_extracts_stores_and_records(monkeypatch) -> 
             "db": db,
         }
 
+    async def fake_candidates(*args: object, **kwargs: object) -> list[list[dict[str, object]]]:
+        return [[]]
+
+    async def fake_reconcile(*args: object, **kwargs: object) -> list[tuple[str, None]]:
+        return [("add", None)]
+
     monkeypatch.setattr(extraction, "extract_memories", fake_extract_memories)
     monkeypatch.setattr(extraction, "store_extracted_memories", fake_store_extracted_memories)
     monkeypatch.setattr(extraction, "record_conversation", fake_record_conversation)
+    monkeypatch.setattr(extraction, "load_reconciliation_candidates", fake_candidates)
+    monkeypatch.setattr(extraction, "reconcile_memories", fake_reconcile)
+    monkeypatch.setattr("api.services.embedding.embed_batch", lambda memories: [[0.0] * 384])
 
     class FakeDb:
         async def fetchrow(self, query, *args):
@@ -62,6 +90,7 @@ async def test_capture_conversation_extracts_stores_and_records(monkeypatch) -> 
             name="openai", api_key="", base_url="", model="", source="test"
         ),
     )
+    monkeypatch.setattr(extraction, "get_pool", lambda: FakePool(FakeDb()))
 
     result = await extraction.capture_conversation_memories(
         user_id,
@@ -70,7 +99,6 @@ async def test_capture_conversation_extracts_stores_and_records(monkeypatch) -> 
         "I will capture durable facts after each meaningful exchange.",
         "vscode",
         "session-1",
-        FakeDb(),
         0.77,
     )
 
@@ -132,6 +160,7 @@ async def test_capture_conversation_records_zero_when_nothing_extracted(monkeypa
             name="openai", api_key="", base_url="", model="", source="test"
         ),
     )
+    monkeypatch.setattr(extraction, "get_pool", lambda: FakePool(FakeDb()))
 
     result = await extraction.capture_conversation_memories(
         uuid4(),
@@ -140,7 +169,6 @@ async def test_capture_conversation_records_zero_when_nothing_extracted(monkeypa
         "Hi",
         "claude_desktop",
         None,
-        FakeDb(),
         None,
     )
 
@@ -168,7 +196,6 @@ async def test_capture_conversation_route_returns_502_for_provider_http_error(mo
             None,
             None,
             {"id": uuid4(), "org_id": uuid4(), "dedup_threshold": 0.95},
-            object(),
         )
 
     assert exc_info.value.status_code == 502

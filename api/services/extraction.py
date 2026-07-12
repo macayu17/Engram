@@ -84,7 +84,8 @@ async def run_extraction_task(
 ) -> None:
     try:
         conversation = build_conversation_text(request_body, response_body)
-        async with get_pool().acquire() as db:
+        pool = get_pool()
+        async with pool.acquire() as db:
             await record_conversation(user_id, org_id, conversation_id, request_body, response_body, "running", 0, db)
             user_row = await db.fetchrow(
                 f"""
@@ -101,17 +102,36 @@ async def run_extraction_task(
             )
             if user_row is None:
                 raise RuntimeError("User not found during extraction")
-            try:
-                resolved = resolve_user_provider(
-                    user_row,
-                    override_provider=override_provider,
-                    override_key=override_provider_key,
+        try:
+            resolved = resolve_user_provider(
+                user_row,
+                override_provider=override_provider,
+                override_key=override_provider_key,
+            )
+        except ProviderConfigError as error:
+            raise RuntimeError(str(error)) from error
+        extracted = await extract_memories(conversation, resolved)
+        from api.services.embedding import embed_batch
+
+        embeddings = embed_batch(extracted) if extracted else []
+        candidates_per_fact: list[list[dict[str, object]]] = [[] for _ in extracted]
+        if extracted and settings.enable_reconciliation:
+            async with pool.acquire() as db:
+                candidates_per_fact = await load_reconciliation_candidates(
+                    user_id, org_id, embeddings, db, namespace
                 )
-            except ProviderConfigError as error:
-                raise RuntimeError(str(error)) from error
-            extracted = await extract_memories(conversation, resolved)
+        decisions = await reconcile_memories(user_id, org_id, extracted, candidates_per_fact, resolved)
+        async with pool.acquire() as db:
             inserted_count, stored_refs = await store_extracted_memories(
-                user_id, org_id, conversation_id, extracted, db, dedup_threshold, namespace=namespace, resolved=resolved
+                user_id,
+                org_id,
+                conversation_id,
+                extracted,
+                db,
+                dedup_threshold,
+                namespace=namespace,
+                embeddings=embeddings,
+                decisions=decisions,
             )
             await record_conversation(
                 user_id,
@@ -142,23 +162,24 @@ async def store_extracted_memories(
     db: asyncpg.Connection,
     dedup_threshold: float | None = None,
     namespace: str = "default",
-    resolved: ResolvedProvider | None = None,
+    embeddings: list[list[float]] | None = None,
+    decisions: list[tuple[str, UUID | None]] | None = None,
 ) -> tuple[int, list[tuple[UUID, str]]]:
     if not memories:
         return 0, []
     from api.services.embedding import embed_batch
 
-    embeddings = embed_batch(memories)
-    decisions = await reconcile_memories(user_id, org_id, memories, embeddings, db, resolved, namespace)
+    memory_embeddings = embed_batch(memories) if embeddings is None else embeddings
+    memory_decisions = [("add", None) for _ in memories] if decisions is None else decisions
     stored_count = 0
     stored_refs: list[tuple[UUID, str]] = []
     for index, content in enumerate(memories):
-        action, target_id = decisions[index]
+        action, target_id = memory_decisions[index]
         if action == "discard":
             continue
         if action == "update" and target_id is not None:
             updated = await apply_memory_update(
-                user_id, org_id, target_id, content, embeddings[index], conversation_id, db
+                user_id, org_id, target_id, content, memory_embeddings[index], conversation_id, db
             )
             if updated is not None:
                 stored_count += 1
@@ -168,7 +189,7 @@ async def store_extracted_memories(
             user_id,
             org_id,
             content,
-            embeddings[index],
+            memory_embeddings[index],
             conversation_id,
             1.0,
             db,
@@ -190,14 +211,38 @@ async def reconcile_memories(
     user_id: UUID,
     org_id: UUID,
     memories: list[str],
-    embeddings: list[list[float]],
-    db: asyncpg.Connection,
+    candidates_per_fact: list[list[dict[str, object]]],
     resolved: ResolvedProvider | None,
-    namespace: str = "default",
 ) -> list[tuple[str, UUID | None]]:
     add_all: list[tuple[str, UUID | None]] = [("add", None) for _ in memories]
     if not settings.enable_reconciliation or resolved is None:
         return add_all
+    if not any(candidates_per_fact):
+        return add_all
+    sections: list[str] = []
+    for index, content in enumerate(memories):
+        sections.append(f"NEW FACT {index + 1}: {content}")
+        if candidates_per_fact[index]:
+            sections.append("EXISTING MEMORIES:")
+            sections.extend(f"  {row['id']}: {row['content']}" for row in candidates_per_fact[index])
+        else:
+            sections.append("EXISTING MEMORIES: none")
+    try:
+        provider = get_extraction_provider(resolved)
+        raw_decisions = await provider.extract(RECONCILE_PROMPT.format(sections="\n".join(sections)))
+        return parse_reconcile_decisions(raw_decisions, candidates_per_fact)
+    except Exception as error:
+        logger.warning("Memory reconciliation failed, storing all facts: %s", error)
+        return add_all
+
+
+async def load_reconciliation_candidates(
+    user_id: UUID,
+    org_id: UUID,
+    embeddings: list[list[float]],
+    db: asyncpg.Connection,
+    namespace: str = "default",
+) -> list[list[dict[str, object]]]:
     from api.services.embedding import format_embedding_for_pgvector
 
     candidates_per_fact: list[list[dict[str, object]]] = []
@@ -223,23 +268,7 @@ async def reconcile_memories(
             settings.memory_refinement_threshold,
         )
         candidates_per_fact.append([dict(row) for row in rows])
-    if not any(candidates_per_fact):
-        return add_all
-    sections: list[str] = []
-    for index, content in enumerate(memories):
-        sections.append(f"NEW FACT {index + 1}: {content}")
-        if candidates_per_fact[index]:
-            sections.append("EXISTING MEMORIES:")
-            sections.extend(f"  {row['id']}: {row['content']}" for row in candidates_per_fact[index])
-        else:
-            sections.append("EXISTING MEMORIES: none")
-    try:
-        provider = get_extraction_provider(resolved)
-        raw_decisions = await provider.extract(RECONCILE_PROMPT.format(sections="\n".join(sections)))
-        return parse_reconcile_decisions(raw_decisions, candidates_per_fact)
-    except Exception as error:
-        logger.warning("Memory reconciliation failed, storing all facts: %s", error)
-        return add_all
+    return candidates_per_fact
 
 
 def parse_reconcile_decisions(
@@ -343,7 +372,6 @@ async def capture_conversation_memories(
     assistant_response: str,
     source: str,
     session_id: str | None,
-    db: asyncpg.Connection,
     dedup_threshold: float | None = None,
     override_provider: str | None = None,
     override_provider_key: str | None = None,
@@ -352,19 +380,21 @@ async def capture_conversation_memories(
     request_body = build_capture_request_body(user_message, assistant_response, source, session_id)
     response_body = build_capture_response_body(assistant_response)
     conversation = build_capture_conversation_text(user_message, assistant_response)
-    user_row = await db.fetchrow(
-        f"""
-        SELECT {_USER_COLUMNS}
-        FROM users
-        WHERE id = $1
-          AND EXISTS (
-              SELECT 1 FROM org_memberships
-              WHERE user_id = users.id AND org_id = $2
-          )
-        """,
-        user_id,
-        org_id,
-    )
+    pool = get_pool()
+    async with pool.acquire() as db:
+        user_row = await db.fetchrow(
+            f"""
+            SELECT {_USER_COLUMNS}
+            FROM users
+            WHERE id = $1
+              AND EXISTS (
+                  SELECT 1 FROM org_memberships
+                  WHERE user_id = users.id AND org_id = $2
+              )
+            """,
+            user_id,
+            org_id,
+        )
     if user_row is None:
         raise RuntimeError("User not found during capture")
     try:
@@ -376,13 +406,35 @@ async def capture_conversation_memories(
     except ProviderConfigError as error:
         raise RuntimeError(str(error)) from error
     extracted_memories = await extract_memories(conversation, resolved)
+    from api.services.embedding import embed_batch
+
+    embeddings = embed_batch(extracted_memories) if extracted_memories else []
+    candidates_per_fact: list[list[dict[str, object]]] = [[] for _ in extracted_memories]
+    if extracted_memories and settings.enable_reconciliation:
+        async with pool.acquire() as db:
+            candidates_per_fact = await load_reconciliation_candidates(
+                user_id, org_id, embeddings, db
+            )
+    decisions = await reconcile_memories(
+        user_id, org_id, extracted_memories, candidates_per_fact, resolved
+    )
     memories_extracted = 0
     stored_refs: list[tuple[UUID, str]] = []
-    if extracted_memories:
-        memories_extracted, stored_refs = await store_extracted_memories(
-            user_id, org_id, conversation_id, extracted_memories, db, dedup_threshold, resolved=resolved
+    async with pool.acquire() as db:
+        if extracted_memories:
+            memories_extracted, stored_refs = await store_extracted_memories(
+                user_id,
+                org_id,
+                conversation_id,
+                extracted_memories,
+                db,
+                dedup_threshold,
+                embeddings=embeddings,
+                decisions=decisions,
+            )
+        await record_conversation(
+            user_id, org_id, conversation_id, request_body, response_body, "completed", memories_extracted, db
         )
-    await record_conversation(user_id, org_id, conversation_id, request_body, response_body, "completed", memories_extracted, db)
     if settings.enable_graph and stored_refs:
         asyncio.create_task(_run_graph_extraction(user_id, org_id, stored_refs, resolved))
     return {
@@ -448,7 +500,29 @@ def extract_assistant_response_text(response_body: bytes) -> str:
     try:
         decoded: object = json.loads(response_body.decode("utf-8"))
     except (UnicodeDecodeError, json.JSONDecodeError):
-        return ""
+        return extract_sse_response_text(response_body)
+    return extract_assistant_payload_text(decoded)
+
+
+def extract_sse_response_text(response_body: bytes) -> str:
+    text_parts: list[str] = []
+    for line in response_body.decode("utf-8", errors="replace").splitlines():
+        if not line.startswith("data:"):
+            continue
+        data = line[5:].strip()
+        if not data or data == "[DONE]":
+            continue
+        try:
+            payload: object = json.loads(data)
+        except json.JSONDecodeError:
+            continue
+        text = extract_assistant_payload_text(payload)
+        if text:
+            text_parts.append(text)
+    return "".join(text_parts)
+
+
+def extract_assistant_payload_text(decoded: object) -> str:
     if not isinstance(decoded, dict):
         return ""
     choices = decoded.get("choices")
@@ -463,6 +537,14 @@ def extract_assistant_response_text(response_body: bytes) -> str:
             text = first_choice.get("text")
             if isinstance(text, str):
                 return text
+            delta = first_choice.get("delta")
+            if isinstance(delta, dict):
+                delta_content = stringify_message_content(delta.get("content"))
+                if delta_content:
+                    return delta_content
+    delta = decoded.get("delta")
+    if isinstance(delta, dict) and isinstance(delta.get("text"), str):
+        return delta["text"]
     content = decoded.get("content")
     if isinstance(content, list):
         text_parts = [

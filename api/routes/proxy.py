@@ -8,8 +8,14 @@ from fastapi import APIRouter, Header, HTTPException, Request, Response
 from fastapi.responses import StreamingResponse
 
 from api.db.connection import get_pool
-from api.services.extraction import run_extraction_task
-from api.services.proxy import ProxyResult, build_proxy_passthrough_result, build_proxy_result, build_proxy_stream_result
+from api.services.extraction import build_capture_response_body, extract_assistant_response_text, run_extraction_task
+from api.services.proxy import (
+    ProxyResult,
+    build_proxy_passthrough_result,
+    forward_to_provider,
+    open_provider_stream,
+    prepare_proxy_request,
+)
 from api.services.users import get_cached_user_by_api_key, get_user_by_api_key
 
 
@@ -134,7 +140,7 @@ async def build_proxy_response_with_available_auth(
             return await build_cached_proxy_response(api_key, requested_external_id, provider, body, headers)
         if user is None:
             raise HTTPException(status_code=401, detail="Invalid API key")
-        result = await build_proxy_result(
+        prepared = await prepare_proxy_request(
             user["id"],
             user["org_id"],
             user["external_id"],
@@ -142,7 +148,6 @@ async def build_proxy_response_with_available_auth(
             body,
             provider,
             disable_injection,
-            headers,
             db,
             int(user["max_memories_injected"]),
             float(user["retrieval_threshold"]),
@@ -162,6 +167,17 @@ async def build_proxy_response_with_available_auth(
             await acquire_context.__aexit__(None, None, None)
         except (asyncpg.PostgresError, OSError, ConnectionError) as error:
             logger.warning("Database connection release failed: %s", error)
+    try:
+        provider_response = await forward_to_provider(prepared.body, prepared.resolved, headers)
+    except RuntimeError as error:
+        raise HTTPException(status_code=502, detail=str(error)) from error
+    result = ProxyResult(
+        provider_response.content,
+        provider_response.status_code,
+        provider_response.media_type,
+        prepared.conversation_id,
+        prepared.injected_count,
+    )
     if not disable_extraction and result.status_code < 400:
         try:
             asyncio.create_task(
@@ -192,7 +208,7 @@ async def build_streaming_proxy_response(
     body: dict[str, object],
     headers: Mapping[str, str],
     namespace: str = "default",
-) -> StreamingResponse:
+) -> Response:
     try:
         pool = get_pool()
     except RuntimeError as error:
@@ -213,7 +229,7 @@ async def build_streaming_proxy_response(
         if user is None:
             raise HTTPException(status_code=401, detail="Invalid API key")
         try:
-            generator, conversation_id, injected_count = await build_proxy_stream_result(
+            prepared = await prepare_proxy_request(
                 user["id"],
                 user["org_id"],
                 user["external_id"],
@@ -221,7 +237,6 @@ async def build_streaming_proxy_response(
                 body,
                 provider,
                 disable_injection,
-                headers,
                 db,
                 int(user["max_memories_injected"]),
                 float(user["retrieval_threshold"]),
@@ -242,27 +257,56 @@ async def build_streaming_proxy_response(
         except (asyncpg.PostgresError, OSError, ConnectionError) as error:
             logger.warning("Database connection release failed: %s", error)
 
+    try:
+        provider_stream = await open_provider_stream(prepared.body, prepared.resolved, headers)
+    except RuntimeError as error:
+        raise HTTPException(status_code=502, detail=str(error)) from error
+
+    response_headers = {
+        "X-Engram-Conversation-ID": str(prepared.conversation_id),
+        "X-Engram-Memories-Injected": str(prepared.injected_count),
+    }
+    if provider_stream.status_code >= 400:
+        try:
+            content = await provider_stream.aread()
+        finally:
+            await provider_stream.aclose()
+        return Response(
+            content=content,
+            status_code=provider_stream.status_code,
+            media_type=provider_stream.media_type,
+            headers=response_headers,
+        )
+
     user_id = user["id"]
     org_id = user["org_id"]
     dedup_threshold = float(user["dedup_threshold"])
 
     async def stream_and_extract() -> AsyncIterator[bytes]:
-        chunks: list[bytes] = []
+        buffer = b""
+        assistant_parts: list[str] = []
         try:
-            async for chunk in generator:
-                chunks.append(chunk)
+            async for chunk in provider_stream.aiter_bytes():
+                buffer += chunk
+                events, buffer = split_sse_events(buffer)
+                assistant_parts.extend(filter(None, (extract_assistant_response_text(event) for event in events)))
                 yield chunk
         finally:
-            if not disable_extraction and chunks:
-                content = b"".join(chunks)
+            if buffer:
+                remaining_text = extract_assistant_response_text(buffer)
+                if remaining_text:
+                    assistant_parts.append(remaining_text)
+            await provider_stream.aclose()
+            assistant_text = "".join(assistant_parts)
+            if not disable_extraction and assistant_text:
                 try:
                     asyncio.create_task(
                         run_extraction_task(
                             user_id,
                             org_id,
-                            conversation_id,
+                            prepared.conversation_id,
                             body,
-                            content,
+                            build_capture_response_body(assistant_text),
                             dedup_threshold,
                             override_provider=provider,
                             override_provider_key=override_provider_key,
@@ -274,14 +318,29 @@ async def build_streaming_proxy_response(
 
     return StreamingResponse(
         stream_and_extract(),
-        media_type="text/event-stream",
+        media_type=provider_stream.media_type,
         headers={
-            "X-Engram-Conversation-ID": str(conversation_id),
-            "X-Engram-Memories-Injected": str(injected_count),
+            **response_headers,
             "Cache-Control": "no-cache",
             "X-Accel-Buffering": "no",
         },
     )
+
+
+def split_sse_events(buffer: bytes) -> tuple[list[bytes], bytes]:
+    events: list[bytes] = []
+    while True:
+        separators = [
+            (index, separator)
+            for separator in (b"\n\n", b"\r\n\r\n")
+            if (index := buffer.find(separator)) >= 0
+        ]
+        if not separators:
+            return events, buffer
+        index, separator = min(separators, key=lambda item: item[0])
+        event_end = index + len(separator)
+        events.append(buffer[:event_end])
+        buffer = buffer[event_end:]
 
 
 async def build_cached_proxy_response(

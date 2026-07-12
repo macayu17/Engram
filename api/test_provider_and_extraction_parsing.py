@@ -45,6 +45,18 @@ def test_extract_assistant_response_text_handles_message_content_parts() -> None
     assert extract_assistant_response_text(response_body) == "First assistant part.\nSecond assistant part."
 
 
+def test_extract_assistant_response_text_handles_openai_sse() -> None:
+    chunks = b'data: {"choices":[{"delta":{"content":"Hello "}}]}\n\ndata: {"choices":[{"delta":{"content":"world"}}]}\n\ndata: [DONE]\n\n'
+
+    assert extract_assistant_response_text(chunks) == "Hello world"
+
+
+def test_extract_assistant_response_text_handles_anthropic_sse() -> None:
+    chunks = b'event: content_block_delta\ndata: {"type":"content_block_delta","delta":{"type":"text_delta","text":"Hello "}}\n\nevent: content_block_delta\ndata: {"type":"content_block_delta","delta":{"type":"text_delta","text":"world"}}\n\n'
+
+    assert extract_assistant_response_text(chunks) == "Hello world"
+
+
 def test_extract_chat_message_content_accepts_text_choice_fallback() -> None:
     payload = {"choices": [{"text": "[\"User prefers concise answers\"]"}]}
 

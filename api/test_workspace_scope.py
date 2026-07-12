@@ -32,6 +32,7 @@ SCOPED_FUNCTIONS = [
     extraction.run_extraction_task,
     extraction.store_extracted_memories,
     extraction.reconcile_memories,
+    extraction.load_reconciliation_candidates,
     extraction.apply_memory_update,
     extraction.capture_conversation_memories,
     extraction.record_conversation,
@@ -43,8 +44,7 @@ SCOPED_FUNCTIONS = [
     graph.get_memory_neighbors,
     graph.get_memory_entities,
     graph.backfill_entities_for_user,
-    proxy.build_proxy_result,
-    proxy.build_proxy_stream_result,
+    proxy.prepare_proxy_request,
 ]
 
 

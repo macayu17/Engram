@@ -22,11 +22,15 @@ const bridgePath = "src/components/ClerkEngramBridge.tsx";
 const bridgeSource = existsSync(join(root, bridgePath)) ? read(bridgePath) : "";
 const clerkRoutePath = "src/app/api/engram/user-key/route.ts";
 const clerkRouteSource = existsSync(join(root, clerkRoutePath)) ? read(clerkRoutePath) : "";
+const manualUserRoutePath = "src/app/api/engram/users/route.ts";
+const manualUserRouteSource = existsSync(join(root, manualUserRoutePath)) ? read(manualUserRoutePath) : "";
 const missingAuthLabel = ["Auth", "Not", "Configured"].join(" ");
 
 assertCheck("depends on @clerk/nextjs", Boolean(packageJson.dependencies?.["@clerk/nextjs"]));
 assertCheck("has proxy.ts", Boolean(proxySource));
-assertCheck("uses clerkMiddleware", proxySource.includes("clerkMiddleware()"));
+assertCheck("uses clerkMiddleware", proxySource.includes("clerkMiddleware("));
+assertCheck("uses Clerk route matcher", proxySource.includes("createRouteMatcher"));
+assertCheck("protects product routes", proxySource.includes("/overview(.*)") && proxySource.includes("/memories(.*)") && proxySource.includes("await auth.protect()"));
 assertCheck("guards missing middleware key", proxySource.includes("NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY") && proxySource.includes("NextResponse.next"));
 assertCheck("imports middleware from server package", proxySource.includes("from \"@clerk/nextjs/server\"") || proxySource.includes("from '@clerk/nextjs/server'"));
 assertCheck("does not use authMiddleware", !proxySource.includes("authMiddleware"));
@@ -49,6 +53,12 @@ assertCheck("bridge clears active key when signed out", bridgeSource.includes("c
 assertCheck("has Clerk key server route", Boolean(clerkRouteSource));
 assertCheck("server route uses Clerk auth", clerkRouteSource.includes("auth()") && clerkRouteSource.includes("from \"@clerk/nextjs/server\""));
 assertCheck("server route uses service key", clerkRouteSource.includes("ENGRAM_SERVICE_KEY") && clerkRouteSource.includes("X-Engram-Service-Key"));
+assertCheck("server route requires Clerk session", clerkRouteSource.includes("sessionId") && clerkRouteSource.includes("!userId || !sessionId"));
+assertCheck("server route derives session key name", clerkRouteSource.includes("key_name: `clerk:${sessionId}`"));
+assertCheck("server route sends workspace name", clerkRouteSource.includes("workspace_name: \"Personal workspace\""));
+assertCheck("server route returns workspace metadata", clerkRouteSource.includes("workspaceId") && clerkRouteSource.includes("workspaceName") && clerkRouteSource.includes("role"));
+assertCheck("manual user route blocks hosted creation", manualUserRouteSource.includes("if (serviceKey)") && manualUserRouteSource.includes("status: 404"));
+assertCheck("manual user route never forwards service key", !manualUserRouteSource.includes('"/users/service-key"') && !manualUserRouteSource.includes('"X-Engram-Service-Key"'));
 
 const failedChecks = checks.filter((check) => !check.passed);
 

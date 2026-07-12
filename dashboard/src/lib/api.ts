@@ -117,6 +117,9 @@ export type UserProviderConfigUpdate = {
 export type ClerkEngramKeyResponse = {
   apiKey: string;
   externalId: string;
+  workspaceId: string;
+  workspaceName: string;
+  role: string;
 };
 
 export type ChatMessage = {

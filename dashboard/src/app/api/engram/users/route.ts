@@ -37,6 +37,11 @@ function getErrorText(body: string): string {
 }
 
 export async function POST(request: Request) {
+  const serviceKey = getServiceKey();
+  if (serviceKey) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+
   let payload: UserCreatePayload;
   try {
     const parsed = await request.json() as unknown;
@@ -55,21 +60,14 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "NEXT_PUBLIC_API_URL must point to the hosted Engram API" }, { status: 503 });
   }
 
-  const serviceKey = getServiceKey();
-  const path = serviceKey ? "/users/service-key" : "/users";
-  const body = serviceKey
-    ? { external_id: externalId, key_name: "manual" }
-    : { external_id: externalId };
-
   let response: Response;
   try {
-    response = await fetch(`${apiBaseUrl}${path}`, {
+    response = await fetch(`${apiBaseUrl}/users`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        ...(serviceKey ? { "X-Engram-Service-Key": serviceKey } : {}),
       },
-      body: JSON.stringify(body),
+      body: JSON.stringify({ external_id: externalId }),
       cache: "no-store",
     });
   } catch {

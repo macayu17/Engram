@@ -49,42 +49,175 @@ async def create_user(external_id: str, db: asyncpg.Connection) -> tuple[asyncpg
             api_key_hash,
         )
         if row is not None:
-            await insert_user_api_key(row["id"], api_key_hash, "default", db)
+            workspace = await db.fetchrow(
+                """
+                INSERT INTO orgs (name)
+                VALUES ($1)
+                RETURNING id, name, extraction_provider, extraction_model
+                """,
+                f"{external_id}'s workspace",
+            )
+            if workspace is None:
+                raise RuntimeError("Workspace creation failed")
+            await db.execute(
+                """
+                INSERT INTO org_memberships (org_id, user_id, role)
+                VALUES ($1, $2, 'owner')
+                """,
+                workspace["id"],
+                row["id"],
+            )
+            await insert_user_api_key(row["id"], workspace["id"], api_key_hash, "default", db)
     if row is None:
         raise RuntimeError("User creation failed")
-    cache_user_auth(api_key_hash, row)
+    cache_user_auth(
+        api_key_hash,
+        {
+            **dict(row),
+            "org_id": workspace["id"],
+            "role": "owner",
+            "extraction_provider": workspace["extraction_provider"],
+            "extraction_model": workspace["extraction_model"],
+        },
+    )
     return row, api_key
 
 
-async def create_or_issue_user_key(external_id: str, key_name: str, db: asyncpg.Connection) -> tuple[asyncpg.Record, str]:
+async def provision_hosted_user(
+    external_id: str,
+    workspace_name: str,
+    key_name: str,
+    db: asyncpg.Connection,
+    workspace_id: object | None = None,
+) -> dict[str, object]:
     api_key = generate_api_key()
     api_key_hash = hash_api_key(api_key)
+    disabled_legacy_key_hash = hash_api_key(generate_api_key())
     async with db.transaction():
         row = await db.fetchrow(
             f"""
             INSERT INTO users (external_id, api_key_hash)
             VALUES ($1, $2)
             ON CONFLICT (external_id) DO UPDATE
-            SET updated_at = users.updated_at
+            SET api_key_hash = EXCLUDED.api_key_hash
             RETURNING {_USER_COLUMNS}
             """,
             external_id,
-            api_key_hash,
+            disabled_legacy_key_hash,
         )
         if row is None:
-            raise RuntimeError("User key creation failed")
-        await insert_user_api_key(row["id"], api_key_hash, key_name, db)
-    cache_user_auth(api_key_hash, row)
-    return row, api_key
+            raise RuntimeError("Hosted user provisioning failed")
+        if workspace_id is None:
+            workspace_row = await db.fetchrow(
+                """
+                SELECT orgs.id, orgs.name, org_memberships.role,
+                       orgs.extraction_provider, orgs.extraction_model,
+                       orgs.openai_api_key_encrypted, orgs.gemini_api_key_encrypted,
+                       orgs.anthropic_api_key_encrypted
+                FROM orgs
+                JOIN org_memberships ON org_memberships.org_id = orgs.id
+                WHERE org_memberships.user_id = $1
+                  AND org_memberships.role = 'owner'
+                ORDER BY org_memberships.created_at
+                LIMIT 1
+                """,
+                row["id"],
+            )
+        else:
+            workspace_row = await db.fetchrow(
+                """
+                SELECT orgs.id, orgs.name, org_memberships.role,
+                       orgs.extraction_provider, orgs.extraction_model,
+                       orgs.openai_api_key_encrypted, orgs.gemini_api_key_encrypted,
+                       orgs.anthropic_api_key_encrypted
+                FROM orgs
+                JOIN org_memberships ON org_memberships.org_id = orgs.id
+                WHERE org_memberships.user_id = $1
+                  AND orgs.id = $2
+                """,
+                row["id"],
+                workspace_id,
+            )
+            if workspace_row is None:
+                raise PermissionError("Workspace not found")
+        if workspace_row is None:
+            workspace_row = await db.fetchrow(
+                """
+                INSERT INTO orgs (name)
+                VALUES ($1)
+                RETURNING id, name, extraction_provider, extraction_model,
+                          openai_api_key_encrypted, gemini_api_key_encrypted,
+                          anthropic_api_key_encrypted
+                """,
+                workspace_name,
+            )
+            if workspace_row is None:
+                raise RuntimeError("Workspace provisioning failed")
+            await db.execute(
+                """
+                INSERT INTO org_memberships (org_id, user_id, role)
+                VALUES ($1, $2, 'owner')
+                """,
+                workspace_row["id"],
+                row["id"],
+            )
+            workspace = {**dict(workspace_row), "role": "owner"}
+        else:
+            workspace = dict(workspace_row)
+        key_row = await db.fetchrow(
+            """
+            INSERT INTO user_api_keys (user_id, org_id, api_key_hash, name)
+            VALUES ($1, $2, $3, $4)
+            ON CONFLICT (user_id, org_id, name) DO UPDATE
+            SET api_key_hash = EXCLUDED.api_key_hash,
+                last_used_at = NULL
+            RETURNING id
+            """,
+            row["id"],
+            workspace["id"],
+            api_key_hash,
+            key_name,
+        )
+        if key_row is None:
+            raise RuntimeError("Workspace key provisioning failed")
+    auth_row = {
+        **dict(row),
+        "org_id": workspace["id"],
+        "role": workspace["role"],
+        "api_key_hash": api_key_hash,
+        "extraction_provider": workspace["extraction_provider"],
+        "extraction_model": workspace["extraction_model"],
+        "openai_api_key_encrypted": workspace["openai_api_key_encrypted"],
+        "gemini_api_key_encrypted": workspace["gemini_api_key_encrypted"],
+        "anthropic_api_key_encrypted": workspace["anthropic_api_key_encrypted"],
+    }
+    clear_cached_user(row["id"])
+    cache_user_auth(api_key_hash, auth_row)
+    return {
+        "id": row["id"],
+        "external_id": row["external_id"],
+        "created_at": row["created_at"],
+        "api_key": api_key,
+        "workspace_id": workspace["id"],
+        "workspace_name": workspace["name"],
+        "role": workspace["role"],
+    }
 
 
-async def insert_user_api_key(user_id: object, api_key_hash: str, key_name: str, db: asyncpg.Connection) -> None:
+async def insert_user_api_key(
+    user_id: object,
+    org_id: object,
+    api_key_hash: str,
+    key_name: str,
+    db: asyncpg.Connection,
+) -> None:
     await db.execute(
         """
-        INSERT INTO user_api_keys (user_id, api_key_hash, name)
-        VALUES ($1, $2, $3)
+        INSERT INTO user_api_keys (user_id, org_id, api_key_hash, name)
+        VALUES ($1, $2, $3, $4)
         """,
         user_id,
+        org_id,
         api_key_hash,
         key_name,
     )
@@ -247,12 +380,14 @@ async def regenerate_user_key(user: asyncpg.Record, db: asyncpg.Connection) -> t
             """
             DELETE FROM user_api_keys
             WHERE user_id = $1
+              AND org_id = $2
             """,
             user["id"],
+            user["org_id"],
         )
-        await insert_user_api_key(user["id"], api_key_hash, "default", db)
+        await insert_user_api_key(user["id"], user["org_id"], api_key_hash, "default", db)
     clear_cached_user(user["id"])
-    cache_user_auth(api_key_hash, row)
+    cache_user_auth(api_key_hash, {**dict(row), **dict(user), "api_key_hash": api_key_hash})
     return dict(row), api_key
 
 

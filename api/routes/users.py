@@ -1,8 +1,10 @@
 import asyncpg
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 
+from api.config import settings
 from api.dependencies import get_current_user, get_db, require_service_key
 from api.models.user import (
+    HostedProvisionResponse,
     ServiceUserKeyCreate,
     UserConfigResponse,
     UserConfigUpdate,
@@ -14,11 +16,11 @@ from api.models.user import (
     UserUpdate,
 )
 from api.services.users import (
-    create_or_issue_user_key,
     create_user,
     delete_user,
     get_user_config,
     get_user_provider_config,
+    provision_hosted_user,
     regenerate_user_key,
     update_user_config,
     update_user_external_id,
@@ -31,6 +33,8 @@ router = APIRouter()
 
 @router.post("", response_model=UserCreateResponse, status_code=status.HTTP_201_CREATED)
 async def create_user_route(payload: UserCreate, db: asyncpg.Connection = Depends(get_db)) -> dict[str, object]:
+    if settings.engram_service_key:
+        raise HTTPException(status_code=404, detail="Not found")
     try:
         row, api_key = await create_user(payload.external_id, db)
     except asyncpg.UniqueViolationError as error:
@@ -43,19 +47,22 @@ async def create_user_route(payload: UserCreate, db: asyncpg.Connection = Depend
     }
 
 
-@router.post("/service-key", response_model=UserCreateResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/service-key", response_model=HostedProvisionResponse, status_code=status.HTTP_201_CREATED)
 async def create_service_user_key_route(
     payload: ServiceUserKeyCreate,
     _: None = Depends(require_service_key),
     db: asyncpg.Connection = Depends(get_db),
 ) -> dict[str, object]:
-    row, api_key = await create_or_issue_user_key(payload.external_id, payload.key_name, db)
-    return {
-        "id": row["id"],
-        "external_id": row["external_id"],
-        "api_key": api_key,
-        "created_at": row["created_at"],
-    }
+    try:
+        return await provision_hosted_user(
+            payload.external_id,
+            payload.workspace_name,
+            payload.key_name,
+            db,
+            payload.workspace_id,
+        )
+    except PermissionError as error:
+        raise HTTPException(status_code=404, detail="Workspace not found") from error
 
 
 @router.get("/me", response_model=UserResponse)
@@ -107,6 +114,8 @@ async def regenerate_current_user_key_route(
     user: asyncpg.Record = Depends(get_current_user),
     db: asyncpg.Connection = Depends(get_db),
 ) -> dict[str, object]:
+    if settings.engram_service_key:
+        raise HTTPException(status_code=404, detail="Not found")
     row, api_key = await regenerate_user_key(user, db)
     return {
         "id": row["id"],

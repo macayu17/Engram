@@ -7,7 +7,12 @@ from api.models.user import ServiceUserKeyCreate, UserCreate, UserProviderConfig
 def test_user_external_id_is_stripped() -> None:
     assert UserCreate(external_id="  ayush  ").external_id == "ayush"
     assert UserUpdate(external_id="  engram-user  ").external_id == "engram-user"
-    assert ServiceUserKeyCreate(external_id="  clerk-user  ").external_id == "clerk-user"
+    payload = ServiceUserKeyCreate(
+        external_id="  clerk-user  ",
+        workspace_name="Personal workspace",
+        key_name="clerk:session",
+    )
+    assert payload.external_id == "clerk-user"
 
 
 def test_user_external_id_rejects_whitespace_only() -> None:

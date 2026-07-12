@@ -24,7 +24,17 @@ class UserUpdate(ExternalIdModel):
 
 
 class ServiceUserKeyCreate(ExternalIdModel):
-    key_name: str = Field(default="clerk", min_length=1, max_length=80)
+    workspace_name: str = Field(min_length=1, max_length=120)
+    key_name: str = Field(min_length=1, max_length=120)
+    workspace_id: UUID4 | None = None
+
+    @field_validator("workspace_name", "key_name")
+    @classmethod
+    def strip_name(cls, value: str) -> str:
+        stripped_value = value.strip()
+        if not stripped_value:
+            raise ValueError("Name is required")
+        return stripped_value
 
 
 class UserResponse(BaseModel):
@@ -35,6 +45,12 @@ class UserResponse(BaseModel):
 
 class UserCreateResponse(UserResponse):
     api_key: str
+
+
+class HostedProvisionResponse(UserCreateResponse):
+    workspace_id: UUID4
+    workspace_name: str
+    role: str
 
 
 class UserConfigUpdate(BaseModel):

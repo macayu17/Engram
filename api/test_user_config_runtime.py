@@ -120,7 +120,7 @@ async def test_extracted_memory_storage_uses_user_dedup_threshold(monkeypatch) -
 
 
 @pytest.mark.asyncio
-async def test_regenerate_user_key_removes_all_old_issued_keys() -> None:
+async def test_regenerate_user_key_replaces_only_current_workspace_keys() -> None:
     class FakeTransaction:
         async def __aenter__(self):
             return self
@@ -131,6 +131,7 @@ async def test_regenerate_user_key_removes_all_old_issued_keys() -> None:
     class FakeDb:
         def __init__(self) -> None:
             self.deleted_user_id = None
+            self.deleted_org_id = None
             self.deleted_with_hash_filter = False
             self.inserted_key_name = ""
 
@@ -154,17 +155,19 @@ async def test_regenerate_user_key_removes_all_old_issued_keys() -> None:
         async def execute(self, query, *args):
             if "DELETE FROM user_api_keys" in query:
                 self.deleted_user_id = args[0]
+                self.deleted_org_id = args[1]
                 self.deleted_with_hash_filter = "api_key_hash" in query
             if "INSERT INTO user_api_keys" in query:
-                self.inserted_key_name = args[2]
+                self.inserted_key_name = args[3]
             return "DELETE 2"
 
-    user = {"id": uuid4(), "api_key_hash": "old-secondary-key-hash"}
+    user = {"id": uuid4(), "org_id": uuid4(), "api_key_hash": "old-secondary-key-hash"}
     db = FakeDb()
 
     await regenerate_user_key(user, db)
 
     assert db.deleted_user_id == user["id"]
+    assert db.deleted_org_id == user["org_id"]
     assert db.deleted_with_hash_filter is False
     assert db.inserted_key_name == "default"
 

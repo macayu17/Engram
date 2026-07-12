@@ -5,8 +5,8 @@ const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL?.trim() || "http://localhost:
 const serviceKey = process.env.ENGRAM_SERVICE_KEY?.trim() ?? "";
 
 export async function POST() {
-  const { userId } = await auth();
-  if (!userId) {
+  const { sessionId, userId } = await auth();
+  if (!userId || !sessionId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   if (!serviceKey) {
@@ -23,16 +23,26 @@ export async function POST() {
     },
     body: JSON.stringify({
       external_id: `clerk:${userId}`,
-      key_name: "clerk",
+      workspace_name: "Personal workspace",
+      key_name: `clerk:${sessionId}`,
     }),
     cache: "no-store",
   });
   if (!response.ok) {
     return NextResponse.json({ error: await response.text() }, { status: response.status });
   }
-  const payload = await response.json() as { api_key: string; external_id: string };
+  const payload = await response.json() as {
+    api_key: string;
+    external_id: string;
+    workspace_id: string;
+    workspace_name: string;
+    role: string;
+  };
   return NextResponse.json({
     apiKey: payload.api_key,
     externalId: payload.external_id,
+    workspaceId: payload.workspace_id,
+    workspaceName: payload.workspace_name,
+    role: payload.role,
   });
 }

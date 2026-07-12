@@ -223,6 +223,68 @@ async def insert_user_api_key(
     )
 
 
+async def create_user_api_key(
+    user_id: object,
+    org_id: object,
+    name: str,
+    db: asyncpg.Connection,
+) -> dict[str, object]:
+    api_key = generate_api_key()
+    row = await db.fetchrow(
+        """
+        INSERT INTO user_api_keys (user_id, org_id, api_key_hash, name)
+        VALUES ($1, $2, $3, $4)
+        RETURNING id, name, created_at, last_used_at
+        """,
+        user_id,
+        org_id,
+        hash_api_key(api_key),
+        name,
+    )
+    if row is None:
+        raise RuntimeError("API key creation failed")
+    return {**dict(row), "api_key": api_key}
+
+
+async def list_user_api_keys(
+    user_id: object,
+    org_id: object,
+    db: asyncpg.Connection,
+) -> list[dict[str, object]]:
+    rows = await db.fetch(
+        """
+        SELECT id, name, created_at, last_used_at
+        FROM user_api_keys
+        WHERE user_id = $1 AND org_id = $2
+        ORDER BY created_at DESC
+        """,
+        user_id,
+        org_id,
+    )
+    return [dict(row) for row in rows]
+
+
+async def revoke_user_api_key(
+    user_id: object,
+    org_id: object,
+    key_id: object,
+    db: asyncpg.Connection,
+) -> bool:
+    result = await db.execute(
+        """
+        DELETE FROM user_api_keys
+        WHERE id = $1 AND user_id = $2 AND org_id = $3
+        """,
+        key_id,
+        user_id,
+        org_id,
+    )
+    deleted = result != "DELETE 0"
+    if deleted:
+        clear_cached_user(user_id)
+    return deleted
+
+
 async def get_user_by_api_key(api_key: str, db: asyncpg.Connection) -> asyncpg.Record | None:
     api_key_hash = hash_api_key(api_key)
     row = await db.fetchrow(

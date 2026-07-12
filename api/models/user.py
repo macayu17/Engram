@@ -53,6 +53,29 @@ class HostedProvisionResponse(UserCreateResponse):
     role: str
 
 
+class ApiKeyCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=120)
+
+    @field_validator("name")
+    @classmethod
+    def strip_name(cls, value: str) -> str:
+        stripped_value = value.strip()
+        if not stripped_value:
+            raise ValueError("Name is required")
+        return stripped_value
+
+
+class ApiKeyResponse(BaseModel):
+    id: UUID4
+    name: str
+    created_at: datetime
+    last_used_at: datetime | None
+
+
+class ApiKeyCreateResponse(ApiKeyResponse):
+    api_key: str
+
+
 class UserConfigUpdate(BaseModel):
     max_memories_injected: int | None = Field(default=None, ge=1, le=20)
     retrieval_threshold: float | None = Field(default=None, ge=0, le=1)

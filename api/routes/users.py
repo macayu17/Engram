@@ -1,9 +1,13 @@
 import asyncpg
 from fastapi import APIRouter, Depends, HTTPException, Response, status
+from pydantic import UUID4
 
 from api.config import settings
 from api.dependencies import get_current_user, get_db, require_service_key
 from api.models.user import (
+    ApiKeyCreate,
+    ApiKeyCreateResponse,
+    ApiKeyResponse,
     HostedProvisionResponse,
     ServiceUserKeyCreate,
     UserConfigResponse,
@@ -16,12 +20,15 @@ from api.models.user import (
     UserUpdate,
 )
 from api.services.users import (
+    create_user_api_key,
     create_user,
     delete_user,
     get_user_config,
     get_user_provider_config,
+    list_user_api_keys,
     provision_hosted_user,
     regenerate_user_key,
+    revoke_user_api_key,
     update_user_config,
     update_user_external_id,
     update_user_provider_config,
@@ -125,6 +132,37 @@ async def regenerate_current_user_key_route(
     }
 
 
+@router.get("/me/api-keys", response_model=list[ApiKeyResponse])
+async def list_current_user_api_keys_route(
+    user: asyncpg.Record = Depends(get_current_user),
+    db: asyncpg.Connection = Depends(get_db),
+) -> list[dict[str, object]]:
+    return await list_user_api_keys(user["id"], user["org_id"], db)
+
+
+@router.post("/me/api-keys", response_model=ApiKeyCreateResponse, status_code=status.HTTP_201_CREATED)
+async def create_current_user_api_key_route(
+    payload: ApiKeyCreate,
+    user: asyncpg.Record = Depends(get_current_user),
+    db: asyncpg.Connection = Depends(get_db),
+) -> dict[str, object]:
+    try:
+        return await create_user_api_key(user["id"], user["org_id"], payload.name, db)
+    except asyncpg.UniqueViolationError as error:
+        raise HTTPException(status_code=409, detail="An API key with this name already exists") from error
+
+
+@router.delete("/me/api-keys/{key_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def revoke_current_user_api_key_route(
+    key_id: UUID4,
+    user: asyncpg.Record = Depends(get_current_user),
+    db: asyncpg.Connection = Depends(get_db),
+) -> Response:
+    if not await revoke_user_api_key(user["id"], user["org_id"], key_id, db):
+        raise HTTPException(status_code=404, detail="API key not found")
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
 @router.delete("/me", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_current_user_route(
     user: asyncpg.Record = Depends(get_current_user),
@@ -164,3 +202,4 @@ async def update_current_user_provider_route(
         )
     except ValueError as error:
         raise HTTPException(status_code=422, detail=str(error)) from error
+    list_user_api_keys,

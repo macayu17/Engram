@@ -122,6 +122,17 @@ export type ClerkEngramKeyResponse = {
   role: string;
 };
 
+export type ApiKeyRecord = {
+  id: string;
+  name: string;
+  created_at: string;
+  last_used_at: string | null;
+};
+
+export type ApiKeyCreateResponse = ApiKeyRecord & {
+  api_key: string;
+};
+
 export type ChatMessage = {
   role: "system" | "user" | "assistant";
   content: string;
@@ -390,6 +401,11 @@ export const api = {
     updateProvider: (payload: UserProviderConfigUpdate) => request<UserProviderConfig>("PATCH", "/users/me/provider", payload),
     regenerateKey: () => request<UserCreateResponse>("POST", "/users/me/api-key"),
     deleteMe: () => request<void>("DELETE", "/users/me"),
+  },
+  keys: {
+    list: () => request<ApiKeyRecord[]>("GET", "/users/me/api-keys"),
+    create: (name: string) => request<ApiKeyCreateResponse>("POST", "/users/me/api-keys", { name }),
+    revoke: (id: string) => request<void>("DELETE", `/users/me/api-keys/${id}`),
   },
 };
 

@@ -118,8 +118,28 @@ CREATE INDEX IF NOT EXISTS conversations_user_created_at_idx ON conversations(us
 CREATE TABLE IF NOT EXISTS orgs (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     name TEXT NOT NULL,
+    extraction_provider TEXT NOT NULL DEFAULT 'openai',
+    extraction_model TEXT NOT NULL DEFAULT 'gpt-4o-mini',
+    openai_api_key_encrypted BYTEA,
+    gemini_api_key_encrypted BYTEA,
+    anthropic_api_key_encrypted BYTEA,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+ALTER TABLE orgs ADD COLUMN IF NOT EXISTS extraction_provider TEXT NOT NULL DEFAULT 'openai';
+ALTER TABLE orgs ADD COLUMN IF NOT EXISTS extraction_model TEXT NOT NULL DEFAULT 'gpt-4o-mini';
+ALTER TABLE orgs ADD COLUMN IF NOT EXISTS openai_api_key_encrypted BYTEA;
+ALTER TABLE orgs ADD COLUMN IF NOT EXISTS gemini_api_key_encrypted BYTEA;
+ALTER TABLE orgs ADD COLUMN IF NOT EXISTS anthropic_api_key_encrypted BYTEA;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'orgs_extraction_provider_check') THEN
+        ALTER TABLE orgs ADD CONSTRAINT orgs_extraction_provider_check
+            CHECK (extraction_provider IN ('openai', 'gemini', 'ollama', 'anthropic'));
+    END IF;
+END;
+$$;
 
 CREATE TABLE IF NOT EXISTS org_memberships (
     org_id UUID NOT NULL REFERENCES orgs(id) ON DELETE CASCADE,
@@ -193,6 +213,146 @@ $$;
 
 CREATE INDEX IF NOT EXISTS memory_relationships_source_idx ON memory_relationships(source_memory_id);
 CREATE INDEX IF NOT EXISTS memory_relationships_target_idx ON memory_relationships(target_memory_id);
+
+ALTER TABLE user_api_keys ADD COLUMN IF NOT EXISTS org_id UUID REFERENCES orgs(id) ON DELETE CASCADE;
+ALTER TABLE retrieval_logs ADD COLUMN IF NOT EXISTS org_id UUID REFERENCES orgs(id) ON DELETE CASCADE;
+ALTER TABLE conversations ADD COLUMN IF NOT EXISTS org_id UUID REFERENCES orgs(id) ON DELETE CASCADE;
+ALTER TABLE memory_entities ADD COLUMN IF NOT EXISTS org_id UUID REFERENCES orgs(id) ON DELETE CASCADE;
+ALTER TABLE memory_relationships ADD COLUMN IF NOT EXISTS org_id UUID REFERENCES orgs(id) ON DELETE CASCADE;
+
+CREATE INDEX IF NOT EXISTS user_api_keys_org_id_idx ON user_api_keys(org_id);
+CREATE INDEX IF NOT EXISTS retrieval_logs_org_created_at_idx ON retrieval_logs(org_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS conversations_org_created_at_idx ON conversations(org_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS memory_entities_org_idx ON memory_entities(org_id);
+CREATE INDEX IF NOT EXISTS memory_relationships_org_idx ON memory_relationships(org_id);
+
+DO $$
+DECLARE
+    user_row RECORD;
+    personal_org_id UUID;
+BEGIN
+    FOR user_row IN
+        SELECT id, external_id, extraction_provider, extraction_model,
+               openai_api_key_encrypted, gemini_api_key_encrypted, anthropic_api_key_encrypted
+        FROM users
+    LOOP
+        SELECT org_id
+        INTO personal_org_id
+        FROM org_memberships
+        WHERE user_id = user_row.id
+          AND role = 'owner'
+        ORDER BY created_at
+        LIMIT 1;
+
+        IF personal_org_id IS NULL THEN
+            INSERT INTO orgs (
+                name,
+                extraction_provider,
+                extraction_model,
+                openai_api_key_encrypted,
+                gemini_api_key_encrypted,
+                anthropic_api_key_encrypted
+            )
+            VALUES (
+                'legacy:' || user_row.external_id,
+                user_row.extraction_provider,
+                user_row.extraction_model,
+                user_row.openai_api_key_encrypted,
+                user_row.gemini_api_key_encrypted,
+                user_row.anthropic_api_key_encrypted
+            )
+            RETURNING id INTO personal_org_id;
+
+            INSERT INTO org_memberships (org_id, user_id, role)
+            VALUES (personal_org_id, user_row.id, 'owner');
+        END IF;
+
+        UPDATE memories
+        SET org_id = personal_org_id
+        WHERE user_id = user_row.id
+          AND org_id IS NULL;
+
+        UPDATE user_api_keys
+        SET org_id = personal_org_id
+        WHERE user_id = user_row.id
+          AND org_id IS NULL;
+
+        UPDATE retrieval_logs
+        SET org_id = personal_org_id
+        WHERE user_id = user_row.id
+          AND org_id IS NULL;
+
+        UPDATE conversations
+        SET org_id = personal_org_id
+        WHERE user_id = user_row.id
+          AND org_id IS NULL;
+
+        UPDATE memory_entities AS entity
+        SET org_id = COALESCE(
+            (
+                SELECT memory.org_id
+                FROM memory_entity_links AS link
+                JOIN memories AS memory ON memory.id = link.memory_id
+                WHERE link.entity_id = entity.id
+                ORDER BY memory.created_at
+                LIMIT 1
+            ),
+            personal_org_id
+        )
+        WHERE entity.user_id = user_row.id
+          AND entity.org_id IS NULL;
+
+        UPDATE memory_relationships AS relationship
+        SET org_id = COALESCE(
+            (
+                SELECT memory.org_id
+                FROM memories AS memory
+                WHERE memory.id = relationship.source_memory_id
+            ),
+            personal_org_id
+        )
+        WHERE relationship.user_id = user_row.id
+          AND relationship.org_id IS NULL;
+    END LOOP;
+END;
+$$;
+
+WITH ranked_keys AS (
+    SELECT id,
+           row_number() OVER (PARTITION BY user_id, org_id, name ORDER BY created_at, id) AS duplicate_number
+    FROM user_api_keys
+)
+UPDATE user_api_keys AS api_key
+SET name = api_key.name || '-' || left(api_key.id::text, 8)
+FROM ranked_keys
+WHERE ranked_keys.id = api_key.id
+  AND ranked_keys.duplicate_number > 1;
+
+ALTER TABLE memories DROP CONSTRAINT IF EXISTS memories_org_id_fkey;
+ALTER TABLE memories ADD CONSTRAINT memories_org_id_fkey
+    FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE CASCADE;
+
+ALTER TABLE memory_entities DROP CONSTRAINT IF EXISTS memory_entities_user_id_name_entity_type_key;
+CREATE UNIQUE INDEX IF NOT EXISTS memory_entities_org_user_name_type_idx
+    ON memory_entities(org_id, user_id, name, entity_type);
+CREATE UNIQUE INDEX IF NOT EXISTS user_api_keys_user_org_name_idx
+    ON user_api_keys(user_id, org_id, name);
+
+CREATE INDEX IF NOT EXISTS memories_org_user_namespace_idx
+    ON memories(org_id, user_id, namespace);
+CREATE INDEX IF NOT EXISTS retrieval_logs_org_user_created_at_idx
+    ON retrieval_logs(org_id, user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS conversations_org_user_created_at_idx
+    ON conversations(org_id, user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS memory_entities_org_user_idx
+    ON memory_entities(org_id, user_id);
+
+ALTER TABLE memories ALTER COLUMN org_id SET NOT NULL;
+ALTER TABLE user_api_keys ALTER COLUMN org_id SET NOT NULL;
+ALTER TABLE retrieval_logs ALTER COLUMN org_id SET NOT NULL;
+ALTER TABLE conversations ALTER COLUMN org_id SET NOT NULL;
+ALTER TABLE memory_entities ALTER COLUMN org_id SET NOT NULL;
+ALTER TABLE memory_relationships ALTER COLUMN org_id SET NOT NULL;
 
 ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.memories ENABLE ROW LEVEL SECURITY;

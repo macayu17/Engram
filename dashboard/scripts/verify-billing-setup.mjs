@@ -4,6 +4,7 @@ import process from "node:process";
 
 
 const root = process.cwd();
+const repositoryRoot = path.resolve(root, "..");
 const routePaths = [
   "src/app/api/billing/checkout/route.ts",
   "src/app/api/billing/portal/route.ts",
@@ -29,6 +30,27 @@ for (const relativePath of routePaths) {
   }
   if (source.includes("body.external_id") || source.includes("body.externalId")) {
     throw new Error(`${relativePath} must not accept browser-supplied identity`);
+  }
+}
+
+const requiredBillingVariables = [
+  "STRIPE_SECRET_KEY",
+  "STRIPE_WEBHOOK_SECRET",
+  "STRIPE_PRO_PRICE_ID",
+  "DASHBOARD_URL",
+];
+const environmentExample = fs.readFileSync(path.join(repositoryRoot, ".env.example"), "utf8");
+const composeFiles = ["docker-compose.yml", "docker-compose.supabase.yml"];
+
+for (const variable of requiredBillingVariables) {
+  if (!environmentExample.includes(`${variable}=`)) {
+    throw new Error(`.env.example must include ${variable}`);
+  }
+  for (const composeFile of composeFiles) {
+    const composeSource = fs.readFileSync(path.join(repositoryRoot, composeFile), "utf8");
+    if (!composeSource.includes(`${variable}: \${${variable}`)) {
+      throw new Error(`${composeFile} must pass ${variable} to the API`);
+    }
   }
 }
 

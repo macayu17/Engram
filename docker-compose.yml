@@ -50,6 +50,10 @@ services:
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3001,http://localhost:3011}
       ENGRAM_SERVICE_KEY: ${ENGRAM_SERVICE_KEY:-}
       ENGRAM_PROVIDER_KEY_ENCRYPTION_KEY: ${ENGRAM_PROVIDER_KEY_ENCRYPTION_KEY:-}
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
+      STRIPE_PRO_PRICE_ID: ${STRIPE_PRO_PRICE_ID:-}
+      DASHBOARD_URL: ${DASHBOARD_URL:-http://localhost:3001}
     depends_on:
       postgres:
         condition: service_healthy

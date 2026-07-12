@@ -36,6 +36,8 @@ NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=your_clerk_publishable_key
 CLERK_SECRET_KEY=your_clerk_secret_key
 ```
 
+Stripe is optional for self-hosting. Leave its variables empty unless you want hosted workspace subscriptions.
+
 3. Start the stack.
 
 ```bash
@@ -100,6 +102,35 @@ docker compose up -d --build api dashboard
 ```
 
 4. Open `http://localhost:3001`, use Create Account in the top nav, and sign up as the first dashboard user.
+
+## Hosted SaaS Billing
+
+Hosted mode uses Clerk identities, workspace-scoped API keys, Stripe subscriptions, and per-workspace quotas. Provider calls remain bring-your-own-key: each workspace saves its own OpenAI, Anthropic, or Gemini key in Settings. Engram encrypts that key before storing it and does not fall back to a server-funded provider key in hosted mode.
+
+The launch limits are:
+
+| Plan | Members | Stored memories | Monthly retrievals |
+| --- | ---: | ---: | ---: |
+| Free | 1 | 2,000 | 10,000 |
+| Pro | 5 | 50,000 | 250,000 |
+
+To enable paid upgrades, create one recurring Pro price in Stripe and set:
+
+```bash
+STRIPE_SECRET_KEY=sk_live_...
+STRIPE_WEBHOOK_SECRET=whsec_...
+STRIPE_PRO_PRICE_ID=price_...
+DASHBOARD_URL=https://your-dashboard.example.com
+```
+
+Register the API endpoint `https://your-api.example.com/billing/webhook` in Stripe for these events:
+
+- `checkout.session.completed`
+- `customer.subscription.created`
+- `customer.subscription.updated`
+- `customer.subscription.deleted`
+
+The dashboard opens Stripe Checkout for Free workspaces and the Stripe Customer Portal for existing Pro workspaces. Leaving the Stripe variables empty disables upgrade actions at the API without creating charges or external infrastructure.
 
 ## Supabase Postgres
 

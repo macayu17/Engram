@@ -17,8 +17,11 @@ def teardown_function() -> None:
 def row(user_id: object, external_id: str) -> dict[str, object]:
     return {
         "id": user_id,
+        "org_id": "org-1",
+        "role": "owner",
         "external_id": external_id,
         "created_at": None,
+        "retrieval_mode": "hybrid",
     }
 
 
@@ -33,7 +36,10 @@ def test_cached_user_is_returned_for_fresh_key(monkeypatch) -> None:
 
     assert cached_user is not None
     assert cached_user["id"] == "user-1"
+    assert cached_user["org_id"] == "org-1"
+    assert cached_user["role"] == "owner"
     assert cached_user["external_id"] == "external-1"
+    assert cached_user["retrieval_mode"] == "hybrid"
 
 
 def test_cached_user_expires_after_ttl(monkeypatch) -> None:

@@ -131,6 +131,32 @@ ALTER TABLE orgs ADD COLUMN IF NOT EXISTS extraction_model TEXT NOT NULL DEFAULT
 ALTER TABLE orgs ADD COLUMN IF NOT EXISTS openai_api_key_encrypted BYTEA;
 ALTER TABLE orgs ADD COLUMN IF NOT EXISTS gemini_api_key_encrypted BYTEA;
 ALTER TABLE orgs ADD COLUMN IF NOT EXISTS anthropic_api_key_encrypted BYTEA;
+ALTER TABLE orgs ADD COLUMN IF NOT EXISTS plan TEXT NOT NULL DEFAULT 'free';
+ALTER TABLE orgs ADD COLUMN IF NOT EXISTS stripe_customer_id TEXT;
+ALTER TABLE orgs ADD COLUMN IF NOT EXISTS stripe_subscription_id TEXT;
+ALTER TABLE orgs ADD COLUMN IF NOT EXISTS subscription_status TEXT NOT NULL DEFAULT 'inactive';
+ALTER TABLE orgs ADD COLUMN IF NOT EXISTS current_period_end TIMESTAMPTZ;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'orgs_plan_check') THEN
+        ALTER TABLE orgs ADD CONSTRAINT orgs_plan_check CHECK (plan IN ('free', 'pro'));
+    END IF;
+END;
+$$;
+
+CREATE UNIQUE INDEX IF NOT EXISTS orgs_stripe_customer_id_idx
+ON orgs(stripe_customer_id)
+WHERE stripe_customer_id IS NOT NULL;
+
+CREATE UNIQUE INDEX IF NOT EXISTS orgs_stripe_subscription_id_idx
+ON orgs(stripe_subscription_id)
+WHERE stripe_subscription_id IS NOT NULL;
+
+CREATE TABLE IF NOT EXISTS stripe_events (
+    event_id TEXT PRIMARY KEY,
+    processed_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
 
 DO $$
 BEGIN
@@ -364,13 +390,14 @@ ALTER TABLE public.org_memberships ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.memory_entities ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.memory_entity_links ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.memory_relationships ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.stripe_events ENABLE ROW LEVEL SECURITY;
 
 DO $$
 DECLARE
     target_table TEXT;
     target_role TEXT;
 BEGIN
-    FOREACH target_table IN ARRAY ARRAY['users', 'memories', 'user_api_keys', 'retrieval_logs', 'conversations', 'orgs', 'org_memberships', 'memory_entities', 'memory_entity_links', 'memory_relationships'] LOOP
+    FOREACH target_table IN ARRAY ARRAY['users', 'memories', 'user_api_keys', 'retrieval_logs', 'conversations', 'orgs', 'org_memberships', 'memory_entities', 'memory_entity_links', 'memory_relationships', 'stripe_events'] LOOP
         EXECUTE format('DROP POLICY IF EXISTS engram_server_access ON public.%I', target_table);
         EXECUTE format(
             'CREATE POLICY engram_server_access ON public.%I FOR ALL TO %I USING (true) WITH CHECK (true)',

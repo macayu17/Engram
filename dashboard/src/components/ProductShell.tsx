@@ -8,6 +8,7 @@ import { useState } from "react";
 
 import { api } from "@/lib/api";
 import { cn } from "@/lib/cn";
+import { useActiveApiKey } from "@/lib/useActiveApiKey";
 import { AuthControls } from "./AuthControls";
 import { CommandPalette } from "./CommandPalette";
 import { EngramLogo } from "./EngramLogo";
@@ -26,9 +27,11 @@ const destinations = [
 export function ProductShell({ authEnabled, children }: { authEnabled: boolean; children: React.ReactNode }) {
   const pathname = usePathname();
   const [menuOpen, setMenuOpen] = useState(false);
+  const activeApiKey = useActiveApiKey();
   const usageQuery = useQuery({
     queryKey: ["billing", "usage"],
     queryFn: () => api.billing.usage(),
+    enabled: activeApiKey.startsWith("ek_"),
     retry: false,
   });
   const plan = usageQuery.data?.plan ?? "free";

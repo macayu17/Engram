@@ -6,7 +6,7 @@ from api.services.entitlements import enforce_workspace_limit
 async def create_org(user_id: object, name: str, db: asyncpg.Connection) -> dict[str, object]:
     async with db.transaction():
         org = await db.fetchrow(
-            "INSERT INTO orgs (name) VALUES ($1) RETURNING id, name, created_at",
+            "INSERT INTO orgs (name) VALUES ($1) RETURNING id, name, plan, created_at",
             name,
         )
         if org is None:
@@ -26,7 +26,7 @@ async def list_orgs(
 ) -> list[dict[str, object]]:
     rows = await db.fetch(
         """
-        SELECT o.id, o.name, o.created_at, m.role
+        SELECT o.id, o.name, o.plan, o.created_at, m.role
         FROM orgs o
         JOIN org_memberships m ON m.org_id = o.id
         WHERE m.user_id = $1 AND o.id = $2
@@ -48,7 +48,7 @@ async def get_org(
         return None
     row = await db.fetchrow(
         """
-        SELECT o.id, o.name, o.created_at, m.role
+        SELECT o.id, o.name, o.plan, o.created_at, m.role
         FROM orgs o
         JOIN org_memberships m ON m.org_id = o.id
         WHERE o.id = $1 AND m.user_id = $2

@@ -1,508 +1,161 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, Copy, Eye, EyeOff, KeyRound, Plus, Trash2 } from "lucide-react";
+import { Check, Copy, KeyRound, Trash2 } from "lucide-react";
 import { FormEvent, useEffect, useState } from "react";
 
 import { api, clearActiveApiKey, readActiveApiKey, setActiveApiKey, type UserProviderConfig, type UserProviderConfigUpdate } from "@/lib/api";
 import { useActiveApiKey } from "@/lib/useActiveApiKey";
 
+
+const sections = ["workspace", "members", "api-keys", "providers", "billing", "account"];
+
 export function SettingsPanel() {
   const queryClient = useQueryClient();
-  const apiKey = useActiveApiKey();
-  const [draftApiKey, setDraftApiKey] = useState(readActiveApiKey);
-  const [showApiKey, setShowApiKey] = useState(false);
-  const [saved, setSaved] = useState(false);
-  const [keyError, setKeyError] = useState("");
-  const [externalIdDraft, setExternalIdDraft] = useState("");
-  const [externalIdMessage, setExternalIdMessage] = useState("");
-  const [externalId, setExternalId] = useState(() => `dashboard_user_${Date.now()}`);
-  const [generatedKey, setGeneratedKey] = useState("");
-  const [generatedExternalId, setGeneratedExternalId] = useState("");
-  const [generationMessage, setGenerationMessage] = useState("");
-  const malformedApiKey = Boolean(apiKey) && !apiKey.startsWith("ek_");
-  const userQuery = useQuery({
-    queryKey: ["current-user", apiKey],
-    queryFn: () => api.users.me(),
-    enabled: Boolean(apiKey) && !malformedApiKey,
+  const activeApiKey = useActiveApiKey();
+  const hosted = Boolean(process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY);
+  const [localKey, setLocalKey] = useState(readActiveApiKey);
+  const [newKeyName, setNewKeyName] = useState("");
+  const [revealedKey, setRevealedKey] = useState("");
+  const [memberExternalId, setMemberExternalId] = useState("");
+  const [statusMessage, setStatusMessage] = useState("");
+  const authenticated = Boolean(activeApiKey?.startsWith("ek_"));
+  const userQuery = useQuery({ queryKey: ["settings", "user", activeApiKey], queryFn: () => api.users.me(), enabled: authenticated, retry: false });
+  const workspaceQuery = useQuery({ queryKey: ["settings", "workspaces", activeApiKey], queryFn: () => api.orgs.list(), enabled: authenticated, retry: false });
+  const usageQuery = useQuery({ queryKey: ["billing", "usage"], queryFn: () => api.billing.usage(), enabled: authenticated, retry: false });
+  const keysQuery = useQuery({ queryKey: ["settings", "keys", activeApiKey], queryFn: () => api.keys.list(), enabled: authenticated, retry: false });
+  const workspace = workspaceQuery.data?.[0];
+  const canManageWorkspace = workspace?.role === "owner" || workspace?.role === "admin";
+
+  useEffect(() => setLocalKey(activeApiKey), [activeApiKey]);
+
+  const createKey = useMutation({
+    mutationFn: (name: string) => api.keys.create(name),
+    onSuccess: (result) => {
+      setRevealedKey(result.api_key);
+      setNewKeyName("");
+      void queryClient.invalidateQueries({ queryKey: ["settings", "keys"] });
+    },
   });
-  const deleteAccountMutation = useMutation({
-    mutationFn: () => api.users.deleteMe(),
+  const revokeKey = useMutation({
+    mutationFn: (id: string) => api.keys.revoke(id),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["settings", "keys"] }),
+  });
+  const addMember = useMutation({
+    mutationFn: (externalId: string) => api.orgs.addMember(workspace?.id ?? "", externalId, "member"),
     onSuccess: () => {
-      clearActiveApiKey();
-      setDraftApiKey("");
-      void queryClient.clear();
+      setMemberExternalId("");
+      setStatusMessage("Member added.");
+      void queryClient.invalidateQueries({ queryKey: ["billing", "usage"] });
     },
+    onError: (error) => setStatusMessage(error instanceof Error ? error.message : "Unable to add member."),
   });
-  const deleteMemoriesMutation = useMutation({
-    mutationFn: () => api.memories.deleteAll(),
-    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["memories"] }),
-  });
-  const createUserMutation = useMutation({
-    mutationFn: (nextExternalId: string) => api.users.create(nextExternalId),
-    onSuccess: (response) => {
-      setActiveApiKey(response.api_key);
-      setDraftApiKey(response.api_key);
-      setGeneratedKey(response.api_key);
-      setGeneratedExternalId(response.external_id);
-      setGenerationMessage("Generated and saved in this browser.");
-      setSaved(true);
-      setKeyError("");
-      void queryClient.invalidateQueries({ queryKey: ["current-user"] });
-    },
-    onError: (error) => {
-      setGenerationMessage(error instanceof Error ? error.message : "Unable to generate key.");
-    },
-  });
-  const updateUserMutation = useMutation({
-    mutationFn: (nextExternalId: string) => api.users.update(nextExternalId),
-    onSuccess: (response) => {
-      setExternalIdDraft(response.external_id);
-      setExternalIdMessage("Username updated.");
-      void queryClient.invalidateQueries({ queryKey: ["current-user"] });
-    },
-    onError: (error) => {
-      setExternalIdMessage(error instanceof Error ? error.message : "Unable to update username.");
-    },
-  });
+  const deleteMemories = useMutation({ mutationFn: () => api.memories.deleteAll(), onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["memories"] }) });
+  const deleteAccount = useMutation({ mutationFn: () => api.users.deleteMe(), onSuccess: () => { clearActiveApiKey(); void queryClient.clear(); } });
 
-  useEffect(() => {
-    setDraftApiKey(apiKey);
-  }, [apiKey]);
-
-  useEffect(() => {
-    if (userQuery.data?.external_id) {
-      setExternalIdDraft(userQuery.data.external_id);
-    }
-  }, [userQuery.data?.external_id]);
-
-  useEffect(() => {
-    setExternalIdMessage("");
-  }, [apiKey]);
-
-  function saveApiKey(event: FormEvent<HTMLFormElement>) {
+  function saveLocalKey(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const trimmedApiKey = draftApiKey.trim();
-    if (trimmedApiKey && !trimmedApiKey.startsWith("ek_")) {
-      setKeyError("Use an Engram key that starts with ek_. OpenAI keys belong in the server .env file.");
-      setSaved(false);
+    const value = localKey.trim();
+    if (value && !value.startsWith("ek_")) {
+      setStatusMessage("Engram API keys start with ek_.");
       return;
     }
-    if (trimmedApiKey) {
-      setActiveApiKey(trimmedApiKey);
-    } else {
-      clearActiveApiKey();
-    }
-    setKeyError("");
-    setSaved(true);
+    if (value) setActiveApiKey(value); else clearActiveApiKey();
+    setStatusMessage("Local API key saved.");
   }
 
-  async function copyApiKey() {
-    if (apiKey) {
-      await navigator.clipboard.writeText(apiKey);
-    }
-  }
-
-  async function copyGeneratedKey() {
-    if (generatedKey) {
-      await navigator.clipboard.writeText(generatedKey);
-    }
-  }
-
-  function createEngramKey(event: FormEvent<HTMLFormElement>) {
+  function submitNewKey(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const trimmedExternalId = externalId.trim();
-    if (!trimmedExternalId) {
-      setGenerationMessage("Enter an external ID first.");
-      return;
-    }
-    setGeneratedKey("");
-    setGeneratedExternalId("");
-    setGenerationMessage("");
-    createUserMutation.mutate(trimmedExternalId);
+    const name = newKeyName.trim();
+    if (name) createKey.mutate(name);
   }
 
-  function updateExternalId(event: FormEvent<HTMLFormElement>) {
+  function submitMember(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const trimmedExternalId = externalIdDraft.trim();
-    if (!trimmedExternalId) {
-      setExternalIdMessage("Enter a username first.");
-      return;
-    }
-    if (trimmedExternalId === userQuery.data?.external_id) {
-      setExternalIdMessage("Username already saved.");
-      return;
-    }
-    setExternalIdMessage("");
-    updateUserMutation.mutate(trimmedExternalId);
+    const externalId = memberExternalId.trim();
+    if (externalId) addMember.mutate(externalId);
   }
 
-  function deleteMemories() {
-    if (window.confirm("Delete all memories for this account?")) {
-      deleteMemoriesMutation.mutate();
-    }
-  }
-
-  function deleteAccount() {
-    if (window.confirm("Delete this Engram user and all related data?")) {
-      deleteAccountMutation.mutate();
+  async function openBilling(mode: "checkout" | "portal") {
+    if (!workspace) return;
+    try {
+      const result = mode === "checkout" ? await api.billing.checkout(workspace.id) : await api.billing.portal(workspace.id);
+      window.location.assign(result.url);
+    } catch (error) {
+      setStatusMessage(error instanceof Error ? error.message : "Unable to open billing.");
     }
   }
 
   return (
-    <section className="space-y-12">
-      <div>
-        <p className="font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-muted">§ III — Local key</p>
-        <h1 className="mt-2 font-serif text-5xl font-semibold leading-tight text-ink">Settings</h1>
-        <p className="mt-4 max-w-2xl font-serif text-lg leading-8 text-muted">
-          The dashboard stores one Engram key in this browser. Workspace provider keys are encrypted by the API.
-        </p>
-      </div>
+    <div className="space-y-10">
+      <header><p className="text-sm font-semibold text-signal">Workspace administration</p><h1 className="mt-2 text-3xl font-semibold">Settings</h1><p className="mt-2 max-w-2xl text-sm leading-6 text-muted">Manage access, provider credentials, plan limits, and account data.</p></header>
+      <nav aria-label="Settings sections" className="flex gap-1 overflow-x-auto border-b border-line pb-3">{sections.map((section) => <a key={section} href={`#${section}`} className="shrink-0 rounded-md px-3 py-2 text-sm capitalize text-muted hover:bg-tag hover:text-ink">{section.replace("-", " ")}</a>)}</nav>
+      {statusMessage && <p className="border border-line bg-panel px-4 py-3 text-sm text-muted">{statusMessage}</p>}
+      {!authenticated && <p className="border border-caution/40 bg-caution/5 px-4 py-3 text-sm text-caution">Connect a valid Engram API key to load workspace settings.</p>}
 
-      <div className="grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
-        <form onSubmit={saveApiKey} className="border-y border-line py-6">
-          <div className="mb-4 flex items-center gap-3">
-            <span className="flex h-10 w-10 items-center justify-center rounded bg-tag text-signal">
-              <KeyRound size={18} aria-hidden="true" />
-            </span>
-            <div>
-              <h2 className="font-serif text-2xl font-semibold">API Key</h2>
-              <p className="font-sans text-[11px] uppercase tracking-[0.12em] text-muted">Stored as engram_api_key</p>
-            </div>
-          </div>
-          <div className="flex flex-col gap-3 sm:flex-row">
-            <input
-              value={draftApiKey}
-              onChange={(event) => {
-                setDraftApiKey(event.target.value);
-                setSaved(false);
-                setKeyError("");
-              }}
-              placeholder="ek_..."
-              className="min-h-12 min-w-0 flex-1 rounded-full border border-line bg-paper px-4 font-serif text-base text-ink outline-none focus:border-signal"
-              type={showApiKey ? "text" : "password"}
-            />
-            <button
-              type="button"
-              onClick={() => setShowApiKey((value) => !value)}
-              title={showApiKey ? "Hide saved key" : "View saved key"}
-              className="inline-flex min-h-12 items-center justify-center gap-2 border border-line px-4 font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-muted hover:border-signal hover:text-signal"
-            >
-              {showApiKey ? <EyeOff size={16} aria-hidden="true" /> : <Eye size={16} aria-hidden="true" />}
-              {showApiKey ? "Hide" : "View"}
-            </button>
-            <button
-              type="button"
-              onClick={copyApiKey}
-              title="Copy saved key"
-              className="inline-flex min-h-12 items-center justify-center gap-2 border border-line px-4 font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-muted hover:border-signal hover:text-signal"
-            >
-              <Copy size={16} aria-hidden="true" />
-              Copy
-            </button>
-            <button
-              type="submit"
-              className="inline-flex min-h-12 items-center justify-center gap-2 border border-ink px-5 font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-ink hover:border-signal hover:text-signal"
-            >
-              <Check size={16} aria-hidden="true" />
-              Save
-            </button>
-          </div>
-          {keyError && <p className="mt-3 font-serif text-base text-fault">{keyError}</p>}
-          {saved && <p className="mt-3 font-serif text-base text-signal">Saved.</p>}
-        </form>
+      <SettingsSection id="workspace" title="Workspace" description="Identity and local dashboard connection.">
+        <DefinitionList items={[["Name", workspace?.name ?? "Unavailable"], ["Role", workspace?.role ?? "Unavailable"], ["User", userQuery.data?.external_id ?? "Unavailable"]]} />
+        {!hosted && <form onSubmit={saveLocalKey} className="mt-6 max-w-2xl"><FieldLabel label="Local Engram API key" detail="Stored in this browser as engram_api_key" /><div className="mt-2 flex flex-col gap-2 sm:flex-row"><input type="password" value={localKey} onChange={(event) => setLocalKey(event.target.value)} placeholder="ek_..." className="min-h-10 min-w-0 flex-1 rounded-md border border-line bg-paper px-3 font-mono text-sm outline-none focus:border-signal" /><Button type="submit">Save key</Button></div></form>}
+      </SettingsSection>
 
-        <div className="border-y border-line py-6">
-          <h2 className="font-serif text-2xl font-semibold">Current User</h2>
-          {apiKey ? (
-            malformedApiKey ? (
-              <p className="mt-4 font-serif text-base text-fault">Use an Engram key that starts with ek_.</p>
-            ) : userQuery.isLoading ? (
-              <p className="mt-4 font-serif text-base text-muted">Loading user...</p>
-            ) : userQuery.isError ? (
-              <p className="mt-4 font-serif text-base text-fault">Unable to authenticate this key.</p>
-            ) : (
-              <div className="mt-4 space-y-5">
-                <form onSubmit={updateExternalId} className="space-y-3">
-                  <label className="block">
-                    <span className="font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-muted">Username</span>
-                    <span className="mt-1 block font-sans text-[11px] uppercase tracking-[0.12em] text-muted/70">Stored as external ID</span>
-                  </label>
-                  <div className="flex flex-col gap-3 sm:flex-row">
-                    <input
-                      value={externalIdDraft}
-                      onChange={(event) => {
-                        setExternalIdDraft(event.target.value);
-                        setExternalIdMessage("");
-                      }}
-                      className="min-h-12 min-w-0 flex-1 rounded-full border border-line bg-paper px-4 font-serif text-base text-ink outline-none focus:border-signal"
-                    />
-                    <button
-                      type="submit"
-                      disabled={updateUserMutation.isPending}
-                      className="inline-flex min-h-12 items-center justify-center gap-2 border border-ink px-5 font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-ink hover:border-signal hover:text-signal disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      <Check size={16} aria-hidden="true" />
-                      Save
-                    </button>
-                  </div>
-                  {externalIdMessage && <p className="font-serif text-base text-muted">{externalIdMessage}</p>}
-                </form>
-                <div>
-                  <p className="font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-muted">Created</p>
-                  <p className="mt-1 font-serif text-lg text-ink">{userQuery.data ? formatDate(userQuery.data.created_at) : ""}</p>
-                </div>
-              </div>
-            )
-          ) : (
-            <p className="mt-4 font-serif text-base text-muted">No key saved.</p>
-          )}
-        </div>
-      </div>
+      <SettingsSection id="members" title="Members" description="Workspace seats share memories, logs, and provider configuration.">
+        <p className="text-sm text-muted">{usageQuery.data?.members ?? 0} of {usageQuery.data?.limits.members ?? 1} seats used on the {usageQuery.data?.plan ?? "free"} plan.</p>
+        {canManageWorkspace && <form onSubmit={submitMember} className="mt-5 flex max-w-2xl flex-col gap-2 sm:flex-row"><input value={memberExternalId} onChange={(event) => setMemberExternalId(event.target.value)} placeholder="Existing user external ID" className="min-h-10 min-w-0 flex-1 rounded-md border border-line bg-paper px-3 text-sm outline-none focus:border-signal" /><Button type="submit" disabled={addMember.isPending}>Add member</Button></form>}
+      </SettingsSection>
 
-      <form onSubmit={createEngramKey} className="border-y border-line py-6">
-        <div className="mb-4 flex items-center gap-3">
-          <span className="flex h-10 w-10 items-center justify-center rounded bg-tag text-signal">
-            <Plus size={18} aria-hidden="true" />
-          </span>
-          <div>
-            <h2 className="font-serif text-2xl font-semibold">Generate Engram Key</h2>
-            <p className="font-sans text-[11px] uppercase tracking-[0.12em] text-muted">Creates a user and saves the new ek_ key</p>
-          </div>
-        </div>
-        <div className="flex flex-col gap-3 lg:flex-row">
-          <input
-            value={externalId}
-            onChange={(event) => {
-              setExternalId(event.target.value);
-              setGenerationMessage("");
-            }}
-            placeholder="dashboard_user_1"
-            className="min-h-12 min-w-0 flex-1 rounded-full border border-line bg-paper px-4 font-serif text-base text-ink outline-none focus:border-signal"
-          />
-          <button
-            type="submit"
-            disabled={createUserMutation.isPending}
-            className="inline-flex min-h-12 items-center justify-center gap-2 border border-ink px-5 font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-ink hover:border-signal hover:text-signal disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            <Plus size={16} aria-hidden="true" />
-            Generate
-          </button>
-        </div>
-        {generatedKey && (
-          <div className="mt-5 grid gap-3 lg:grid-cols-[1fr_auto]">
-            <div>
-              <p className="font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-muted">One-time key for {generatedExternalId}</p>
-              <input
-                readOnly
-                value={generatedKey}
-                className="mt-2 min-h-12 w-full rounded-full border border-line bg-paper px-4 font-serif text-base text-ink outline-none"
-              />
-            </div>
-            <button
-              type="button"
-              onClick={copyGeneratedKey}
-              className="inline-flex min-h-12 items-center justify-center gap-2 self-end border border-line px-4 font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-muted hover:border-signal hover:text-signal"
-            >
-              <Copy size={16} aria-hidden="true" />
-              Copy New Key
-            </button>
-          </div>
-        )}
-        {generationMessage && <p className="mt-3 font-serif text-base text-muted">{generationMessage}</p>}
-      </form>
+      <SettingsSection id="api-keys" title="API keys" description="Create scoped workspace credentials without rotating unrelated keys.">
+        <form onSubmit={submitNewKey} className="flex max-w-2xl flex-col gap-2 sm:flex-row"><input value={newKeyName} onChange={(event) => setNewKeyName(event.target.value)} placeholder="Key name" className="min-h-10 min-w-0 flex-1 rounded-md border border-line bg-paper px-3 text-sm outline-none focus:border-signal" /><Button type="submit" disabled={createKey.isPending}><KeyRound size={15} /> Create key</Button></form>
+        {revealedKey && <div className="mt-4 border border-signal/30 bg-signal/5 p-4"><p className="text-xs font-semibold text-signal">Shown once</p><div className="mt-2 flex gap-2"><code className="min-w-0 flex-1 overflow-x-auto font-mono text-xs text-ink">{revealedKey}</code><button type="button" onClick={() => navigator.clipboard.writeText(revealedKey)} aria-label="Copy new API key" className="text-signal"><Copy size={16} /></button></div></div>}
+        <div className="mt-5 divide-y divide-line border-y border-line">{keysQuery.data?.map((key) => <div key={key.id} className="grid gap-2 py-3 sm:grid-cols-[1fr_auto_auto] sm:items-center"><div><p className="text-sm font-medium">{key.name}</p><p className="mt-1 text-xs text-muted">Created {formatDate(key.created_at)} · Last used {key.last_used_at ? formatDate(key.last_used_at) : "never"}</p></div><span className="font-mono text-xs text-muted">{key.id.slice(0, 8)}</span><button type="button" onClick={() => window.confirm(`Revoke ${key.name}?`) && revokeKey.mutate(key.id)} className="justify-self-start text-xs font-medium text-fault sm:justify-self-end">Revoke</button></div>)}</div>
+      </SettingsSection>
 
-      <ProviderConfigSection apiKey={apiKey} onError={setKeyError} />
+      <ProviderSection authenticated={authenticated} />
 
-      <div className="border-y border-fault/30 bg-fault/5 py-6">
-        <h2 className="px-0 font-serif text-2xl font-semibold text-fault">Danger Zone</h2>
-        <div className="mt-4 flex flex-col gap-3 sm:flex-row">
-          <button
-            type="button"
-            onClick={deleteMemories}
-            disabled={!apiKey || deleteMemoriesMutation.isPending}
-            className="inline-flex items-center justify-center gap-2 border border-fault/40 px-4 py-2 font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-fault hover:bg-fault/10 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            <Trash2 size={16} aria-hidden="true" />
-            Delete Memories
-          </button>
-          <button
-            type="button"
-            onClick={deleteAccount}
-            disabled={!apiKey || deleteAccountMutation.isPending}
-            className="inline-flex items-center justify-center gap-2 border border-fault/40 bg-fault/10 px-4 py-2 font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-fault hover:bg-fault/15 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            <Trash2 size={16} aria-hidden="true" />
-            Delete Account
-          </button>
-        </div>
-      </div>
-    </section>
-  );
-}
+      <SettingsSection id="billing" title="Billing" description="Plan, calendar-month usage, and subscription management.">
+        <DefinitionList items={[["Plan", usageQuery.data?.plan === "pro" ? "Pro" : "Free"], ["Memories", formatUsage(usageQuery.data?.memories, usageQuery.data?.limits.memories)], ["Retrievals", formatUsage(usageQuery.data?.retrievals, usageQuery.data?.limits.retrievals)], ["Period end", usageQuery.data?.current_period_end ? formatDate(usageQuery.data.current_period_end) : "Not applicable"]]} />
+        <p className="mt-5 text-sm text-muted">Hosted Engram does not include model credits. Provider usage is billed through your saved provider credential.</p>
+        {workspace?.role === "owner" && hosted && <Button type="button" className="mt-5" onClick={() => openBilling(usageQuery.data?.plan === "pro" ? "portal" : "checkout")}>{usageQuery.data?.plan === "pro" ? "Manage billing" : "Upgrade to Pro"}</Button>}
+      </SettingsSection>
 
-
-function formatDate(value: string): string {
-  return new Intl.DateTimeFormat(undefined, { month: "short", day: "2-digit", hour: "2-digit", minute: "2-digit" }).format(
-    new Date(value),
-  );
-}
-
-function ProviderConfigSection({ apiKey, onError }: { apiKey: string; onError: (msg: string) => void }) {
-  const queryClient = useQueryClient();
-  const malformed = Boolean(apiKey) && !apiKey.startsWith("ek_");
-  const providerQuery = useQuery({
-    queryKey: ["user-provider", apiKey],
-    queryFn: () => api.users.provider(),
-    enabled: Boolean(apiKey) && !malformed,
-  });
-  const [provider, setProvider] = useState("openai");
-  const [model, setModel] = useState("gpt-4o-mini");
-  const [apiKeyInput, setApiKeyInput] = useState("");
-  const [saveMessage, setSaveMessage] = useState("");
-
-  useEffect(() => {
-    if (providerQuery.data) {
-      setProvider(providerQuery.data.extraction_provider);
-      setModel(providerQuery.data.extraction_model);
-    }
-  }, [providerQuery.data]);
-
-  const updateMutation = useMutation({
-    mutationFn: (payload: UserProviderConfigUpdate) => api.users.updateProvider(payload),
-    onSuccess: (response: UserProviderConfig) => {
-      setSaveMessage("Saved.");
-      setApiKeyInput("");
-      void queryClient.invalidateQueries({ queryKey: ["user-provider"] });
-      void queryClient.invalidateQueries({ queryKey: ["current-user"] });
-      onError("");
-    },
-    onError: (err) => {
-      const msg = err instanceof Error ? err.message : "Unable to save provider config.";
-      onError(msg);
-      setSaveMessage("");
-    },
-  });
-
-  function save(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const trimmedModel = model.trim();
-    if (!trimmedModel) {
-      setSaveMessage("");
-      onError("Enter an extraction model first.");
-      return;
-    }
-    const payload: UserProviderConfigUpdate = {
-      extraction_provider: provider as UserProviderConfig["extraction_provider"],
-      extraction_model: trimmedModel,
-    };
-    if (apiKeyInput.trim()) {
-      if (provider === "openai") payload.openai_api_key = apiKeyInput.trim();
-      if (provider === "gemini") payload.gemini_api_key = apiKeyInput.trim();
-      if (provider === "anthropic") payload.anthropic_api_key = apiKeyInput.trim();
-    }
-    updateMutation.mutate(payload);
-  }
-
-  function clearKey() {
-    const payload: UserProviderConfigUpdate = { extraction_provider: provider as UserProviderConfig["extraction_provider"] };
-    if (provider === "openai") payload.clear_openai_key = true;
-    if (provider === "gemini") payload.clear_gemini_key = true;
-    if (provider === "anthropic") payload.clear_anthropic_key = true;
-    updateMutation.mutate(payload);
-  }
-
-  if (!apiKey) return null;
-  if (malformed) {
-    return (
-      <div className="border-y border-line py-6">
-        <h2 className="font-serif text-2xl font-semibold">Extraction</h2>
-        <p className="mt-2 font-serif text-base text-muted">Save a valid Engram key first.</p>
-      </div>
-    );
-  }
-
-  return (
-    <div className="border-y border-line py-6">
-      <h2 className="font-serif text-2xl font-semibold">Extraction</h2>
-      <p className="mt-1 font-serif text-base text-muted">
-        Choose which provider extracts durable memories. The key is encrypted with Fernet on the server before storage.
-      </p>
-      {providerQuery.isLoading ? (
-        <p className="mt-4 font-serif text-base text-muted">Loading provider config...</p>
-      ) : providerQuery.isError ? (
-        <p className="mt-4 font-serif text-base text-fault">Unable to load provider config.</p>
-      ) : (
-        <form onSubmit={save} className="mt-5 space-y-4">
-          <div>
-            <label className="block">
-              <span className="font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-muted">Provider</span>
-              <select
-                value={provider}
-                onChange={(event) => setProvider(event.target.value)}
-                className="mt-2 min-h-12 w-full rounded-full border border-line bg-paper px-4 font-serif text-base text-ink outline-none focus:border-signal"
-              >
-                <option value="openai">OpenAI</option>
-                <option value="gemini">Gemini</option>
-                <option value="anthropic">Anthropic</option>
-                <option value="ollama">Ollama (local, no key)</option>
-              </select>
-            </label>
-          </div>
-          <div>
-            <label className="block">
-              <span className="font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-muted">Model</span>
-              <input
-                value={model}
-                onChange={(event) => setModel(event.target.value)}
-                placeholder="gpt-4o-mini"
-                className="mt-2 min-h-12 w-full rounded-full border border-line bg-paper px-4 font-serif text-base text-ink outline-none focus:border-signal"
-              />
-            </label>
-          </div>
-          {provider !== "ollama" && (
-            <div>
-              <label className="block">
-                <span className="font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-muted">
-                  {provider === "openai" ? "OpenAI" : provider === "gemini" ? "Gemini" : "Anthropic"} API key
-                </span>
-                <span className="mt-1 block font-sans text-[11px] uppercase tracking-[0.12em] text-muted/70">
-                  {providerQuery.data?.user_api_key_preview
-                    ? `Stored as ${providerQuery.data.user_api_key_preview}`
-                    : "No workspace key stored."}
-                </span>
-              </label>
-              <div className="mt-2 flex flex-col gap-3 sm:flex-row">
-                <input
-                  type="password"
-                  value={apiKeyInput}
-                  onChange={(event) => setApiKeyInput(event.target.value)}
-                  placeholder={providerQuery.data?.has_user_api_key ? "••• (leave blank to keep stored key)" : "Paste key"}
-                  className="min-h-12 min-w-0 flex-1 rounded-full border border-line bg-paper px-4 font-serif text-base text-ink outline-none focus:border-signal"
-                />
-                <button
-                  type="button"
-                  onClick={clearKey}
-                  disabled={!providerQuery.data?.has_user_api_key || updateMutation.isPending}
-                  className="inline-flex min-h-12 items-center justify-center gap-2 border border-line px-4 font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-muted hover:border-signal hover:text-signal disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  Clear
-                </button>
-              </div>
-            </div>
-          )}
-          <div className="flex items-center gap-3">
-            <button
-              type="submit"
-              disabled={updateMutation.isPending}
-              className="inline-flex min-h-12 items-center justify-center gap-2 border border-ink px-5 font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-ink hover:border-signal hover:text-signal disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              Save Provider
-            </button>
-            {saveMessage && <span className="font-serif text-base text-signal">{saveMessage}</span>}
-          </div>
-        </form>
-      )}
+      <SettingsSection id="account" title="Account" description="Destructive actions remain separate from access and billing controls.">
+        <div className="flex flex-col gap-3 sm:flex-row"><Button type="button" danger onClick={() => window.confirm("Delete all memories for this account?") && deleteMemories.mutate()} disabled={!authenticated || deleteMemories.isPending}><Trash2 size={15} /> Delete memories</Button><Button type="button" danger onClick={() => window.confirm("Delete this Engram user and all related data?") && deleteAccount.mutate()} disabled={!authenticated || deleteAccount.isPending}><Trash2 size={15} /> Delete account</Button></div>
+      </SettingsSection>
     </div>
   );
 }
+
+function ProviderSection({ authenticated }: { authenticated: boolean }) {
+  const queryClient = useQueryClient();
+  const providerQuery = useQuery({ queryKey: ["settings", "provider"], queryFn: () => api.users.provider(), enabled: authenticated, retry: false });
+  const [provider, setProvider] = useState<UserProviderConfig["extraction_provider"]>("openai");
+  const [model, setModel] = useState("gpt-4o-mini");
+  const [providerKey, setProviderKey] = useState("");
+  const [message, setMessage] = useState("");
+  useEffect(() => { if (providerQuery.data) { setProvider(providerQuery.data.extraction_provider); setModel(providerQuery.data.extraction_model); } }, [providerQuery.data]);
+  const update = useMutation({ mutationFn: (payload: UserProviderConfigUpdate) => api.users.updateProvider(payload), onSuccess: () => { setProviderKey(""); setMessage("Provider settings saved."); void queryClient.invalidateQueries({ queryKey: ["settings", "provider"] }); }, onError: (error) => setMessage(error instanceof Error ? error.message : "Unable to save provider settings.") });
+
+  function save(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const payload: UserProviderConfigUpdate = { extraction_provider: provider, extraction_model: model.trim() };
+    if (providerKey.trim() && provider === "openai") payload.openai_api_key = providerKey.trim();
+    if (providerKey.trim() && provider === "gemini") payload.gemini_api_key = providerKey.trim();
+    if (providerKey.trim() && provider === "anthropic") payload.anthropic_api_key = providerKey.trim();
+    update.mutate(payload);
+  }
+  function clearProviderKey() {
+    const payload: UserProviderConfigUpdate = { extraction_provider: provider };
+    if (provider === "openai") payload.clear_openai_key = true;
+    if (provider === "gemini") payload.clear_gemini_key = true;
+    if (provider === "anthropic") payload.clear_anthropic_key = true;
+    update.mutate(payload);
+  }
+
+  return <SettingsSection id="providers" title="Providers" description="Extraction uses the workspace credential; hosted Engram supplies no model credits."><form onSubmit={save} className="grid max-w-3xl gap-4 sm:grid-cols-2"><label><FieldLabel label="Provider" /><select value={provider} onChange={(event) => setProvider(event.target.value as UserProviderConfig["extraction_provider"])} className="mt-2 min-h-10 w-full rounded-md border border-line bg-paper px-3 text-sm"><option value="openai">OpenAI</option><option value="anthropic">Anthropic</option><option value="gemini">Gemini</option><option value="ollama">Ollama</option></select></label><label><FieldLabel label="Extraction model" /><input value={model} onChange={(event) => setModel(event.target.value)} className="mt-2 min-h-10 w-full rounded-md border border-line bg-paper px-3 text-sm outline-none focus:border-signal" /></label>{provider !== "ollama" && <label className="sm:col-span-2"><FieldLabel label={`${provider} API key`} detail={providerQuery.data?.user_api_key_preview ? `Stored as ${providerQuery.data.user_api_key_preview}` : "No workspace key stored"} /><div className="mt-2 flex gap-2"><input type="password" value={providerKey} onChange={(event) => setProviderKey(event.target.value)} placeholder="Leave blank to keep the saved key" className="min-h-10 min-w-0 flex-1 rounded-md border border-line bg-paper px-3 text-sm outline-none focus:border-signal" /><Button type="button" onClick={clearProviderKey} disabled={!providerQuery.data?.has_user_api_key}>Clear</Button></div></label>}<div className="flex items-center gap-3 sm:col-span-2"><Button type="submit" disabled={update.isPending}><Check size={15} /> Save provider</Button>{message && <span className="text-sm text-muted">{message}</span>}</div></form></SettingsSection>;
+}
+
+function SettingsSection({ id, title, description, children }: { id: string; title: string; description: string; children: React.ReactNode }) { return <section id={id} className="scroll-mt-24 border-t border-line pt-6"><div className="grid gap-5 lg:grid-cols-[15rem_minmax(0,1fr)]"><div><h2 className="text-lg font-semibold">{title}</h2><p className="mt-1 text-sm leading-6 text-muted">{description}</p></div><div className="min-w-0">{children}</div></div></section>; }
+function FieldLabel({ label, detail }: { label: string; detail?: string }) { return <span className="block"><span className="text-sm font-medium text-ink">{label}</span>{detail && <span className="mt-1 block text-xs text-muted">{detail}</span>}</span>; }
+function DefinitionList({ items }: { items: string[][] }) { return <dl className="grid gap-4 sm:grid-cols-3">{items.map(([label, value]) => <div key={label}><dt className="text-xs text-muted">{label}</dt><dd className="mt-1 break-words text-sm font-medium text-ink">{value}</dd></div>)}</dl>; }
+function Button({ children, className = "", danger = false, ...props }: React.ButtonHTMLAttributes<HTMLButtonElement> & { danger?: boolean }) { return <button {...props} className={`${className} inline-flex min-h-10 items-center justify-center gap-2 rounded-md border px-4 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50 ${danger ? "border-fault/40 text-fault hover:bg-fault/5" : "border-line bg-panel text-ink hover:border-signal"}`}>{children}</button>; }
+function formatUsage(current?: number, limit?: number) { return `${(current ?? 0).toLocaleString()} / ${(limit ?? 0).toLocaleString()}`; }
+function formatDate(value: string) { return new Intl.DateTimeFormat(undefined, { dateStyle: "medium" }).format(new Date(value)); }

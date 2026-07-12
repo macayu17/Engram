@@ -4,14 +4,17 @@ import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 
 import { api } from "@/lib/api";
+import { useActiveApiKey } from "@/lib/useActiveApiKey";
 
 
 export function OverviewDashboard() {
-  const memories = useQuery({ queryKey: ["overview", "memories"], queryFn: () => api.memories.list({ limit: 1, status: "approved" }), retry: false });
-  const pending = useQuery({ queryKey: ["overview", "pending"], queryFn: () => api.memories.list({ limit: 1, status: "pending" }), retry: false });
-  const logs = useQuery({ queryKey: ["overview", "logs"], queryFn: () => api.logs.list({ limit: 5, offset: 0 }), retry: false });
-  const provider = useQuery({ queryKey: ["overview", "provider"], queryFn: () => api.users.provider(), retry: false });
-  const usage = useQuery({ queryKey: ["billing", "usage"], queryFn: () => api.billing.usage(), retry: false });
+  const activeApiKey = useActiveApiKey();
+  const connected = activeApiKey.startsWith("ek_");
+  const memories = useQuery({ queryKey: ["overview", "memories"], queryFn: () => api.memories.list({ limit: 1, status: "approved" }), enabled: connected, retry: false });
+  const pending = useQuery({ queryKey: ["overview", "pending"], queryFn: () => api.memories.list({ limit: 1, status: "pending" }), enabled: connected, retry: false });
+  const logs = useQuery({ queryKey: ["overview", "logs"], queryFn: () => api.logs.list({ limit: 5, offset: 0 }), enabled: connected, retry: false });
+  const provider = useQuery({ queryKey: ["overview", "provider"], queryFn: () => api.users.provider(), enabled: connected, retry: false });
+  const usage = useQuery({ queryKey: ["billing", "usage"], queryFn: () => api.billing.usage(), enabled: connected, retry: false });
   const failed = [memories, pending, logs, provider, usage].some((query) => query.isError);
   const loading = [memories, pending, logs, provider, usage].some((query) => query.isLoading);
 
@@ -22,6 +25,8 @@ export function OverviewDashboard() {
         <h1 className="mt-2 text-3xl font-semibold text-ink">Overview</h1>
         <p className="mt-2 text-sm text-muted">Memory storage, retrieval activity, and provider status.</p>
       </header>
+      {!connected && <section className="max-w-2xl border-y border-line py-8"><h2 className="text-lg font-semibold">Connect this dashboard</h2><p className="mt-2 text-sm leading-6 text-muted">Add a local Engram API key in Settings, or sign in when hosted authentication is configured.</p><Link href="/settings" className="mt-5 inline-flex rounded-md bg-signal px-4 py-2.5 text-sm font-semibold text-white">Open settings</Link></section>}
+      {!connected ? null : <>
       {failed && <div className="border border-fault/40 bg-fault/5 px-4 py-3 text-sm text-fault">Some workspace data could not be loaded. Check the API key and provider connection.</div>}
       {loading ? (
         <div className="grid gap-4 sm:grid-cols-2"><div className="h-28 animate-pulse bg-tag" /><div className="h-28 animate-pulse bg-tag" /></div>
@@ -47,6 +52,7 @@ export function OverviewDashboard() {
           </section>
         </div>
       )}
+      </>}
     </div>
   );
 }

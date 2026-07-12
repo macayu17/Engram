@@ -150,6 +150,14 @@ export type WorkspaceUsage = {
   };
 };
 
+export type Workspace = {
+  id: string;
+  name: string;
+  role: "owner" | "admin" | "member";
+  plan: "free" | "pro";
+  created_at: string;
+};
+
 export type ChatMessage = {
   role: "system" | "user" | "assistant";
   content: string;
@@ -428,6 +436,12 @@ export const api = {
     usage: () => request<WorkspaceUsage>("GET", "/billing/usage"),
     checkout: (orgId: string) => requestInternal<{ url: string }>("POST", "/api/billing/checkout", { orgId }),
     portal: (orgId: string) => requestInternal<{ url: string }>("POST", "/api/billing/portal", { orgId }),
+  },
+  orgs: {
+    list: () => request<Workspace[]>("GET", "/orgs"),
+    addMember: (orgId: string, externalId: string, role: "admin" | "member") =>
+      request<{ user_id: string; external_id: string; role: string; created_at: string }>("POST", `/orgs/${orgId}/members`, { external_id: externalId, role }),
+    removeMember: (orgId: string, externalId: string) => request<void>("DELETE", `/orgs/${orgId}/members/${encodeURIComponent(externalId)}`),
   },
 };
 

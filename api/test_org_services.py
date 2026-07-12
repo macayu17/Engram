@@ -29,6 +29,7 @@ async def test_list_orgs_returns_only_authenticated_workspace() -> None:
 
     assert await list_orgs("user-1", "org-1", db) == []
     assert "o.id = $2" in db.query
+    assert "o.plan" in db.query
     assert db.args == ("user-1", "org-1")
 
 

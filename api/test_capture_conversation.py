@@ -1,3 +1,4 @@
+from contextlib import asynccontextmanager
 from uuid import UUID, uuid4
 
 import httpx
@@ -8,12 +9,40 @@ from api.routes import memories
 from api.services import extraction
 
 
+def available_usage() -> dict[str, object]:
+    return {
+        "memories": 0,
+        "limits": {"memories": 2_000},
+    }
+
+
+@pytest.fixture(autouse=True)
+def allow_memory_capacity(monkeypatch):
+    async def usage(*args: object, **kwargs: object) -> dict[str, object]:
+        return available_usage()
+
+    monkeypatch.setattr(extraction, "get_workspace_usage", usage)
+    monkeypatch.setattr(extraction, "enforce_workspace_limit", usage)
+
+
+class TransactionDb:
+    def __init__(self, db: object) -> None:
+        self.db = db
+
+    def __getattr__(self, name: str) -> object:
+        return getattr(self.db, name)
+
+    @asynccontextmanager
+    async def transaction(self):
+        yield
+
+
 class FakeAcquire:
     def __init__(self, db: object) -> None:
         self.db = db
 
     async def __aenter__(self) -> object:
-        return self.db
+        return TransactionDb(self.db)
 
     async def __aexit__(self, exc_type, exc, traceback) -> None:
         return None

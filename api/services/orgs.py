@@ -1,5 +1,7 @@
 import asyncpg
 
+from api.services.entitlements import enforce_workspace_limit
+
 
 async def create_org(user_id: object, name: str, db: asyncpg.Connection) -> dict[str, object]:
     async with db.transaction():
@@ -80,6 +82,17 @@ async def add_org_member(
     )
     if target is None:
         return None
+    existing_member = await db.fetchval(
+        "SELECT 1 FROM org_memberships WHERE org_id = $1 AND user_id = $2",
+        org_id,
+        target["id"],
+    )
+    await enforce_workspace_limit(
+        org_id,
+        "members",
+        db,
+        amount=0 if existing_member is not None else 1,
+    )
     row = await db.fetchrow(
         """
         INSERT INTO org_memberships (org_id, user_id, role)

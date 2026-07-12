@@ -1,6 +1,6 @@
 import pytest
 
-from api.services.entitlements import PLAN_LIMITS, QuotaExceeded, enforce_limit
+from api.services.entitlements import PLAN_LIMITS, QuotaExceeded, enforce_limit, remaining_capacity
 
 
 def test_plan_limits_match_launch_contract() -> None:
@@ -23,3 +23,9 @@ def test_limit_rejects_next_unit() -> None:
     assert raised.value.resource == "memories"
     assert raised.value.current == 2_000
     assert raised.value.limit == 2_000
+
+
+def test_remaining_capacity_never_goes_negative() -> None:
+    usage = {"memories": 2_001, "limits": {"memories": 2_000}}
+
+    assert remaining_capacity(usage, "memories") == 0

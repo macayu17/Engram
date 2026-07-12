@@ -9,6 +9,7 @@ import asyncpg
 from api.config import settings
 from api.db.connection import get_pool
 from api.services.deduplication import store_memory_with_deduplication
+from api.services.entitlements import enforce_workspace_limit, get_workspace_usage, remaining_capacity
 from api.services.memories import infer_category
 from api.services.providers.base import ExtractionProvider
 from api.services.providers.factory import build_extraction_provider
@@ -71,6 +72,23 @@ async def extract_memories(conversation: str, resolved: ResolvedProvider) -> lis
     return await provider.extract(EXTRACTION_PROMPT.format(conversation=conversation))
 
 
+def limit_add_decisions(
+    decisions: list[tuple[str, UUID | None]],
+    available: int,
+) -> list[tuple[str, UUID | None]]:
+    additions_kept = 0
+    limited: list[tuple[str, UUID | None]] = []
+    for action, target_id in decisions:
+        if action != "add":
+            limited.append((action, target_id))
+        elif additions_kept < available:
+            limited.append((action, target_id))
+            additions_kept += 1
+        else:
+            limited.append(("discard", None))
+    return limited
+
+
 async def run_extraction_task(
     user_id: UUID,
     org_id: UUID,
@@ -90,6 +108,12 @@ async def run_extraction_task(
             user_row = await get_workspace_provider_context(user_id, org_id, db)
             if user_row is None:
                 raise RuntimeError("User not found during extraction")
+            memory_capacity = remaining_capacity(await get_workspace_usage(org_id, db), "memories")
+            if memory_capacity == 0:
+                await record_conversation(
+                    user_id, org_id, conversation_id, request_body, response_body, "completed", 0, db
+                )
+                return
         try:
             resolved = resolve_user_provider(
                 user_row,
@@ -98,7 +122,7 @@ async def run_extraction_task(
             )
         except ProviderConfigError as error:
             raise RuntimeError(str(error)) from error
-        extracted = await extract_memories(conversation, resolved)
+        extracted = (await extract_memories(conversation, resolved))[:memory_capacity]
         from api.services.embedding import embed_batch
 
         embeddings = embed_batch(extracted) if extracted else []
@@ -109,28 +133,40 @@ async def run_extraction_task(
                     user_id, org_id, embeddings, db, namespace
                 )
         decisions = await reconcile_memories(user_id, org_id, extracted, candidates_per_fact, resolved)
+        if not extracted:
+            async with pool.acquire() as db:
+                await record_conversation(
+                    user_id, org_id, conversation_id, request_body, response_body, "completed", 0, db
+                )
+            return
         async with pool.acquire() as db:
-            inserted_count, stored_refs = await store_extracted_memories(
-                user_id,
-                org_id,
-                conversation_id,
-                extracted,
-                db,
-                dedup_threshold,
-                namespace=namespace,
-                embeddings=embeddings,
-                decisions=decisions,
-            )
-            await record_conversation(
-                user_id,
-                org_id,
-                conversation_id,
-                request_body,
-                response_body,
-                "completed",
-                inserted_count,
-                db,
-            )
+            async with db.transaction():
+                locked_usage = await enforce_workspace_limit(org_id, "memories", db, amount=0)
+                limited_decisions = limit_add_decisions(
+                    decisions,
+                    remaining_capacity(locked_usage, "memories"),
+                )
+                inserted_count, stored_refs = await store_extracted_memories(
+                    user_id,
+                    org_id,
+                    conversation_id,
+                    extracted,
+                    db,
+                    dedup_threshold,
+                    namespace=namespace,
+                    embeddings=embeddings,
+                    decisions=limited_decisions,
+                )
+                await record_conversation(
+                    user_id,
+                    org_id,
+                    conversation_id,
+                    request_body,
+                    response_body,
+                    "completed",
+                    inserted_count,
+                    db,
+                )
         if settings.enable_graph and stored_refs:
             asyncio.create_task(_run_graph_extraction(user_id, org_id, stored_refs, resolved))
     except Exception as error:
@@ -371,8 +407,21 @@ async def capture_conversation_memories(
     pool = get_pool()
     async with pool.acquire() as db:
         user_row = await get_workspace_provider_context(user_id, org_id, db)
+        memory_capacity = remaining_capacity(await get_workspace_usage(org_id, db), "memories")
     if user_row is None:
         raise RuntimeError("User not found during capture")
+    if memory_capacity == 0:
+        async with pool.acquire() as db:
+            await record_conversation(
+                user_id, org_id, conversation_id, request_body, response_body, "completed", 0, db
+            )
+        return {
+            "conversation_id": conversation_id,
+            "memories_extracted": 0,
+            "extracted_memories": [],
+            "source": source,
+            "session_id": session_id,
+        }
     try:
         resolved = resolve_user_provider(
             user_row,
@@ -381,7 +430,7 @@ async def capture_conversation_memories(
         )
     except ProviderConfigError as error:
         raise RuntimeError(str(error)) from error
-    extracted_memories = await extract_memories(conversation, resolved)
+    extracted_memories = (await extract_memories(conversation, resolved))[:memory_capacity]
     from api.services.embedding import embed_batch
 
     embeddings = embed_batch(extracted_memories) if extracted_memories else []
@@ -396,21 +445,32 @@ async def capture_conversation_memories(
     )
     memories_extracted = 0
     stored_refs: list[tuple[UUID, str]] = []
-    async with pool.acquire() as db:
-        if extracted_memories:
-            memories_extracted, stored_refs = await store_extracted_memories(
-                user_id,
-                org_id,
-                conversation_id,
-                extracted_memories,
-                db,
-                dedup_threshold,
-                embeddings=embeddings,
-                decisions=decisions,
+    if extracted_memories:
+        async with pool.acquire() as db:
+            async with db.transaction():
+                locked_usage = await enforce_workspace_limit(org_id, "memories", db, amount=0)
+                limited_decisions = limit_add_decisions(
+                    decisions,
+                    remaining_capacity(locked_usage, "memories"),
+                )
+                memories_extracted, stored_refs = await store_extracted_memories(
+                    user_id,
+                    org_id,
+                    conversation_id,
+                    extracted_memories,
+                    db,
+                    dedup_threshold,
+                    embeddings=embeddings,
+                    decisions=limited_decisions,
+                )
+                await record_conversation(
+                    user_id, org_id, conversation_id, request_body, response_body, "completed", memories_extracted, db
+                )
+    else:
+        async with pool.acquire() as db:
+            await record_conversation(
+                user_id, org_id, conversation_id, request_body, response_body, "completed", 0, db
             )
-        await record_conversation(
-            user_id, org_id, conversation_id, request_body, response_body, "completed", memories_extracted, db
-        )
     if settings.enable_graph and stored_refs:
         asyncio.create_task(_run_graph_extraction(user_id, org_id, stored_refs, resolved))
     return {

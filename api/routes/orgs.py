@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from api.dependencies import get_current_user, get_db
 from api.models.org import OrgCreate, OrgMemberAdd, OrgMemberResponse, OrgResponse
 from api.services import orgs as org_service
+from api.services.entitlements import QuotaExceeded, quota_headers
 
 
 router = APIRouter()
@@ -48,14 +49,21 @@ async def add_member(
     if body.role not in ("owner", "admin", "member"):
         raise HTTPException(status_code=422, detail="Role must be owner, admin, or member")
     try:
-        row = await org_service.add_org_member(
-            org_id,
-            user["id"],
-            user["org_id"],
-            body.external_id,
-            body.role,
-            db,
-        )
+        async with db.transaction():
+            row = await org_service.add_org_member(
+                org_id,
+                user["id"],
+                user["org_id"],
+                body.external_id,
+                body.role,
+                db,
+            )
+    except QuotaExceeded as error:
+        raise HTTPException(
+            status_code=429,
+            detail="members limit reached",
+            headers=quota_headers(error),
+        ) from error
     except PermissionError as error:
         raise HTTPException(status_code=403, detail=str(error)) from error
     if row is None:

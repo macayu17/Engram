@@ -24,6 +24,7 @@ from api.models.memory import (
     MemoryUpdate,
 )
 from api.services.extraction import capture_conversation_memories
+from api.services.entitlements import QuotaExceeded, enforce_workspace_limit, quota_headers
 from api.services.memories import (
     apply_confidence_decay,
     create_memory,
@@ -68,7 +69,16 @@ async def create_memory_route(
     user: asyncpg.Record = Depends(get_current_user),
     db: asyncpg.Connection = Depends(get_db),
 ) -> dict[str, object]:
-    return await create_memory(user["id"], user["org_id"], payload.content, db, float(user["dedup_threshold"]), payload.category, payload.pinned)
+    try:
+        async with db.transaction():
+            await enforce_workspace_limit(user["org_id"], "memories", db)
+            return await create_memory(user["id"], user["org_id"], payload.content, db, float(user["dedup_threshold"]), payload.category, payload.pinned)
+    except QuotaExceeded as error:
+        raise HTTPException(
+            status_code=429,
+            detail="memories limit reached",
+            headers=quota_headers(error),
+        ) from error
 
 
 @router.delete("", status_code=status.HTTP_204_NO_CONTENT)
@@ -105,8 +115,17 @@ async def import_memories_route(
     user: asyncpg.Record = Depends(get_current_user),
     db: asyncpg.Connection = Depends(get_db),
 ) -> dict[str, object]:
-    imported = await import_memories(user["id"], user["org_id"], [item.model_dump() for item in payload.memories], db, float(user["dedup_threshold"]))
-    return {"imported": imported}
+    try:
+        async with db.transaction():
+            await enforce_workspace_limit(user["org_id"], "memories", db, amount=len(payload.memories))
+            imported = await import_memories(user["id"], user["org_id"], [item.model_dump() for item in payload.memories], db, float(user["dedup_threshold"]))
+            return {"imported": imported}
+    except QuotaExceeded as error:
+        raise HTTPException(
+            status_code=429,
+            detail="memories limit reached",
+            headers=quota_headers(error),
+        ) from error
 
 
 @router.get("/merge-suggestions", response_model=MemoryMergeSuggestionsResponse)

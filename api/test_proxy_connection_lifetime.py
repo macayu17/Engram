@@ -1,3 +1,4 @@
+from contextlib import asynccontextmanager
 from uuid import uuid4
 
 import pytest
@@ -8,13 +9,29 @@ from api.services.provider_keys import ResolvedProvider
 from api.services.proxy import PreparedProxyRequest, ProviderResponse
 
 
+@pytest.fixture(autouse=True)
+def bypass_quota_checks(monkeypatch):
+    async def allow(*args: object, **kwargs: object) -> dict[str, object]:
+        return {"memories": 0, "limits": {"memories": 2_000}}
+
+    monkeypatch.setattr(proxy_routes, "enforce_workspace_limit", allow)
+    monkeypatch.setattr(extraction, "enforce_workspace_limit", allow)
+    monkeypatch.setattr(extraction, "get_workspace_usage", allow)
+
+
+class FakeDb:
+    @asynccontextmanager
+    async def transaction(self):
+        yield
+
+
 class FakeAcquire:
     def __init__(self, events: list[str]) -> None:
         self.events = events
 
     async def __aenter__(self) -> object:
         self.events.append("connection_acquired")
-        return object()
+        return FakeDb()
 
     async def __aexit__(self, exc_type, exc, traceback) -> None:
         self.events.append("connection_released")

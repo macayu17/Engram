@@ -8,6 +8,7 @@ from fastapi import APIRouter, Header, HTTPException, Request, Response
 from fastapi.responses import StreamingResponse
 
 from api.db.connection import get_pool
+from api.services.entitlements import QuotaExceeded, enforce_workspace_limit, quota_headers
 from api.services.extraction import build_capture_response_body, extract_assistant_response_text, run_extraction_task
 from api.services.proxy import (
     ProxyResult,
@@ -140,22 +141,30 @@ async def build_proxy_response_with_available_auth(
             return await build_cached_proxy_response(api_key, requested_external_id, provider, body, headers)
         if user is None:
             raise HTTPException(status_code=401, detail="Invalid API key")
-        prepared = await prepare_proxy_request(
-            user["id"],
-            user["org_id"],
-            user["external_id"],
-            requested_external_id,
-            body,
-            provider,
-            disable_injection,
-            db,
-            int(user["max_memories_injected"]),
-            float(user["retrieval_threshold"]),
-            override_provider=provider,
-            override_provider_key=override_provider_key,
-            retrieval_mode=str(user.get("retrieval_mode") or "vector"),
-            namespace=namespace,
-        )
+        async with db.transaction():
+            await enforce_workspace_limit(user["org_id"], "retrievals", db)
+            prepared = await prepare_proxy_request(
+                user["id"],
+                user["org_id"],
+                user["external_id"],
+                requested_external_id,
+                body,
+                provider,
+                disable_injection,
+                db,
+                int(user["max_memories_injected"]),
+                float(user["retrieval_threshold"]),
+                override_provider=provider,
+                override_provider_key=override_provider_key,
+                retrieval_mode=str(user.get("retrieval_mode") or "vector"),
+                namespace=namespace,
+            )
+    except QuotaExceeded as error:
+        raise HTTPException(
+            status_code=429,
+            detail="retrievals limit reached",
+            headers=quota_headers(error),
+        ) from error
     except PermissionError as error:
         raise HTTPException(status_code=403, detail=str(error)) from error
     except ValueError as error:
@@ -229,22 +238,30 @@ async def build_streaming_proxy_response(
         if user is None:
             raise HTTPException(status_code=401, detail="Invalid API key")
         try:
-            prepared = await prepare_proxy_request(
-                user["id"],
-                user["org_id"],
-                user["external_id"],
-                requested_external_id,
-                body,
-                provider,
-                disable_injection,
-                db,
-                int(user["max_memories_injected"]),
-                float(user["retrieval_threshold"]),
-                override_provider=provider,
-                override_provider_key=override_provider_key,
-                retrieval_mode=str(user.get("retrieval_mode") or "vector"),
-                namespace=namespace,
-            )
+            async with db.transaction():
+                await enforce_workspace_limit(user["org_id"], "retrievals", db)
+                prepared = await prepare_proxy_request(
+                    user["id"],
+                    user["org_id"],
+                    user["external_id"],
+                    requested_external_id,
+                    body,
+                    provider,
+                    disable_injection,
+                    db,
+                    int(user["max_memories_injected"]),
+                    float(user["retrieval_threshold"]),
+                    override_provider=provider,
+                    override_provider_key=override_provider_key,
+                    retrieval_mode=str(user.get("retrieval_mode") or "vector"),
+                    namespace=namespace,
+                )
+        except QuotaExceeded as error:
+            raise HTTPException(
+                status_code=429,
+                detail="retrievals limit reached",
+                headers=quota_headers(error),
+            ) from error
         except PermissionError as error:
             raise HTTPException(status_code=403, detail=str(error)) from error
         except ValueError as error:

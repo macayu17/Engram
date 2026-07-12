@@ -29,9 +29,24 @@ class QuotaExceeded(RuntimeError):
         super().__init__(f"{resource} limit reached ({current}/{limit})")
 
 
+def quota_headers(error: QuotaExceeded) -> dict[str, str]:
+    return {
+        "X-Engram-Quota-Resource": error.resource,
+        "X-Engram-Quota-Current": str(error.current),
+        "X-Engram-Quota-Limit": str(error.limit),
+    }
+
+
 def enforce_limit(resource: QuotaResource, current: int, limit: int, amount: int = 1) -> None:
     if current + amount > limit:
         raise QuotaExceeded(resource, current, limit)
+
+
+def remaining_capacity(usage: dict[str, object], resource: QuotaResource) -> int:
+    limits = usage["limits"]
+    if not isinstance(limits, dict):
+        raise RuntimeError("Workspace limits are invalid")
+    return max(0, int(limits[resource]) - int(usage[resource]))
 
 
 async def get_workspace_usage(org_id: object, db: asyncpg.Connection) -> dict[str, object]:
@@ -77,6 +92,12 @@ async def enforce_workspace_limit(
     db: asyncpg.Connection,
     amount: int = 1,
 ) -> dict[str, object]:
+    workspace_exists = await db.fetchval(
+        "SELECT id FROM orgs WHERE id = $1 FOR UPDATE",
+        org_id,
+    )
+    if workspace_exists is None:
+        raise RuntimeError("Workspace not found")
     usage = await get_workspace_usage(org_id, db)
     limits = usage["limits"]
     if not isinstance(limits, dict):

@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useMemo } from "react";
 
 import { api } from "@/lib/api";
+import { useActiveApiKey } from "@/lib/useActiveApiKey";
 import { MemoryConstellation } from "./MemoryConstellation";
 
 const TYPE_COLORS: Record<string, string> = {
@@ -26,25 +27,32 @@ const QUICK_LINKS = [
 ];
 
 export function HomeDashboard() {
+  const apiKey = useActiveApiKey();
+  const connected = apiKey.startsWith("ek_");
   const approvedQuery = useQuery({
     queryKey: ["dashboard", "approved-count"],
     queryFn: () => api.memories.list({ limit: 1, offset: 0, status: "approved" }),
+    enabled: connected,
   });
   const pendingQuery = useQuery({
     queryKey: ["dashboard", "pending-count"],
     queryFn: () => api.memories.list({ limit: 1, offset: 0, status: "pending" }),
+    enabled: connected,
   });
   const timelineQuery = useQuery({
     queryKey: ["dashboard", "timeline"],
     queryFn: () => api.memories.timeline(8),
+    enabled: connected,
   });
   const entitiesQuery = useQuery({
     queryKey: ["dashboard", "entities"],
     queryFn: () => api.graph.listEntities(),
+    enabled: connected,
   });
   const logsQuery = useQuery({
     queryKey: ["dashboard", "logs"],
     queryFn: () => api.logs.list({ limit: 5, offset: 0 }),
+    enabled: connected,
   });
 
   const totalApproved = approvedQuery.data?.total ?? 0;
@@ -96,18 +104,18 @@ export function HomeDashboard() {
               <br />
               Inspectable.
             </h1>
-            <p className="mt-6 max-w-[20rem] font-serif text-lg leading-8 text-muted sm:max-w-[min(36rem,100%)]">
+            <p className="mt-6 max-w-[20rem] font-serif text-lg leading-8 text-muted sm:max-w-[min(38rem,100%)]">
               Watch user facts move from conversation to vector retrieval, then inspect exactly what Engram injected.
             </p>
             <div className="mt-8 flex flex-wrap gap-3">
               <Link
-                href="/memories"
+                href={connected ? "/memories" : "/settings"}
                 className="group inline-flex items-center gap-3 rounded-full bg-signal px-4 py-2.5 font-sans text-[11px] font-semibold uppercase tracking-[0.12em] text-paper shadow-[0_18px_44px_rgb(var(--color-signal)_/_0.22)] transition hover:-translate-y-0.5 hover:bg-ink hover:text-paper focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-signal active:translate-y-0"
               >
                 <span className="flex h-7 w-7 items-center justify-center rounded-full bg-paper/12 text-paper transition group-hover:bg-signal">
                   <Plus size={15} aria-hidden="true" />
                 </span>
-                Add Memory
+                {connected ? "Add Memory" : "Connect Engram"}
               </Link>
               <Link
                 href="/chat"
@@ -131,10 +139,10 @@ export function HomeDashboard() {
       <section>
         <p className="font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-muted">§ I — The numbers</p>
         <div className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-4">
-          <StatTile label="Approved memories" value={totalApproved} loading={approvedQuery.isLoading} href="/memories" />
-          <StatTile label="Pending review" value={totalPending} loading={pendingQuery.isLoading} accent={totalPending > 0} href="/memories" />
-          <StatTile label="Entities" value={totalEntities} loading={entitiesQuery.isLoading} href="/graph" />
-          <StatTile label="Retrievals logged" value={totalRetrievals} loading={logsQuery.isLoading} href="/logs" />
+          <StatTile label="Approved memories" value={totalApproved} loading={connected && approvedQuery.isLoading} href="/memories" />
+          <StatTile label="Pending review" value={totalPending} loading={connected && pendingQuery.isLoading} accent={totalPending > 0} href="/memories" />
+          <StatTile label="Entities" value={totalEntities} loading={connected && entitiesQuery.isLoading} href="/graph" />
+          <StatTile label="Retrievals logged" value={totalRetrievals} loading={connected && logsQuery.isLoading} href="/logs" />
         </div>
       </section>
 
@@ -143,11 +151,11 @@ export function HomeDashboard() {
           <p className="font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-muted">§ II — Recent activity</p>
           <h2 className="mt-2 font-serif text-3xl font-semibold leading-tight text-ink">Timeline</h2>
           <ul className="mt-4 divide-y divide-line border-y border-line">
-            {timelineQuery.isLoading && (
+            {connected && timelineQuery.isLoading && (
               <li className="py-4 font-serif text-base text-muted">Loading…</li>
             )}
             {!timelineQuery.isLoading && (timelineQuery.data?.items.length ?? 0) === 0 && (
-              <li className="py-4 font-serif text-base text-muted">No activity yet. Have a conversation in <Link className="underline" href="/chat">Chat</Link> to start.</li>
+              <li className="py-5 font-serif text-base text-muted">{connected ? <>No activity yet. Have a conversation in <Link className="underline" href="/chat">Chat</Link> to start.</> : <>Connect an API key in <Link className="underline" href="/settings">Settings</Link> to load workspace activity.</>}</li>
             )}
             {timelineQuery.data?.items.map((item) => (
               <li key={item.id} className="flex items-start justify-between gap-4 py-4">
@@ -170,12 +178,12 @@ export function HomeDashboard() {
           <p className="font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-muted">§ III — Most connected</p>
           <h2 className="mt-2 font-serif text-3xl font-semibold leading-tight text-ink">Top entities</h2>
           <ul className="mt-4 space-y-2">
-            {entitiesQuery.isLoading && (
+            {connected && entitiesQuery.isLoading && (
               <li className="font-serif text-base text-muted">Loading…</li>
             )}
             {!entitiesQuery.isLoading && topEntities.length === 0 && (
-              <li className="font-serif text-base text-muted">
-                No entities yet. Open the <Link className="underline" href="/graph">Graph</Link> and click <em>Backfill entities</em>.
+              <li className="font-serif text-base leading-7 text-muted">
+                {connected ? <>No entities yet. Open the <Link className="underline" href="/graph">Graph</Link> and click <em>Backfill entities</em>.</> : "Entity counts appear after the dashboard is connected."}
               </li>
             )}
             {topEntities.map((entity) => (
@@ -202,10 +210,10 @@ export function HomeDashboard() {
         <p className="font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-muted">§ IV — Latest retrievals</p>
         <h2 className="mt-2 font-serif text-3xl font-semibold leading-tight text-ink">What your assistant just looked up</h2>
         <ul className="mt-4 divide-y divide-line border-y border-line">
-          {logsQuery.isLoading && <li className="py-4 font-serif text-base text-muted">Loading…</li>}
+          {connected && logsQuery.isLoading && <li className="py-4 font-serif text-base text-muted">Loading…</li>}
           {!logsQuery.isLoading && (logsQuery.data?.logs.length ?? 0) === 0 && (
             <li className="py-4 font-serif text-base text-muted">
-              No retrievals yet. They appear here as soon as your assistant queries memories.
+              {connected ? "No retrievals yet. They appear here as soon as your assistant queries memories." : "Retrieval traces appear after the dashboard is connected."}
             </li>
           )}
           {logsQuery.data?.logs.slice(0, 5).map((log) => (

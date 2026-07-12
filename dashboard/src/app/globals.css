@@ -326,9 +326,37 @@ body {
   stroke-linejoin: round;
 }
 
-.memory-constellation__mesh path {
-  opacity: 0.24;
+.memory-constellation__clusters circle {
+  fill: rgb(var(--color-panel) / 0.08);
+  stroke: rgb(var(--color-line) / 0.42);
+  stroke-dasharray: 2 7;
   stroke-width: 1;
+}
+
+.memory-constellation__clusters text,
+.memory-constellation__gateway text {
+  fill: rgb(var(--color-muted));
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: 8px;
+  letter-spacing: 0.12em;
+  opacity: 0.58;
+}
+
+.memory-constellation__mesh path {
+  opacity: 0.32;
+  stroke-width: 1;
+}
+
+.memory-constellation__gateway circle:first-child {
+  animation: memory-core-breathe 7s ease-in-out infinite;
+  fill: rgb(var(--color-panel) / 0.08);
+  stroke: rgb(var(--color-signal) / 0.5);
+  stroke-dasharray: 2 6;
+}
+
+.memory-constellation__gateway circle:nth-child(2) {
+  fill: rgb(var(--color-signal));
+  opacity: 0.78;
 }
 
 .memory-constellation__core circle {
@@ -352,8 +380,9 @@ body {
 }
 
 .memory-constellation__paths path {
-  opacity: 0.42;
-  stroke-width: 1.25;
+  opacity: 0.5;
+  stroke: rgb(var(--color-signal));
+  stroke-width: 1.1;
 }
 
 .memory-constellation__nodes circle {
@@ -374,11 +403,11 @@ body {
 }
 
 .memory-constellation__flow path {
-  animation: memory-line-flow 7.5s linear infinite;
+  animation: memory-line-flow 6.5s linear infinite;
   fill: none;
   opacity: 0.85;
   stroke: rgb(var(--color-signal));
-  stroke-dasharray: 0.1 24;
+  stroke-dasharray: 0.1 30;
   stroke-linecap: round;
   stroke-width: 2.1;
 }
@@ -389,22 +418,6 @@ body {
 
 .memory-constellation__flow path:nth-child(3) {
   animation-delay: 1.6s;
-}
-
-.memory-constellation__flow path:nth-child(4) {
-  animation-delay: 2.4s;
-}
-
-.memory-constellation__flow path:nth-child(5) {
-  animation-delay: 3.2s;
-}
-
-.memory-constellation__flow path:nth-child(6) {
-  animation-delay: 4s;
-}
-
-.memory-constellation__flow path:nth-child(7) {
-  animation-delay: 4.8s;
 }
 
 .memory-constellation__beacons circle {
@@ -439,20 +452,20 @@ body {
 }
 
 .memory-constellation__label--one {
-  left: 15%;
-  top: 17%;
-  transform: rotate(-16deg);
+  left: 12%;
+  top: 20%;
+  transform: rotate(-8deg);
 }
 
 .memory-constellation__label--two {
-  bottom: 18%;
-  left: 31%;
+  bottom: 16%;
+  left: 37%;
 }
 
 .memory-constellation__label--three {
-  right: 12%;
-  top: 39%;
-  transform: rotate(12deg);
+  right: 10%;
+  top: 42%;
+  transform: rotate(5deg);
 }
 
 @keyframes theme-fallback-wave {

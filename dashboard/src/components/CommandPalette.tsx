@@ -92,7 +92,7 @@ export function CommandPalette() {
       <button
         type="button"
         onClick={() => setIsOpen(true)}
-        className="flex min-h-10 w-full max-w-[calc(100vw-2rem)] items-center justify-between rounded-full border border-line bg-paper px-4 text-left text-sm text-muted transition hover:border-ink sm:max-w-md"
+        className="flex min-h-10 w-full max-w-[calc(100vw-2rem)] items-center justify-between rounded-lg border border-line bg-panel px-4 text-left text-sm text-muted transition hover:border-signal hover:text-ink sm:max-w-lg"
       >
         <span className="flex min-w-0 items-center gap-2">
           <Search size={15} aria-hidden="true" className="shrink-0" />
@@ -103,7 +103,7 @@ export function CommandPalette() {
 
       {isOpen && (
         <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 px-4 py-20">
-          <div className="w-full max-w-xl rounded-lg border border-line bg-panel text-ink">
+          <div className="w-full max-w-2xl rounded-lg border border-line bg-panel text-ink shadow-[0_24px_80px_rgba(0,0,0,0.28)]">
             <form onSubmit={submitSearch} className="flex min-h-16 items-center gap-3 border-b border-line px-4">
               <Search size={18} aria-hidden="true" className="text-muted" />
               <input
@@ -111,14 +111,14 @@ export function CommandPalette() {
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
                 onKeyDown={handleInputKeyDown}
-                className="min-w-0 flex-1 bg-transparent font-serif text-lg outline-none placeholder:text-muted"
+                className="min-w-0 flex-1 bg-transparent font-sans text-base outline-none placeholder:text-muted"
                 placeholder="Search memories, users, projects..."
               />
               <button
                 type="button"
                 onClick={() => setIsOpen(false)}
                 title="Close"
-                className="rounded-full border border-line p-2 text-muted hover:text-ink"
+                className="rounded-md border border-line p-2 text-muted hover:border-signal hover:text-ink"
               >
                 <X size={16} aria-hidden="true" />
               </button>
@@ -138,9 +138,9 @@ export function CommandPalette() {
                     activeIndex === index && "bg-tag",
                   )}
                 >
-                  <span className="flex h-9 w-9 items-center justify-center rounded bg-tag font-serif text-sm font-semibold text-ink">ME</span>
+                  <span className="flex h-9 w-9 items-center justify-center rounded-md bg-tag font-sans text-xs font-semibold text-signal">ME</span>
                   <span className="min-w-0">
-                    <span className="block truncate font-serif text-base">{result.title}</span>
+                    <span className="block truncate font-sans text-sm leading-6">{result.title}</span>
                     <span className="mt-1 block font-sans text-[11px] uppercase tracking-[0.12em] text-muted">{result.meta}</span>
                   </span>
                 </button>

@@ -54,8 +54,8 @@ export function MemoryTable({ memories, onUpdate, onDelete, onSource, isBusy }: 
 
   if (!memories.length) {
     return (
-      <div className="border-y border-line py-12 text-center font-serif text-lg text-muted">
-        No memories found for this API key.
+      <div className="border-y border-line py-12 text-center font-sans text-sm text-muted">
+        No memories found. Add one manually or send a conversation through the proxy.
       </div>
     );
   }
@@ -85,13 +85,13 @@ export function MemoryTable({ memories, onUpdate, onDelete, onSource, isBusy }: 
                     <textarea
                       value={draft}
                       onChange={(event) => setDraft(event.target.value)}
-                      className="min-h-24 w-full border border-line bg-paper p-3 font-serif text-base text-ink outline-none focus:border-signal"
+                      className="min-h-24 w-full rounded-md border border-line bg-panel p-3 font-sans text-sm leading-6 text-ink outline-none focus:border-signal"
                     />
                   ) : (
                     <div className="space-y-3">
                       <p
                         className={cn(
-                          "break-words whitespace-pre-wrap font-serif text-lg leading-8 text-ink",
+                          "break-words whitespace-pre-wrap font-sans text-[15px] leading-7 text-ink",
                           canExpand && !isExpanded && "max-h-32 overflow-hidden",
                         )}
                       >
@@ -111,9 +111,9 @@ export function MemoryTable({ memories, onUpdate, onDelete, onSource, isBusy }: 
                   )}
                   <p className="mt-2 font-sans text-[11px] uppercase tracking-[0.12em] text-muted">{memory.id}</p>
                   <div className="mt-3 flex flex-wrap gap-2 font-sans text-[10px] uppercase tracking-[0.12em] text-muted">
-                    <span className="border border-line px-2 py-1">{memory.category}</span>
-                    <span className="border border-line px-2 py-1">{memory.source}</span>
-                    {memory.pinned && <span className="border border-signal px-2 py-1 text-signal">pinned</span>}
+                    <span className="rounded-md border border-line bg-tag/40 px-2 py-1">{memory.category}</span>
+                    <span className="rounded-md border border-line bg-tag/40 px-2 py-1">{memory.source}</span>
+                    {memory.pinned && <span className="rounded-md border border-signal px-2 py-1 text-signal">pinned</span>}
                   </div>
                 </td>
                 <td className="px-4 py-5 font-sans text-[11px] uppercase tracking-[0.12em] text-muted">{memory.confidence.toFixed(2)}</td>

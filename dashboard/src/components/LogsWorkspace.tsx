@@ -55,31 +55,31 @@ export function LogsWorkspace() {
       </div>
 
       <form onSubmit={submitFilter} className="flex flex-col gap-3 sm:flex-row">
-        <label className="flex min-h-12 flex-1 items-center gap-3 rounded-full border border-line bg-paper px-4 text-sm text-ink focus-within:border-signal">
+        <label className="flex min-h-12 flex-1 items-center gap-3 rounded-lg border border-line bg-panel px-4 text-sm text-ink transition focus-within:border-signal focus-within:ring-1 focus-within:ring-signal/30">
           <Filter size={16} aria-hidden="true" className="text-muted" />
           <input
             value={draftConversationId}
             onChange={(event) => setDraftConversationId(event.target.value)}
             placeholder="Conversation ID"
-            className="min-w-0 flex-1 bg-transparent font-serif text-base outline-none placeholder:text-muted"
+            className="min-w-0 flex-1 bg-transparent font-sans text-sm outline-none placeholder:text-muted"
           />
         </label>
         <button
           type="submit"
-          className="inline-flex min-h-12 items-center justify-center border border-ink px-5 font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-ink hover:border-signal hover:text-signal"
+          className="inline-flex min-h-12 items-center justify-center rounded-lg border border-ink px-5 font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-ink transition hover:border-signal hover:bg-signal hover:text-paper"
         >
           Filter
         </button>
       </form>
 
       {logsQuery.isError && (
-        <div className="border-y border-fault/30 bg-fault/5 py-5 font-serif text-base text-fault">
+        <div className="border-y border-fault/30 bg-fault/5 px-4 py-5 font-sans text-sm text-fault">
           Unable to load retrieval logs.
         </div>
       )}
 
       {logsQuery.isLoading ? (
-        <div className="border-y border-line py-12 font-serif text-lg text-muted">Loading logs...</div>
+        <div className="border-y border-line py-12 font-sans text-sm text-muted">Loading logs...</div>
       ) : (
         <div className="border-y border-line">
           {logs.length ? logs.map((log) => <LogEntry key={log.id} log={log} />) : <EmptyLogs />}
@@ -115,5 +115,5 @@ export function LogsWorkspace() {
 
 
 function EmptyLogs() {
-  return <div className="py-12 text-center font-serif text-lg text-muted">No retrieval logs found.</div>;
+  return <div className="py-12 text-center font-sans text-sm text-muted">No retrieval logs found. Retrieval traces appear after a memory-enabled request.</div>;
 }

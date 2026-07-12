@@ -14,10 +14,10 @@ export function LogEntry({ log }: { log: RetrievalLog }) {
       <button
         type="button"
         onClick={() => setIsOpen((value) => !value)}
-        className="grid w-full gap-3 py-5 text-left text-sm hover:bg-tag md:grid-cols-[160px_1fr_130px_220px]"
+        className="grid w-full min-w-0 gap-3 px-3 py-5 text-left text-sm transition hover:bg-tag md:grid-cols-[150px_minmax(0,1fr)_120px_210px]"
       >
         <span className="font-sans text-[11px] uppercase tracking-[0.12em] text-muted">{formatDate(log.created_at)}</span>
-        <span className="truncate font-serif text-lg text-ink">{log.query}</span>
+        <span className="min-w-0 break-words font-sans text-[15px] leading-6 text-ink md:line-clamp-2">{log.query || "Empty retrieval query"}</span>
         <span className="font-sans text-[11px] uppercase tracking-[0.12em] text-muted">{log.retrieved_memories.length} memories</span>
         <span className="flex items-center justify-between gap-2 font-sans text-[11px] uppercase tracking-[0.12em] text-muted">
           <span className="truncate">{log.conversation_id ?? "no conversation"}</span>
@@ -25,14 +25,14 @@ export function LogEntry({ log }: { log: RetrievalLog }) {
         </span>
       </button>
       {isOpen && (
-        <div className="border-t border-line py-4">
+        <div className="border-t border-line bg-tag/30 px-4 py-4">
           {log.retrieved_memories.length ? (
             <div className="space-y-0">
               {log.retrieved_memories.map((memory) => (
                 <div key={memory.memory_id} className="grid gap-3 border-b border-line py-4 text-sm last:border-b-0 md:grid-cols-[1fr_80px]">
                   <div>
-                    <p className="font-serif text-lg leading-8 text-ink">{memory.content ?? "Deleted memory"}</p>
-                    <p className="mt-2 font-sans text-[11px] uppercase tracking-[0.12em] text-muted">{memory.memory_id}</p>
+                    <p className="font-sans text-[15px] leading-7 text-ink">{memory.content ?? "Deleted memory"}</p>
+                    <p className="mt-2 break-all font-mono text-[10px] text-muted">{memory.memory_id}</p>
                   </div>
                   <div className="md:text-right">
                     <ScoreBadge score={memory.score} />
@@ -41,7 +41,7 @@ export function LogEntry({ log }: { log: RetrievalLog }) {
               ))}
             </div>
           ) : (
-            <p className="font-serif text-base text-muted">No memories crossed the retrieval threshold.</p>
+            <p className="font-sans text-sm text-muted">No memories crossed the retrieval threshold.</p>
           )}
         </div>
       )}

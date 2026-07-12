@@ -20,12 +20,31 @@ export function SettingsPanel() {
   const [generatedKey, setGeneratedKey] = useState("");
   const [generatedExternalId, setGeneratedExternalId] = useState("");
   const [generationMessage, setGenerationMessage] = useState("");
+  const [managedKeyName, setManagedKeyName] = useState("");
+  const [revealedManagedKey, setRevealedManagedKey] = useState("");
+  const hosted = Boolean(process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY);
   const malformedApiKey = Boolean(apiKey) && !apiKey.startsWith("ek_");
   const userQuery = useQuery({
     queryKey: ["current-user", apiKey],
     queryFn: () => api.users.me(),
     enabled: Boolean(apiKey) && !malformedApiKey,
   });
+  const workspaceQuery = useQuery({
+    queryKey: ["workspaces", apiKey],
+    queryFn: () => api.orgs.list(),
+    enabled: Boolean(apiKey) && !malformedApiKey,
+  });
+  const usageQuery = useQuery({
+    queryKey: ["billing", "usage", apiKey],
+    queryFn: () => api.billing.usage(),
+    enabled: Boolean(apiKey) && !malformedApiKey,
+  });
+  const managedKeysQuery = useQuery({
+    queryKey: ["workspace-keys", apiKey],
+    queryFn: () => api.keys.list(),
+    enabled: Boolean(apiKey) && !malformedApiKey,
+  });
+  const workspace = workspaceQuery.data?.[0];
   const deleteAccountMutation = useMutation({
     mutationFn: () => api.users.deleteMe(),
     onSuccess: () => {
@@ -64,6 +83,18 @@ export function SettingsPanel() {
     onError: (error) => {
       setExternalIdMessage(error instanceof Error ? error.message : "Unable to update username.");
     },
+  });
+  const createManagedKeyMutation = useMutation({
+    mutationFn: (name: string) => api.keys.create(name),
+    onSuccess: (response) => {
+      setManagedKeyName("");
+      setRevealedManagedKey(response.api_key);
+      void queryClient.invalidateQueries({ queryKey: ["workspace-keys"] });
+    },
+  });
+  const revokeManagedKeyMutation = useMutation({
+    mutationFn: (id: string) => api.keys.revoke(id),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["workspace-keys"] }),
   });
 
   useEffect(() => {
@@ -135,6 +166,24 @@ export function SettingsPanel() {
     }
     setExternalIdMessage("");
     updateUserMutation.mutate(trimmedExternalId);
+  }
+
+  function createManagedKey(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const name = managedKeyName.trim();
+    if (name) createManagedKeyMutation.mutate(name);
+  }
+
+  async function openBilling() {
+    if (!workspace) return;
+    try {
+      const response = usageQuery.data?.plan === "pro"
+        ? await api.billing.portal(workspace.id)
+        : await api.billing.checkout(workspace.id);
+      window.location.assign(response.url);
+    } catch (error) {
+      setKeyError(error instanceof Error ? error.message : "Unable to open billing.");
+    }
   }
 
   function deleteMemories() {
@@ -260,7 +309,7 @@ export function SettingsPanel() {
         </div>
       </div>
 
-      <form onSubmit={createEngramKey} className="border-y border-line py-6">
+      {!hosted && <form onSubmit={createEngramKey} className="border-y border-line py-6">
         <div className="mb-4 flex items-center gap-3">
           <span className="flex h-10 w-10 items-center justify-center rounded bg-tag text-signal">
             <Plus size={18} aria-hidden="true" />
@@ -310,7 +359,38 @@ export function SettingsPanel() {
           </div>
         )}
         {generationMessage && <p className="mt-3 font-serif text-base text-muted">{generationMessage}</p>}
-      </form>
+      </form>}
+
+      <section className="border-y border-line py-6">
+        <div className="grid gap-6 lg:grid-cols-[0.8fr_1.2fr]">
+          <div>
+            <p className="font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-muted">Workspace access</p>
+            <h2 className="mt-2 font-serif text-2xl font-semibold">API Keys</h2>
+            <p className="mt-2 max-w-md font-serif text-base leading-7 text-muted">Create named credentials and revoke one key without rotating every client.</p>
+          </div>
+          <div>
+            <form onSubmit={createManagedKey} className="flex flex-col gap-3 sm:flex-row">
+              <input value={managedKeyName} onChange={(event) => setManagedKeyName(event.target.value)} placeholder="Key name" className="min-h-11 min-w-0 flex-1 rounded-md border border-line bg-panel px-4 font-sans text-sm text-ink outline-none focus:border-signal" />
+              <button type="submit" disabled={!apiKey || createManagedKeyMutation.isPending} className="min-h-11 rounded-md border border-ink px-4 font-sans text-[11px] font-medium uppercase tracking-[0.12em] hover:border-signal hover:text-signal disabled:opacity-40">Create key</button>
+            </form>
+            {revealedManagedKey && <div className="mt-4 border border-signal/40 bg-signal/5 p-4"><p className="font-sans text-[10px] font-medium uppercase tracking-[0.12em] text-signal">Shown once</p><div className="mt-2 flex gap-3"><code className="min-w-0 flex-1 overflow-x-auto font-mono text-xs text-ink">{revealedManagedKey}</code><button type="button" onClick={() => navigator.clipboard.writeText(revealedManagedKey)} className="text-signal">Copy</button></div></div>}
+            <div className="mt-5 divide-y divide-line border-y border-line">
+              {managedKeysQuery.data?.map((key) => <div key={key.id} className="grid gap-2 py-3 sm:grid-cols-[1fr_auto] sm:items-center"><div><p className="font-sans text-sm font-medium text-ink">{key.name}</p><p className="mt-1 font-sans text-[10px] uppercase tracking-[0.1em] text-muted">Created {formatDate(key.created_at)} · Last used {key.last_used_at ? formatDate(key.last_used_at) : "never"}</p></div><button type="button" onClick={() => window.confirm(`Revoke ${key.name}?`) && revokeManagedKeyMutation.mutate(key.id)} className="justify-self-start font-sans text-[10px] uppercase tracking-[0.1em] text-fault sm:justify-self-end">Revoke</button></div>)}
+              {apiKey && !managedKeysQuery.isLoading && !managedKeysQuery.data?.length && <p className="py-4 font-sans text-sm text-muted">No named workspace keys yet.</p>}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="border-y border-line py-6">
+        <div className="grid gap-6 lg:grid-cols-[0.8fr_1.2fr]">
+          <div><p className="font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-muted">Subscription</p><h2 className="mt-2 font-serif text-2xl font-semibold">Billing</h2><p className="mt-2 max-w-md font-serif text-base leading-7 text-muted">Hosted plans limit stored memories, monthly retrievals, and workspace seats. Model usage stays on your provider account.</p></div>
+          <div>
+            <dl className="grid gap-4 border-y border-line py-4 sm:grid-cols-3"><UsageValue label="Plan" value={usageQuery.data?.plan === "pro" ? "Pro" : "Free"} /><UsageValue label="Memories" value={formatUsage(usageQuery.data?.memories, usageQuery.data?.limits.memories)} /><UsageValue label="Retrievals" value={formatUsage(usageQuery.data?.retrievals, usageQuery.data?.limits.retrievals)} /></dl>
+            {hosted && workspace?.role === "owner" && <button type="button" onClick={openBilling} className="mt-5 min-h-11 rounded-md border border-ink px-4 font-sans text-[11px] font-medium uppercase tracking-[0.12em] hover:border-signal hover:text-signal">{usageQuery.data?.plan === "pro" ? "Manage billing" : "Upgrade to Pro"}</button>}
+          </div>
+        </div>
+      </section>
 
       <ProviderConfigSection apiKey={apiKey} onError={setKeyError} />
 
@@ -346,6 +426,14 @@ function formatDate(value: string): string {
   return new Intl.DateTimeFormat(undefined, { month: "short", day: "2-digit", hour: "2-digit", minute: "2-digit" }).format(
     new Date(value),
   );
+}
+
+function formatUsage(current?: number, limit?: number): string {
+  return `${(current ?? 0).toLocaleString()} / ${(limit ?? 0).toLocaleString()}`;
+}
+
+function UsageValue({ label, value }: { label: string; value: string }) {
+  return <div><dt className="font-sans text-[10px] uppercase tracking-[0.1em] text-muted">{label}</dt><dd className="mt-2 font-serif text-xl font-semibold text-ink">{value}</dd></div>;
 }
 
 function ProviderConfigSection({ apiKey, onError }: { apiKey: string; onError: (msg: string) => void }) {

@@ -120,7 +120,7 @@ export function ChatWorkspace() {
 
       <div className="grid gap-8 lg:grid-cols-[1fr_280px]">
         <div className="space-y-5">
-          <div className="min-h-[28rem] border-y border-line">
+          <div className="min-h-[28rem] overflow-hidden rounded-lg border border-line bg-panel">
             {messages.length ? (
               messages.map((message) => <ChatRow key={message.id} message={message} />)
             ) : (
@@ -129,13 +129,13 @@ export function ChatWorkspace() {
                   <MessageSquare size={20} aria-hidden="true" />
                 </span>
                 <p className="mt-5 max-w-md font-serif text-xl leading-8 text-ink">Ask something that should use your saved memories.</p>
-                <p className="mt-2 max-w-md font-serif text-base leading-7 text-muted">
+                <p className="mt-2 max-w-md font-sans text-sm leading-6 text-muted">
                   Try: What am I testing with Supabase Postgres?
                 </p>
               </div>
             )}
             {chatMutation.isPending && (
-              <div className="border-t border-line py-5 font-serif text-base text-muted">Waiting for provider response...</div>
+              <div className="border-t border-line px-5 py-5 font-sans text-sm text-muted">Waiting for provider response...</div>
             )}
           </div>
 
@@ -145,18 +145,18 @@ export function ChatWorkspace() {
               onChange={(event) => setDraft(event.target.value)}
               onKeyDown={handleDraftKeyDown}
               placeholder="Ask through Engram..."
-              className="min-h-28 min-w-0 flex-1 border border-line bg-paper p-4 font-serif text-base leading-7 text-ink outline-none focus:border-signal"
+              className="min-h-28 min-w-0 flex-1 rounded-lg border border-line bg-panel p-4 font-sans text-sm leading-6 text-ink outline-none focus:border-signal focus:ring-1 focus:ring-signal/30"
             />
             <button
               type="submit"
               disabled={!canChat || chatMutation.isPending || !draft.trim()}
-              className="inline-flex min-h-12 items-center justify-center gap-2 border border-ink px-5 font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-ink hover:border-signal hover:text-signal disabled:cursor-not-allowed disabled:opacity-50"
+              className="inline-flex min-h-12 items-center justify-center gap-2 rounded-lg border border-ink px-5 font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-ink transition hover:border-signal hover:bg-signal hover:text-paper disabled:cursor-not-allowed disabled:opacity-50"
             >
               <Send size={16} aria-hidden="true" />
               Send
             </button>
           </form>
-          {error && <p className="font-serif text-base text-fault">{error}</p>}
+          {error && <p className="font-sans text-sm text-fault">{error}</p>}
         </div>
 
         <aside className="border-y border-line py-5">
@@ -174,7 +174,7 @@ export function ChatWorkspace() {
                 <select
                   value={provider}
                   onChange={(event) => setProvider(event.target.value)}
-                  className="min-h-10 w-full border border-line bg-paper px-3 font-serif text-base text-ink outline-none focus:border-signal"
+                  className="min-h-10 w-full rounded-md border border-line bg-panel px-3 font-sans text-sm text-ink outline-none focus:border-signal"
                 >
                   <option value="openai">openai</option>
                   <option value="anthropic">anthropic</option>
@@ -189,7 +189,7 @@ export function ChatWorkspace() {
                 <input
                   value={model}
                   onChange={(event) => setModel(event.target.value)}
-                  className="min-h-10 w-full border border-line bg-paper px-3 font-serif text-base text-ink outline-none focus:border-signal"
+                  className="min-h-10 w-full rounded-md border border-line bg-panel px-3 font-mono text-xs text-ink outline-none focus:border-signal"
                 />
               </dd>
             </div>
@@ -218,7 +218,7 @@ function ChatRow({ message }: { message: VisualMessage }) {
       <div className="grid gap-3 md:grid-cols-[120px_1fr]">
         <div className="font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-muted">{isAssistant ? "Assistant" : "You"}</div>
         <div>
-          <p className={cn("whitespace-pre-wrap font-serif text-lg leading-8", isAssistant ? "text-ink" : "text-muted")}>{message.content}</p>
+          <p className={cn("whitespace-pre-wrap font-sans text-[15px] leading-7", isAssistant ? "text-ink" : "text-muted")}>{message.content}</p>
           {isAssistant && (
             <p className="mt-3 font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-muted">
               {message.injectedCount ?? 0} memories injected {message.conversationId ? `· ${message.conversationId}` : ""}

@@ -39,7 +39,7 @@ function DashboardShell({ authEnabled, children }: { authEnabled: boolean; child
       {authEnabled && <ClerkEngramBridge />}
       <div className="min-h-screen">
         <header className="sticky top-0 z-40 border-b border-line bg-paper/95 backdrop-blur">
-          <div className="mx-auto grid min-h-14 max-w-7xl grid-cols-[1fr_auto] items-center gap-4 px-4 py-3 lg:grid-cols-[200px_minmax(18rem,30rem)_auto] lg:px-6">
+          <div className="mx-auto grid min-h-14 max-w-[1400px] grid-cols-[1fr_auto] items-center gap-4 px-4 py-3 lg:grid-cols-[220px_minmax(20rem,34rem)_auto] lg:px-8">
             <Link href="/" className="group">
               <EngramLogo />
             </Link>
@@ -74,8 +74,8 @@ function DashboardShell({ authEnabled, children }: { authEnabled: boolean; child
             </nav>
           </div>
         </header>
-        <main className="mx-auto max-w-7xl px-4 pb-16 pt-10 sm:px-6 sm:pb-10 md:py-16">{children}</main>
-        <footer className="mx-auto max-w-7xl border-t border-line px-4 pb-28 pt-6 sm:px-6 sm:pb-10">
+        <main className="mx-auto max-w-[1400px] px-4 pb-16 pt-10 sm:px-8 sm:pb-10 md:py-16">{children}</main>
+        <footer className="mx-auto max-w-[1400px] border-t border-line px-4 pb-28 pt-6 sm:px-8 sm:pb-10">
           <p className="font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-muted">
             Copyright (c) 2026 Ayush
           </p>

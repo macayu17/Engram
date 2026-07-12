@@ -454,25 +454,50 @@ async def regenerate_user_key(user: asyncpg.Record, db: asyncpg.Connection) -> t
 
 
 _SENTINEL_NO_UPDATE = object()
+_WORKSPACE_PROVIDER_COLUMNS = (
+    "extraction_provider, extraction_model, openai_api_key_encrypted, "
+    "gemini_api_key_encrypted, anthropic_api_key_encrypted"
+)
+_WORKSPACE_PROVIDER_SELECT = (
+    "orgs.extraction_provider, orgs.extraction_model, orgs.openai_api_key_encrypted, "
+    "orgs.gemini_api_key_encrypted, orgs.anthropic_api_key_encrypted"
+)
 
 
-async def get_user_provider_config(user_id: object, db: asyncpg.Connection) -> dict[str, object]:
-    from api.services.provider_keys import summarize_provider_for_response
+async def get_workspace_provider_context(
+    user_id: object,
+    org_id: object,
+    db: asyncpg.Connection,
+) -> dict[str, object] | None:
     row = await db.fetchrow(
         f"""
-        SELECT {_USER_COLUMNS}
-        FROM users
-        WHERE id = $1
+        SELECT users.id, users.external_id, {_WORKSPACE_PROVIDER_SELECT}
+        FROM orgs
+        JOIN org_memberships ON org_memberships.org_id = orgs.id
+        JOIN users ON users.id = org_memberships.user_id
+        WHERE orgs.id = $1 AND users.id = $2
         """,
+        org_id,
         user_id,
     )
+    return dict(row) if row is not None else None
+
+
+async def get_user_provider_config(
+    user_id: object,
+    org_id: object,
+    db: asyncpg.Connection,
+) -> dict[str, object]:
+    from api.services.provider_keys import summarize_provider_for_response
+    row = await get_workspace_provider_context(user_id, org_id, db)
     if row is None:
-        raise RuntimeError("User not found")
+        raise RuntimeError("Workspace not found")
     return summarize_provider_for_response(row)
 
 
 async def update_user_provider_config(
     user_id: object,
+    org_id: object,
     extraction_provider: str | None,
     extraction_model: str | None,
     openai_api_key: str | None,
@@ -511,37 +536,42 @@ async def update_user_provider_config(
     assignments: list[str] = []
     params: list[object] = []
     if chosen_provider is not None:
-        assignments.append("extraction_provider = $" + str(len(params) + 2))
+        assignments.append("extraction_provider = $" + str(len(params) + 3))
         params.append(chosen_provider)
     if clean_extraction_model is not None:
-        assignments.append("extraction_model = $" + str(len(params) + 2))
+        assignments.append("extraction_model = $" + str(len(params) + 3))
         params.append(clean_extraction_model)
     if openai_blob is not _SENTINEL_NO_UPDATE:
-        assignments.append("openai_api_key_encrypted = $" + str(len(params) + 2))
+        assignments.append("openai_api_key_encrypted = $" + str(len(params) + 3))
         params.append(openai_blob)
     if gemini_blob is not _SENTINEL_NO_UPDATE:
-        assignments.append("gemini_api_key_encrypted = $" + str(len(params) + 2))
+        assignments.append("gemini_api_key_encrypted = $" + str(len(params) + 3))
         params.append(gemini_blob)
     if anthropic_blob is not _SENTINEL_NO_UPDATE:
-        assignments.append("anthropic_api_key_encrypted = $" + str(len(params) + 2))
+        assignments.append("anthropic_api_key_encrypted = $" + str(len(params) + 3))
         params.append(anthropic_blob)
 
     if not assignments:
-        return await get_user_provider_config(user_id, db)
+        return await get_user_provider_config(user_id, org_id, db)
 
     set_clause = ", ".join(assignments)
     row = await db.fetchrow(
         f"""
-        UPDATE users
+        UPDATE orgs
         SET {set_clause}
         WHERE id = $1
-        RETURNING {_USER_COLUMNS}
+          AND EXISTS (
+              SELECT 1 FROM org_memberships
+              WHERE org_id = orgs.id AND user_id = $2
+          )
+        RETURNING {_WORKSPACE_PROVIDER_COLUMNS}
         """,
+        org_id,
         user_id,
         *params,
     )
     if row is None:
-        raise RuntimeError("User not found")
+        raise RuntimeError("Workspace not found")
     clear_cached_user(user_id)
     from api.services.provider_keys import summarize_provider_for_response
     return summarize_provider_for_response(row)

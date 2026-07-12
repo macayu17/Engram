@@ -70,7 +70,7 @@ export default function DocsPage() {
         <div className="grid gap-8 lg:grid-cols-[0.9fr_1.1fr]">
           <div className="space-y-4 font-serif text-base leading-7 text-muted">
             <p>
-              Engram runs as a FastAPI service backed by PostgreSQL and pgvector. The dashboard stores one Engram API key in the browser, while provider keys stay on the server.
+              Engram runs as a FastAPI service backed by PostgreSQL and pgvector. The dashboard stores one Engram API key in the browser, while workspace provider keys are encrypted by the API.
             </p>
             <p>
               Use the same <InlineCode>ek_...</InlineCode> key across Claude Desktop, VS Code Agent Mode, Cursor-style clients, and the dashboard when you want one shared memory store.
@@ -283,7 +283,7 @@ curl http://localhost:8000/orgs \\
       <DocsSection id="deploy" eyebrow="10" title="Deployment checklist">
         <div className="grid gap-4 md:grid-cols-2">
           <DocCard title="API">
-            Deploy the FastAPI service on a container host (Azure Container Apps, Fly.io, Render, Railway). Set <InlineCode>DATABASE_URL</InlineCode>, provider keys, <InlineCode>CORS_ORIGINS</InlineCode>, <InlineCode>ENGRAM_SERVICE_KEY</InlineCode>, <InlineCode>ENGRAM_PROVIDER_KEY_ENCRYPTION_KEY</InlineCode>.
+            Deploy the FastAPI service on a container host (Azure Container Apps, Fly.io, Render, Railway). Set <InlineCode>DATABASE_URL</InlineCode>, <InlineCode>CORS_ORIGINS</InlineCode>, <InlineCode>ENGRAM_SERVICE_KEY</InlineCode>, and <InlineCode>ENGRAM_PROVIDER_KEY_ENCRYPTION_KEY</InlineCode>. Hosted users save their own provider key per workspace.
           </DocCard>
           <DocCard title="Database">
             PostgreSQL with the <InlineCode>vector</InlineCode> extension enabled. Local Docker Postgres and Supabase Postgres both supported. Schema migrates on API startup.
@@ -315,7 +315,7 @@ curl http://localhost:8000/orgs \\
             Add one manually, call <InlineCode>capture_conversation</InlineCode>, or route a chat through <InlineCode>/v1/chat</InlineCode>. Empty memory stores are valid for new keys.
           </Trouble>
           <Trouble title="Proxy fails provider requests">
-            Check provider keys in server environment variables and verify <InlineCode>X-Engram-Provider</InlineCode> matches the configured provider.
+            Check the workspace provider key in Settings and verify <InlineCode>X-Engram-Provider</InlineCode> matches the configured provider.
           </Trouble>
           <Trouble title="Graph page shows Not Found">
             The deployed API doesn't have the <InlineCode>/graph/*</InlineCode> routes yet. Update the container to the latest image and create a new revision so it actually pulls.

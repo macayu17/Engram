@@ -11,6 +11,7 @@ from api.services.extraction import run_extraction_task
 from api.services.providers.base import build_chat_completions_url
 from api.services.provider_keys import ProviderConfigError, ResolvedProvider, resolve_user_provider
 from api.services.retrieval import get_retrieval_query, log_retrieval, retrieve_memories, retrieve_memories_graph, retrieve_memories_hybrid
+from api.services.users import get_workspace_provider_context
 
 
 logger = logging.getLogger(__name__)
@@ -113,19 +114,7 @@ async def prepare_proxy_request(
         except Exception as error:
             injected_count = 0
             logger.warning("Retrieval failed, proceeding without memories: %s", error)
-    user_row = await db.fetchrow(
-        """SELECT id, external_id, extraction_provider,
-                  extraction_model,
-                  openai_api_key_encrypted, gemini_api_key_encrypted, anthropic_api_key_encrypted
-           FROM users
-           WHERE id = $1
-             AND EXISTS (
-                 SELECT 1 FROM org_memberships
-                 WHERE user_id = users.id AND org_id = $2
-             )""",
-        user_id,
-        org_id,
-    )
+    user_row = await get_workspace_provider_context(user_id, org_id, db)
     if user_row is None:
         raise PermissionError("Authenticated user no longer exists")
     try:

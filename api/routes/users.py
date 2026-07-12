@@ -178,7 +178,7 @@ async def get_current_user_provider_route(
     user: asyncpg.Record = Depends(get_current_user),
     db: asyncpg.Connection = Depends(get_db),
 ) -> dict[str, object]:
-    return await get_user_provider_config(user["id"], db)
+    return await get_user_provider_config(user["id"], user["org_id"], db)
 
 
 @router.patch("/me/provider", response_model=UserProviderConfigResponse)
@@ -187,9 +187,12 @@ async def update_current_user_provider_route(
     user: asyncpg.Record = Depends(get_current_user),
     db: asyncpg.Connection = Depends(get_db),
 ) -> dict[str, object]:
+    if user["role"] not in ("owner", "admin"):
+        raise HTTPException(status_code=403, detail="Only workspace owners and admins can change provider settings")
     try:
         return await update_user_provider_config(
             user["id"],
+            user["org_id"],
             payload.extraction_provider,
             payload.extraction_model,
             payload.openai_api_key,
@@ -202,4 +205,3 @@ async def update_current_user_provider_route(
         )
     except ValueError as error:
         raise HTTPException(status_code=422, detail=str(error)) from error
-    list_user_api_keys,

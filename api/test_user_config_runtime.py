@@ -1,9 +1,12 @@
 from uuid import uuid4
 
 import pytest
+from fastapi import HTTPException
 
+from api.models.user import UserProviderConfigUpdate
+from api.routes import users as user_routes
 from api.services import extraction, proxy
-from api.services.users import regenerate_user_key, update_user_provider_config
+from api.services.users import get_user_provider_config, regenerate_user_key, update_user_provider_config
 
 
 @pytest.mark.asyncio
@@ -33,7 +36,11 @@ async def test_proxy_uses_user_retrieval_config(monkeypatch) -> None:
         )
 
     class FakeDb:
+        def __init__(self) -> None:
+            self.query = ""
+
         async def fetchrow(self, query, *args):
+            self.query = query
             return {
                 "id": args[0],
                 "external_id": "external-user",
@@ -49,6 +56,7 @@ async def test_proxy_uses_user_retrieval_config(monkeypatch) -> None:
 
     user_id = uuid4()
     org_id = uuid4()
+    db = FakeDb()
     await proxy.prepare_proxy_request(
         user_id,
         org_id,
@@ -57,7 +65,7 @@ async def test_proxy_uses_user_retrieval_config(monkeypatch) -> None:
         {"messages": [{"role": "user", "content": "What stack should I use?"}]},
         "openai",
         False,
-        FakeDb(),
+        db,
         2,
         0.72,
     )
@@ -67,6 +75,8 @@ async def test_proxy_uses_user_retrieval_config(monkeypatch) -> None:
     assert captured["query"] == "What stack should I use?"
     assert captured["limit"] == 2
     assert captured["threshold"] == 0.72
+    assert "FROM orgs" in db.query
+    assert "orgs.extraction_provider" in db.query
 
 
 @pytest.mark.asyncio
@@ -189,8 +199,8 @@ async def test_update_user_provider_config_persists_extraction_model() -> None:
                 "max_memories_injected": 5,
                 "retrieval_threshold": 0.5,
                 "dedup_threshold": 0.95,
-                "extraction_provider": args[1],
-                "extraction_model": args[2],
+                "extraction_provider": args[2],
+                "extraction_model": args[3],
                 "openai_api_key_encrypted": None,
                 "gemini_api_key_encrypted": None,
                 "anthropic_api_key_encrypted": None,
@@ -198,9 +208,11 @@ async def test_update_user_provider_config_persists_extraction_model() -> None:
 
     db = FakeDb()
     user_id = uuid4()
+    org_id = uuid4()
 
     response = await update_user_provider_config(
         user_id,
+        org_id,
         "gemini",
         "gemini-1.5-flash",
         None,
@@ -213,7 +225,8 @@ async def test_update_user_provider_config_persists_extraction_model() -> None:
     )
 
     assert "extraction_model" in db.query
-    assert db.args == (user_id, "gemini", "gemini-1.5-flash")
+    assert "UPDATE orgs" in db.query
+    assert db.args == (org_id, user_id, "gemini", "gemini-1.5-flash")
     assert response["extraction_provider"] == "gemini"
     assert response["extraction_model"] == "gemini-1.5-flash"
 
@@ -227,6 +240,7 @@ async def test_update_user_provider_config_rejects_blank_extraction_model() -> N
     with pytest.raises(ValueError, match="Extraction model is required"):
         await update_user_provider_config(
             uuid4(),
+            uuid4(),
             "openai",
             "   ",
             None,
@@ -237,3 +251,43 @@ async def test_update_user_provider_config_rejects_blank_extraction_model() -> N
             False,
             FakeDb(),
         )
+
+
+@pytest.mark.asyncio
+async def test_get_provider_config_reads_authenticated_workspace() -> None:
+    class FakeDb:
+        def __init__(self) -> None:
+            self.query = ""
+            self.args: tuple[object, ...] = ()
+
+        async def fetchrow(self, query: str, *args: object) -> dict[str, object]:
+            self.query = query
+            self.args = args
+            return {
+                "extraction_provider": "openai",
+                "extraction_model": "gpt-4o-mini",
+                "openai_api_key_encrypted": None,
+                "gemini_api_key_encrypted": None,
+                "anthropic_api_key_encrypted": None,
+            }
+
+    db = FakeDb()
+    user_id = uuid4()
+    org_id = uuid4()
+
+    await get_user_provider_config(user_id, org_id, db)
+
+    assert "FROM orgs" in db.query
+    assert db.args == (org_id, user_id)
+
+
+@pytest.mark.asyncio
+async def test_workspace_member_cannot_update_provider_settings() -> None:
+    with pytest.raises(HTTPException) as raised:
+        await user_routes.update_current_user_provider_route(
+            UserProviderConfigUpdate(extraction_provider="openai"),
+            {"id": uuid4(), "org_id": uuid4(), "role": "member"},
+            object(),
+        )
+
+    assert raised.value.status_code == 403

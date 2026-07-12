@@ -154,7 +154,7 @@ Save the returned `ek_...` API key and use it in the dashboard or API calls.
 
 The hot path is designed to stay simple:
 
-1. Embed the latest user message with `sentence-transformers/all-MiniLM-L6-v2`.
+1. Embed the latest user message with `BAAI/bge-small-en-v1.5`.
 2. Search `memories` with pgvector cosine similarity.
 3. Inject the top matches into the system prompt.
 4. Forward the request to OpenAI, Gemini, Ollama, or Anthropic.
@@ -321,7 +321,7 @@ For an existing Supabase database, re-apply `api/db/schema.sql` after pulling up
 docker compose -f docker-compose.supabase.yml run --rm api python -m api.apply_schema
 ```
 
-Supabase replaces only the Postgres service. It does not replace the FastAPI service, because Engram still needs `/users`, `/memories`, `/logs`, and `/v1/chat`. Host `api/` on a container-capable platform such as Azure Container Apps, Render, Railway, Fly.io, or another Docker host. Point its `DATABASE_URL` at Supabase and set provider keys such as `OPENAI_API_KEY`.
+Supabase replaces only the Postgres service. It does not replace the FastAPI service, because Engram still needs `/users`, `/memories`, `/logs`, and `/v1/chat`. Host `api/` on a container-capable platform such as Azure Container Apps, Render, Railway, Fly.io, or another Docker host. Point its `DATABASE_URL` at Supabase. In hosted mode, paid-provider calls require a workspace key saved in Settings or `X-Engram-Provider-Key`; server provider keys are used only for self-hosted mode.
 
 ## Development Checks
 

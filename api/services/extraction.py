@@ -7,13 +7,13 @@ from uuid import uuid4
 import asyncpg
 
 from api.config import settings
-from api.services.users import _USER_COLUMNS
 from api.db.connection import get_pool
 from api.services.deduplication import store_memory_with_deduplication
 from api.services.memories import infer_category
 from api.services.providers.base import ExtractionProvider
 from api.services.providers.factory import build_extraction_provider
 from api.services.provider_keys import ProviderConfigError, resolve_user_provider, ResolvedProvider
+from api.services.users import get_workspace_provider_context
 
 
 logger = logging.getLogger(__name__)
@@ -87,19 +87,7 @@ async def run_extraction_task(
         pool = get_pool()
         async with pool.acquire() as db:
             await record_conversation(user_id, org_id, conversation_id, request_body, response_body, "running", 0, db)
-            user_row = await db.fetchrow(
-                f"""
-                SELECT {_USER_COLUMNS}
-                FROM users
-                WHERE id = $1
-                  AND EXISTS (
-                      SELECT 1 FROM org_memberships
-                      WHERE user_id = users.id AND org_id = $2
-                  )
-                """,
-                user_id,
-                org_id,
-            )
+            user_row = await get_workspace_provider_context(user_id, org_id, db)
             if user_row is None:
                 raise RuntimeError("User not found during extraction")
         try:
@@ -382,19 +370,7 @@ async def capture_conversation_memories(
     conversation = build_capture_conversation_text(user_message, assistant_response)
     pool = get_pool()
     async with pool.acquire() as db:
-        user_row = await db.fetchrow(
-            f"""
-            SELECT {_USER_COLUMNS}
-            FROM users
-            WHERE id = $1
-              AND EXISTS (
-                  SELECT 1 FROM org_memberships
-                  WHERE user_id = users.id AND org_id = $2
-              )
-            """,
-            user_id,
-            org_id,
-        )
+        user_row = await get_workspace_provider_context(user_id, org_id, db)
     if user_row is None:
         raise RuntimeError("User not found during capture")
     try:

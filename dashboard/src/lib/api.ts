@@ -99,19 +99,21 @@ export type UserConfig = {
 export type UserConfigUpdate = Partial<UserConfig>;
 
 export type UserProviderConfig = {
-  extraction_provider: "openai" | "gemini" | "ollama";
+  extraction_provider: "openai" | "gemini" | "ollama" | "anthropic";
   extraction_model: string;
   has_user_api_key: boolean;
   user_api_key_preview: string | null;
 };
 
 export type UserProviderConfigUpdate = {
-  extraction_provider?: "openai" | "gemini" | "ollama";
+  extraction_provider?: "openai" | "gemini" | "ollama" | "anthropic";
   extraction_model?: string;
   openai_api_key?: string;
   gemini_api_key?: string;
+  anthropic_api_key?: string;
   clear_openai_key?: boolean;
   clear_gemini_key?: boolean;
+  clear_anthropic_key?: boolean;
 };
 
 export type ClerkEngramKeyResponse = {

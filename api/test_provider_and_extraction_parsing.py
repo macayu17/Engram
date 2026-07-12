@@ -1,9 +1,12 @@
 import json
+from pathlib import Path
 
 import pytest
 
 from api.services.extraction import build_conversation_text, extract_assistant_response_text
 from api.services.providers.base import extract_chat_message_content, parse_memory_json
+from api.services.providers.factory import build_extraction_provider
+from api.services.provider_keys import ResolvedProvider
 
 
 def test_build_conversation_text_includes_text_content_parts() -> None:
@@ -72,3 +75,22 @@ def test_parse_memory_json_strips_markdown_json_fence() -> None:
 def test_parse_memory_json_rejects_non_string_items() -> None:
     with pytest.raises(ValueError):
         parse_memory_json("[\"valid\", 123]")
+
+
+def test_build_extraction_provider_accepts_anthropic() -> None:
+    resolved = ResolvedProvider(
+        name="anthropic",
+        api_key="anthropic-key",
+        base_url="https://api.anthropic.com/v1",
+        model="claude-3-5-haiku-latest",
+        source="user",
+    )
+
+    assert build_extraction_provider(resolved).__class__.__name__ == "AnthropicExtractionProvider"
+
+
+def test_embedding_model_defaults_match_runtime() -> None:
+    root = Path(__file__).resolve().parent.parent
+
+    assert "BAAI/bge-small-en-v1.5" in (root / ".env.example").read_text()
+    assert "BAAI/bge-small-en-v1.5" in (root / "README.md").read_text()

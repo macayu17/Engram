@@ -20,6 +20,5 @@ def test_user_external_id_rejects_whitespace_only() -> None:
         UserCreate(external_id="   ")
 
 
-def test_extraction_provider_config_rejects_anthropic() -> None:
-    with pytest.raises(ValidationError):
-        UserProviderConfigUpdate(extraction_provider="anthropic")
+def test_extraction_provider_config_accepts_anthropic() -> None:
+    assert UserProviderConfigUpdate(extraction_provider="anthropic").extraction_provider == "anthropic"

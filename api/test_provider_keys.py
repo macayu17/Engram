@@ -98,12 +98,14 @@ def test_resolve_user_provider_rejects_unknown_provider() -> None:
         provider_keys.resolve_user_provider({"extraction_provider": "deepseek", "openai_api_key_encrypted": None, "gemini_api_key_encrypted": None, "anthropic_api_key_encrypted": None})
 
 
-def test_resolve_user_provider_rejects_override_for_anthropic() -> None:
-    with pytest.raises(provider_keys.ProviderConfigError):
-        provider_keys.resolve_user_provider(
-            {"extraction_provider": "anthropic", "openai_api_key_encrypted": None, "gemini_api_key_encrypted": None, "anthropic_api_key_encrypted": None},
-            override_key="anything",
-        )
+def test_resolve_user_provider_accepts_override_for_anthropic() -> None:
+    resolved = provider_keys.resolve_user_provider(
+        {"extraction_provider": "anthropic", "openai_api_key_encrypted": None, "gemini_api_key_encrypted": None, "anthropic_api_key_encrypted": None},
+        override_key="anything",
+    )
+
+    assert resolved.api_key == "anything"
+    assert resolved.source == "override"
 
 
 def test_resolve_user_provider_falls_back_to_server_env(monkeypatch) -> None:
@@ -119,6 +121,35 @@ def test_resolve_user_provider_falls_back_to_server_env(monkeypatch) -> None:
     resolved = provider_keys.resolve_user_provider(user)
     assert resolved.api_key == "server-openai"
     assert resolved.source == "server"
+
+
+def test_hosted_mode_does_not_spend_server_provider_key(monkeypatch) -> None:
+    monkeypatch.setattr(provider_keys.settings, "engram_service_key", "service-key")
+    monkeypatch.setattr(provider_keys.settings, "openai_api_key", "server-openai")
+    user = {
+        "id": "u1",
+        "extraction_provider": "openai",
+        "openai_api_key_encrypted": None,
+        "gemini_api_key_encrypted": None,
+        "anthropic_api_key_encrypted": None,
+    }
+
+    with pytest.raises(provider_keys.ProviderConfigError, match="Configure a provider API key for this workspace"):
+        provider_keys.resolve_user_provider(user)
+
+
+def test_self_hosted_mode_keeps_server_provider_fallback(monkeypatch) -> None:
+    monkeypatch.setattr(provider_keys.settings, "engram_service_key", "")
+    monkeypatch.setattr(provider_keys.settings, "openai_api_key", "server-openai")
+    user = {
+        "id": "u1",
+        "extraction_provider": "openai",
+        "openai_api_key_encrypted": None,
+        "gemini_api_key_encrypted": None,
+        "anthropic_api_key_encrypted": None,
+    }
+
+    assert provider_keys.resolve_user_provider(user).source == "server"
 
 
 def test_settings_accepts_engram_prefixed_env_var(monkeypatch) -> None:

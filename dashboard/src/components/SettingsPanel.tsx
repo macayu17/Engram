@@ -155,7 +155,7 @@ export function SettingsPanel() {
         <p className="font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-muted">§ III — Local key</p>
         <h1 className="mt-2 font-serif text-5xl font-semibold leading-tight text-ink">Settings</h1>
         <p className="mt-4 max-w-2xl font-serif text-lg leading-8 text-muted">
-          The dashboard stores one Engram key in this browser. Provider keys stay on the server.
+          The dashboard stores one Engram key in this browser. Workspace provider keys are encrypted by the API.
         </p>
       </div>
 
@@ -399,6 +399,7 @@ function ProviderConfigSection({ apiKey, onError }: { apiKey: string; onError: (
     if (apiKeyInput.trim()) {
       if (provider === "openai") payload.openai_api_key = apiKeyInput.trim();
       if (provider === "gemini") payload.gemini_api_key = apiKeyInput.trim();
+      if (provider === "anthropic") payload.anthropic_api_key = apiKeyInput.trim();
     }
     updateMutation.mutate(payload);
   }
@@ -407,6 +408,7 @@ function ProviderConfigSection({ apiKey, onError }: { apiKey: string; onError: (
     const payload: UserProviderConfigUpdate = { extraction_provider: provider as UserProviderConfig["extraction_provider"] };
     if (provider === "openai") payload.clear_openai_key = true;
     if (provider === "gemini") payload.clear_gemini_key = true;
+    if (provider === "anthropic") payload.clear_anthropic_key = true;
     updateMutation.mutate(payload);
   }
 
@@ -442,6 +444,7 @@ function ProviderConfigSection({ apiKey, onError }: { apiKey: string; onError: (
               >
                 <option value="openai">OpenAI</option>
                 <option value="gemini">Gemini</option>
+                <option value="anthropic">Anthropic</option>
                 <option value="ollama">Ollama (local, no key)</option>
               </select>
             </label>
@@ -461,12 +464,12 @@ function ProviderConfigSection({ apiKey, onError }: { apiKey: string; onError: (
             <div>
               <label className="block">
                 <span className="font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-muted">
-                  {provider === "openai" ? "OpenAI" : "Gemini"} API key
+                  {provider === "openai" ? "OpenAI" : provider === "gemini" ? "Gemini" : "Anthropic"} API key
                 </span>
                 <span className="mt-1 block font-sans text-[11px] uppercase tracking-[0.12em] text-muted/70">
                   {providerQuery.data?.user_api_key_preview
                     ? `Stored as ${providerQuery.data.user_api_key_preview}`
-                    : "Not stored. Server fallback will be used."}
+                    : "No workspace key stored."}
                 </span>
               </label>
               <div className="mt-2 flex flex-col gap-3 sm:flex-row">

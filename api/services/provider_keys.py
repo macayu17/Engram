@@ -56,7 +56,7 @@ def resolve_user_provider(
     )
     base_url, fallback_model = _base_url_and_model_for(chosen)
     api_key: str | None = None
-    source = "server"
+    source = "local" if chosen == "ollama" else "workspace"
     if override_key:
         if not _override_key_supported(chosen):
             raise ProviderConfigError(
@@ -69,18 +69,18 @@ def resolve_user_provider(
         if decrypted:
             api_key = decrypted
             source = "user"
-    if not api_key and chosen != "ollama":
+    if not api_key and chosen != "ollama" and not settings.engram_service_key:
         api_key = _server_default_key(chosen)
+        if api_key:
+            source = "server"
     if not api_key and chosen != "ollama":
-        raise ProviderConfigError(
-            f"No API key available for provider '{chosen}'. Set one in the dashboard or configure the server environment.",
-        )
+        raise ProviderConfigError("Configure a provider API key for this workspace")
     model = str(user.get("extraction_model") or fallback_model) if hasattr(user, "get") and user.get("extraction_model") else fallback_model
     return ResolvedProvider(name=chosen, api_key=api_key, base_url=base_url, model=model, source=source)
 
 
 def _override_key_supported(provider: str) -> bool:
-    return provider in {"openai", "gemini"}
+    return provider in {"openai", "gemini", "anthropic"}
 
 
 def _base_url_and_model_for(provider: str) -> tuple[str, str]:
@@ -137,5 +137,5 @@ def supported_providers() -> list[dict[str, str]]:
         {"name": "openai", "supports_override_key": "true"},
         {"name": "gemini", "supports_override_key": "true"},
         {"name": "ollama", "supports_override_key": "false"},
-        {"name": "anthropic", "supports_override_key": "false"},
+        {"name": "anthropic", "supports_override_key": "true"},
     ]

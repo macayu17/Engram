@@ -247,7 +247,7 @@ def main() -> None:
         assert_true(all(mcp_payload.values()), f"MCP tool verification failed: {completed_mcp.stdout}")
         json_request("DELETE", f"{API_URL}/users/me", headers={"X-Engram-Key": api_key})
         user_deleted = True
-        sys.stdout.write(f"{json.dumps({
+        sys.stdout.write(json.dumps({
             "proxyFirstCall": True,
             "extractionStoredMemories": len(memories_payload["memories"]),
             "proxySecondCallInjected": injected_count,
@@ -257,7 +257,7 @@ def main() -> None:
             "mcpTools": mcp_payload,
             "cleanupUserDeleted": user_deleted,
             "userConfigApplied": config_payload,
-        })}\n")
+        }) + "\n")
     finally:
         if postgres_stopped:
             try:

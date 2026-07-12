@@ -9,7 +9,8 @@
     "typecheck": "next typegen && tsc --noEmit",
     "verify:billing": "node scripts/verify-billing-setup.mjs",
     "verify:clerk": "node scripts/verify-clerk-setup.mjs",
-    "verify:logic": "node scripts/verify-dashboard-logic.mjs"
+    "verify:logic": "node scripts/verify-dashboard-logic.mjs",
+    "verify:visual": "node scripts/verify-visual-system.mjs"
   },
   "dependencies": {
     "@clerk/nextjs": "^7.3.5",

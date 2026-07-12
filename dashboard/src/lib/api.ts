@@ -135,6 +135,21 @@ export type ApiKeyCreateResponse = ApiKeyRecord & {
   api_key: string;
 };
 
+export type WorkspaceUsage = {
+  plan: "free" | "pro";
+  subscription_status: string;
+  period_start: string;
+  current_period_end: string | null;
+  members: number;
+  memories: number;
+  retrievals: number;
+  limits: {
+    members: number;
+    memories: number;
+    retrievals: number;
+  };
+};
+
 export type ChatMessage = {
   role: "system" | "user" | "assistant";
   content: string;
@@ -408,6 +423,11 @@ export const api = {
     list: () => request<ApiKeyRecord[]>("GET", "/users/me/api-keys"),
     create: (name: string) => request<ApiKeyCreateResponse>("POST", "/users/me/api-keys", { name }),
     revoke: (id: string) => request<void>("DELETE", `/users/me/api-keys/${id}`),
+  },
+  billing: {
+    usage: () => request<WorkspaceUsage>("GET", "/billing/usage"),
+    checkout: (orgId: string) => requestInternal<{ url: string }>("POST", "/api/billing/checkout", { orgId }),
+    portal: (orgId: string) => requestInternal<{ url: string }>("POST", "/api/billing/portal", { orgId }),
   },
 };
 

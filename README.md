@@ -363,6 +363,14 @@ Full deterministic flow with the local mock provider:
 python scripts/verify_full_flow.py
 ```
 
+Workspace isolation with local Compose services and a configured service key:
+
+```bash
+ENGRAM_SERVICE_KEY=local_test_service_key python scripts/verify_workspace_isolation.py
+```
+
+This verifier creates and deletes temporary local users. Do not point `ENGRAM_API_URL` at a hosted environment.
+
 ## Local Test Scripts
 
 Embedding retrieval:
@@ -385,4 +393,4 @@ python -m api.test_proxy_flow
 
 ## Scope
 
-Engram v1 intentionally avoids API JWT auth, rate limiting, streaming proxy support, external vector stores, Redis, Celery, LangChain, and LlamaIndex. The focus is the inspectable memory loop: retrieve, inject, forward, extract, deduplicate, store, and expose through REST, MCP, and dashboard surfaces. Dashboard sign-in is handled separately through Clerk.
+Engram v1 intentionally avoids API JWT auth, rate limiting, external vector stores, Redis, Celery, LangChain, and LlamaIndex. The focus is the inspectable memory loop: retrieve, inject, forward, extract, deduplicate, store, and expose through REST, MCP, and dashboard surfaces. Dashboard sign-in is handled separately through Clerk.

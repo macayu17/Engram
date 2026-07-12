@@ -3,57 +3,652 @@
 @tailwind utilities;
 
 :root {
+  color-scheme: dark;
+  --color-paper: 11 10 9;
+  --color-ink: 244 239 229;
+  --color-panel: 18 17 15;
+  --color-muted: 166 160 148;
+  --color-line: 55 51 44;
+  --color-tag: 35 32 27;
+  --color-signal: 200 145 74;
+  --color-caution: 210 175 88;
+  --color-fault: 255 107 94;
+  --theme-wave-x: 100vw;
+  --theme-wave-y: 0px;
+  --theme-wave-radius: 150vmax;
+  --theme-fallback-left: 0px;
+  --theme-fallback-top: 0px;
+  --theme-fallback-size: 0px;
+}
+
+[data-theme="light"] {
   color-scheme: light;
-  --color-paper: 250 250 249;
-  --color-ink: 24 28 27;
-  --color-panel: 255 255 255;
-  --color-muted: 94 102 98;
-  --color-line: 220 224 221;
-  --color-tag: 239 242 240;
-  --color-signal: 30 111 82;
-  --color-caution: 161 98 7;
-  --color-fault: 185 28 28;
+  --color-paper: 244 239 229;
+  --color-ink: 26 26 24;
+  --color-panel: 249 245 237;
+  --color-muted: 112 105 95;
+  --color-line: 219 211 198;
+  --color-tag: 235 227 213;
+  --color-signal: 122 85 40;
+  --color-caution: 139 111 45;
+  --color-fault: 180 35 24;
 }
 
 [data-theme="dark"] {
   color-scheme: dark;
-  --color-paper: 14 17 16;
-  --color-ink: 238 242 240;
-  --color-panel: 20 24 22;
-  --color-muted: 157 166 161;
-  --color-line: 50 57 53;
-  --color-tag: 31 37 34;
-  --color-signal: 74 192 143;
-  --color-caution: 245 190 71;
-  --color-fault: 248 113 113;
 }
 
-html,
-body {
+html {
   overflow-x: hidden;
 }
 
 body {
   background: rgb(var(--color-paper));
-  color: rgb(var(--color-ink));
+  overflow-x: hidden;
+}
+
+.theme-transition-active *,
+.theme-transition-active *::before,
+.theme-transition-active *::after {
+  transition: none !important;
+}
+
+.theme-view-transition-active *,
+.theme-view-transition-active *::before,
+.theme-view-transition-active *::after {
+  animation-play-state: paused !important;
 }
 
 ::selection {
-  background: rgb(var(--color-signal) / 0.18);
+  background: rgb(var(--color-tag));
+  color: rgb(var(--color-ink));
 }
 
-:focus-visible {
-  outline: 2px solid rgb(var(--color-signal));
-  outline-offset: 3px;
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+
+::view-transition-new(root) {
+  animation: theme-wave 720ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  clip-path: circle(0 at var(--theme-wave-x) var(--theme-wave-y));
+}
+
+@keyframes theme-wave {
+  from {
+    clip-path: circle(0 at var(--theme-wave-x) var(--theme-wave-y));
+  }
+
+  to {
+    clip-path: circle(var(--theme-wave-radius) at var(--theme-wave-x) var(--theme-wave-y));
+  }
+}
+
+.theme-fallback-wave {
+  animation: theme-fallback-wave 820ms cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+  height: var(--theme-fallback-size);
+  left: var(--theme-fallback-left);
+  top: var(--theme-fallback-top);
+  transform: scale(0);
+  transform-origin: center;
+  width: var(--theme-fallback-size);
+}
+
+.theme-fallback-wave-light {
+  background: rgb(251 251 249);
+}
+
+.theme-fallback-wave-dark {
+  background: rgb(11 10 9);
+}
+
+.memory-constellation {
+  color: rgb(var(--color-ink));
+  opacity: 0.92;
+}
+
+.memory-hero-frame {
+  background: rgb(var(--color-paper));
+}
+
+.memory-hero-orbit {
+  height: min(27rem, 52vw);
+  pointer-events: none;
+  position: absolute;
+  right: max(-3.75rem, calc((100vw - 82rem) / 2 - 4.75rem));
+  top: 8.75rem;
+  width: min(27rem, 52vw);
+  z-index: 1;
+}
+
+.memory-hero-orbit__halo {
+  animation: memory-orbit-turn 28s linear infinite;
+  border: 1px solid rgb(var(--color-signal) / 0.24);
+  border-radius: 9999px;
+  inset: 0;
+  position: absolute;
+}
+
+.memory-hero-orbit__halo::before,
+.memory-hero-orbit__halo::after {
+  border: 1px solid rgb(var(--color-line) / 0.42);
+  border-radius: inherit;
+  content: "";
+  position: absolute;
+}
+
+.memory-hero-orbit__halo::before {
+  inset: 16%;
+}
+
+.memory-hero-orbit__halo::after {
+  border-color: rgb(var(--color-signal) / 0.18);
+  inset: 32%;
+}
+
+.memory-hero-orbit__halo--inner {
+  animation-direction: reverse;
+  animation-duration: 18s;
+  border-color: rgb(var(--color-muted) / 0.16);
+  inset: 11%;
+}
+
+.memory-hero-orbit__cross {
+  background: linear-gradient(90deg, transparent, rgb(var(--color-line) / 0.38), transparent);
+  left: 6%;
+  position: absolute;
+  top: 50%;
+  transform-origin: center;
+  width: 88%;
+}
+
+.memory-hero-orbit__cross--x {
+  height: 1px;
+}
+
+.memory-hero-orbit__cross--y {
+  height: 1px;
+  transform: rotate(90deg);
+}
+
+.memory-hero-orbit__beacon {
+  animation: memory-orbit-beacon 3.4s ease-in-out infinite;
+  background: rgb(var(--color-signal));
+  border-radius: 9999px;
+  box-shadow:
+    0 0 1.4rem rgb(var(--color-signal) / 0.7),
+    0 0 4.2rem rgb(var(--color-signal) / 0.3);
+  height: 0.75rem;
+  left: calc(50% - 0.375rem);
+  position: absolute;
+  top: calc(50% - 0.375rem);
+  width: 0.75rem;
+}
+
+.memory-hero-orbit__needle {
+  background: linear-gradient(90deg, transparent, rgb(var(--color-signal) / 0.36), rgb(var(--color-signal) / 0.06));
+  height: 1px;
+  left: 0;
+  position: absolute;
+  top: 50%;
+  transform-origin: right center;
+  width: 50%;
+}
+
+.memory-hero-orbit__needle--one {
+  transform: rotate(-22deg);
+}
+
+.memory-hero-orbit__needle--two {
+  opacity: 0.72;
+  transform: rotate(0deg);
+}
+
+.memory-hero-orbit__needle--three {
+  opacity: 0.56;
+  transform: rotate(22deg);
+}
+
+.memory-hero-orbit__chip {
+  align-items: center;
+  animation: memory-chip-float 7s ease-in-out infinite alternate;
+  color: rgb(var(--color-muted));
+  display: flex;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  gap: 0.55rem;
+  letter-spacing: 0.1em;
+  position: absolute;
+  text-transform: uppercase;
+}
+
+.memory-hero-orbit__chip span {
+  border-bottom: 1px solid rgb(var(--color-line) / 0.6);
+  font-size: 0.58rem;
+  padding-bottom: 0.15rem;
+}
+
+.memory-hero-orbit__chip strong {
+  color: rgb(var(--color-signal));
+  font-size: 0.64rem;
+  font-weight: 700;
+}
+
+.memory-hero-orbit__chip--one {
+  right: 18%;
+  top: 13%;
+}
+
+.memory-hero-orbit__chip--two {
+  animation-delay: 1.2s;
+  left: 2%;
+  top: 43%;
+}
+
+.memory-hero-orbit__chip--three {
+  animation-delay: 2.4s;
+  bottom: 14%;
+  right: 9%;
+}
+
+.memory-hero-orbit__rail {
+  bottom: 5%;
+  color: rgb(var(--color-muted));
+  display: grid;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: 0.58rem;
+  gap: 0.45rem;
+  letter-spacing: 0.1em;
+  opacity: 0.58;
+  position: absolute;
+  right: 50%;
+  text-transform: uppercase;
+}
+
+.memory-hero-orbit__rail span {
+  border-left: 1px solid rgb(var(--color-signal) / 0.48);
+  padding-left: 0.55rem;
+}
+
+.memory-constellation__ledger {
+  background-image:
+    linear-gradient(rgb(var(--color-line) / 0.28) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(var(--color-line) / 0.22) 1px, transparent 1px);
+  background-size: 72px 72px;
+  inset: -18% -12%;
+  opacity: 0.16;
+  position: absolute;
+  transform: rotate(-6deg);
+}
+
+.memory-constellation__scan {
+  animation: memory-scan-drift 20s ease-in-out infinite alternate;
+  display: grid;
+  gap: 0.42rem;
+  left: 8%;
+  opacity: 0.36;
+  position: absolute;
+  top: 3%;
+  transform: rotate(-9deg);
+  width: min(22rem, 42vw);
+}
+
+.memory-constellation__scan span {
+  animation: memory-row-fade 6s ease-in-out infinite;
+  animation-delay: calc(var(--row-index) * 220ms);
+  border-bottom: 1px solid rgb(var(--color-line) / 0.35);
+  color: rgb(var(--color-muted));
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: 0.56rem;
+  letter-spacing: 0.08em;
+  line-height: 1;
+  overflow: hidden;
+  padding-bottom: 0.18rem;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.memory-constellation__network {
+  animation: memory-field-drift 18s ease-in-out infinite alternate;
+  bottom: -4.5rem;
+  height: min(42rem, 78vw);
+  left: 56%;
+  position: absolute;
+  transform: translateX(-50%);
+  width: min(82rem, 118vw);
+}
+
+.memory-constellation__mesh path,
+.memory-constellation__paths path {
+  fill: none;
+  stroke: rgb(var(--color-muted));
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.memory-constellation__mesh path {
+  opacity: 0.24;
+  stroke-width: 1;
+}
+
+.memory-constellation__core circle {
+  animation: memory-core-breathe 9s ease-in-out infinite;
+  fill: none;
+  opacity: 0.16;
+  stroke: rgb(var(--color-signal));
+  stroke-dasharray: 1 18;
+  stroke-width: 1;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+.memory-constellation__core circle:nth-child(2) {
+  animation-delay: 1.4s;
+  stroke: rgb(var(--color-muted));
+}
+
+.memory-constellation__core circle:nth-child(3) {
+  animation-delay: 2.8s;
+}
+
+.memory-constellation__paths path {
+  opacity: 0.42;
+  stroke-width: 1.25;
+}
+
+.memory-constellation__nodes circle {
+  animation: memory-node-pulse 5.5s ease-in-out infinite;
+  fill: rgb(var(--color-muted));
+  opacity: 0.7;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+.memory-constellation__nodes circle:nth-child(3n) {
+  animation-delay: 0.8s;
+  fill: rgb(var(--color-signal));
+}
+
+.memory-constellation__nodes circle:nth-child(4n) {
+  animation-delay: 1.4s;
+}
+
+.memory-constellation__flow path {
+  animation: memory-line-flow 7.5s linear infinite;
+  fill: none;
+  opacity: 0.85;
+  stroke: rgb(var(--color-signal));
+  stroke-dasharray: 0.1 24;
+  stroke-linecap: round;
+  stroke-width: 2.1;
+}
+
+.memory-constellation__flow path:nth-child(2) {
+  animation-delay: 0.8s;
+}
+
+.memory-constellation__flow path:nth-child(3) {
+  animation-delay: 1.6s;
+}
+
+.memory-constellation__flow path:nth-child(4) {
+  animation-delay: 2.4s;
+}
+
+.memory-constellation__flow path:nth-child(5) {
+  animation-delay: 3.2s;
+}
+
+.memory-constellation__flow path:nth-child(6) {
+  animation-delay: 4s;
+}
+
+.memory-constellation__flow path:nth-child(7) {
+  animation-delay: 4.8s;
+}
+
+.memory-constellation__beacons circle {
+  animation: memory-beacon-pulse 3.2s ease-in-out infinite;
+  fill: rgb(var(--color-signal));
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+.memory-constellation__beacons circle:nth-child(2) {
+  animation-delay: 1s;
+}
+
+.memory-constellation__beacons circle:nth-child(3) {
+  animation-delay: 1.8s;
+}
+
+.memory-constellation__labels {
+  inset: 0;
+  position: absolute;
+}
+
+.memory-constellation__label {
+  animation: memory-label-float 8s ease-in-out infinite alternate;
+  color: rgb(var(--color-muted));
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: 0.55rem;
+  letter-spacing: 0.08em;
+  opacity: 0.55;
+  position: absolute;
+  text-transform: uppercase;
+}
+
+.memory-constellation__label--one {
+  left: 15%;
+  top: 17%;
+  transform: rotate(-16deg);
+}
+
+.memory-constellation__label--two {
+  bottom: 18%;
+  left: 31%;
+}
+
+.memory-constellation__label--three {
+  right: 12%;
+  top: 39%;
+  transform: rotate(12deg);
+}
+
+@keyframes theme-fallback-wave {
+  from {
+    transform: scale(0);
+  }
+
+  to {
+    transform: scale(1);
+  }
+}
+
+@keyframes memory-field-drift {
+  from {
+    transform: translateX(-51%) translateY(0) scale(1);
+  }
+
+  to {
+    transform: translateX(-49%) translateY(-0.75rem) scale(1.015);
+  }
+}
+
+@keyframes memory-scan-drift {
+  from {
+    transform: translateY(0) rotate(-9deg);
+  }
+
+  to {
+    transform: translateY(1rem) rotate(-8deg);
+  }
+}
+
+@keyframes memory-row-fade {
+  0%,
+  100% {
+    opacity: 0.22;
+  }
+
+  48%,
+  62% {
+    opacity: 0.72;
+  }
+}
+
+@keyframes memory-line-flow {
+  from {
+    stroke-dashoffset: 0;
+  }
+
+  to {
+    stroke-dashoffset: -240;
+  }
+}
+
+@keyframes memory-node-pulse {
+  0%,
+  100% {
+    opacity: 0.38;
+    transform: scale(0.9);
+  }
+
+  50% {
+    opacity: 0.82;
+    transform: scale(1.15);
+  }
+}
+
+@keyframes memory-core-breathe {
+  0%,
+  100% {
+    opacity: 0.08;
+    transform: scale(0.94);
+  }
+
+  50% {
+    opacity: 0.24;
+    transform: scale(1.04);
+  }
+}
+
+@keyframes memory-beacon-pulse {
+  0%,
+  100% {
+    opacity: 0.58;
+    transform: scale(0.86);
+  }
+
+  50% {
+    opacity: 1;
+    transform: scale(1.7);
+  }
+}
+
+@keyframes memory-label-float {
+  from {
+    opacity: 0.35;
+  }
+
+  to {
+    opacity: 0.68;
+  }
+}
+
+@keyframes memory-orbit-turn {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes memory-orbit-beacon {
+  0%,
+  100% {
+    opacity: 0.74;
+    transform: scale(0.86);
+  }
+
+  50% {
+    opacity: 1;
+    transform: scale(1.65);
+  }
+}
+
+@keyframes memory-chip-float {
+  from {
+    opacity: 0.45;
+    transform: translateY(-0.35rem);
+  }
+
+  to {
+    opacity: 0.86;
+    transform: translateY(0.35rem);
+  }
+}
+
+@media (max-width: 768px) {
+  .memory-hero-orbit {
+    opacity: 0.5;
+    right: -10rem;
+    top: 12rem;
+    width: 23rem;
+  }
+
+  .memory-hero-orbit__chip,
+  .memory-hero-orbit__rail {
+    display: none;
+  }
+
+  .memory-constellation__scan {
+    left: -6%;
+    opacity: 0.26;
+    top: 2%;
+    width: 18rem;
+  }
+
+  .memory-constellation__network {
+    bottom: -4rem;
+    height: 31rem;
+    left: 50%;
+    width: 58rem;
+  }
+
+  .memory-constellation__label--three {
+    display: none;
+  }
+
 }
 
 @media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
-    scroll-behavior: auto !important;
-    transition-duration: 0.01ms !important;
+  body {
+    transition: none;
+  }
+
+  ::view-transition-new(root) {
+    animation: none;
+  }
+
+  .theme-fallback-wave {
+    animation: none;
+    transform: scale(1);
+  }
+
+  .memory-constellation__network,
+  .memory-constellation__scan,
+  .memory-constellation__scan span,
+  .memory-constellation__nodes circle,
+  .memory-constellation__core circle,
+  .memory-constellation__flow path,
+  .memory-constellation__beacons circle,
+  .memory-constellation__label,
+  .memory-hero-orbit__halo,
+  .memory-hero-orbit__beacon,
+  .memory-hero-orbit__chip {
+    animation: none;
   }
 }

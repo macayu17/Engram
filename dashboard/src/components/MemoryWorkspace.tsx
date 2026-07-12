@@ -6,6 +6,7 @@ import Link from "next/link";
 import { ChangeEvent, FormEvent, ReactNode, useState } from "react";
 
 import { api, type MemorySourceResponse, type MemoryUpdatePayload, type SearchResponse } from "@/lib/api";
+import { MemoryConstellation } from "./MemoryConstellation";
 import { MemoryCard } from "./MemoryCard";
 import { MemoryTable } from "./MemoryTable";
 import { SearchBar } from "./SearchBar";

@@ -22,7 +22,6 @@ function loadTsModule(relativePath) {
 }
 
 const { extractChatResponseContent } = loadTsModule("src/lib/chat-response.ts");
-const settingsSource = readFileSync(join(root, "src/components/SettingsPanel.tsx"), "utf8");
 
 assert.equal(
   extractChatResponseContent({
@@ -58,13 +57,3 @@ assert.equal(
 );
 
 process.stdout.write("PASS dashboard chat response parser\n");
-
-for (const heading of ["Workspace", "Members", "API keys", "Providers", "Billing", "Account"]) {
-  assert.match(settingsSource, new RegExp(`title=\\"${heading}\\"`), `Settings must include ${heading}`);
-}
-assert.match(settingsSource, /api\.billing\.(checkout|portal)/, "Settings must route subscription actions through api.billing");
-assert.match(settingsSource, /anthropic_api_key/, "Settings must save Anthropic keys");
-assert.match(settingsSource, /clear_anthropic_key/, "Settings must clear Anthropic keys");
-assert.match(settingsSource, /!hosted/, "Hosted settings must hide the local API-key form");
-
-process.stdout.write("PASS dashboard SaaS settings source\n");

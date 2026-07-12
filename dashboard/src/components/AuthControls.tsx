@@ -10,8 +10,8 @@ export function AuthControls({ enabled }: { enabled: boolean }) {
     <>
       <Show when="signed-out">
         <SignInButton mode="modal">
-          <button type="button" className="rounded-md border border-line bg-panel px-3 py-2 text-sm font-medium text-ink hover:border-signal hover:text-signal">
-            Sign in
+          <button type="button" className="border border-line px-3 py-2 text-ink hover:border-signal hover:text-signal">
+            Sign In
           </button>
         </SignInButton>
       </Show>

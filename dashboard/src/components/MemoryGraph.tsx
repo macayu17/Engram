@@ -9,6 +9,7 @@ import {
   type GraphEntity,
   type GraphMemoryItem,
 } from "@/lib/api";
+import { cn } from "@/lib/cn";
 
 const ForceGraph2D = dynamic(() => import("react-force-graph-2d"), { ssr: false }) as unknown as React.ComponentType<ForceGraphProps>;
 
@@ -815,8 +816,10 @@ export function MemoryGraph() {
                     type="button"
                     onClick={() => handleToggleType(type)}
                     aria-pressed={active}
-                    className="flex w-full items-center justify-between gap-3 rounded-md border border-transparent px-2 py-1.5 font-sans text-[11px] font-medium uppercase tracking-[0.1em] transition hover:border-line/60"
-                    style={{ opacity: active ? 1 : 0.45, color: active ? "#cbd5e1" : "#64748b" }}
+                    className={cn(
+                      "flex w-full items-center justify-between gap-3 rounded-md border border-transparent px-2 py-1.5 font-sans text-[11px] font-medium uppercase tracking-[0.1em] transition hover:border-line/60",
+                      active ? "text-ink" : "text-muted opacity-60",
+                    )}
                   >
                     <span className="flex items-center gap-2">
                       <span
@@ -825,7 +828,7 @@ export function MemoryGraph() {
                       />
                       {type}
                     </span>
-                    <span className="font-sans text-[10px] tabular-nums text-muted">{count}</span>
+                    <span className={cn("font-sans text-[10px] tabular-nums", active ? "text-ink/80" : "text-muted")}>{count}</span>
                   </button>
                 </li>
               );

@@ -24,26 +24,33 @@ import asyncpg
 GOLDEN_SET_PATH = Path(__file__).parent / "golden_set.json"
 
 
-async def seed_user(db: asyncpg.Connection) -> tuple[str, uuid.UUID]:
+async def seed_user(db: asyncpg.Connection) -> tuple[str, uuid.UUID, uuid.UUID]:
     external_id = f"eval_{uuid.uuid4().hex[:8]}"
     row = await db.fetchrow(
         "INSERT INTO users (external_id, api_key_hash) VALUES ($1, $2) RETURNING id",
         external_id,
         f"eval_hash_{uuid.uuid4().hex}",
     )
-    return external_id, row["id"]
+    org = await db.fetchrow("INSERT INTO orgs (name) VALUES ($1) RETURNING id", f"{external_id} workspace")
+    await db.execute(
+        "INSERT INTO org_memberships (org_id, user_id, role) VALUES ($1, $2, 'owner')",
+        org["id"],
+        row["id"],
+    )
+    return external_id, row["id"], org["id"]
 
 
-async def seed_memory(db: asyncpg.Connection, user_id: uuid.UUID, content: str) -> None:
+async def seed_memory(db: asyncpg.Connection, user_id: uuid.UUID, org_id: uuid.UUID, content: str) -> None:
     from api.services.embedding import embed, format_embedding_for_pgvector
 
     embedding = format_embedding_for_pgvector(embed(content))
     await db.execute(
         """
-        INSERT INTO memories (user_id, content, embedding, status, source)
-        VALUES ($1, $2, $3::vector, 'approved', 'eval')
+        INSERT INTO memories (user_id, org_id, content, embedding, status, source)
+        VALUES ($1, $2, $3, $4::vector, 'approved', 'eval')
         """,
         user_id,
+        org_id,
         content,
         embedding,
     )
@@ -56,6 +63,7 @@ async def delete_user(db: asyncpg.Connection, user_id: uuid.UUID) -> None:
 async def run_query(
     db: asyncpg.Connection,
     user_id: uuid.UUID,
+    org_id: uuid.UUID,
     query: str,
     mode: str,
     limit: int = 5,
@@ -63,9 +71,9 @@ async def run_query(
     from api.services.retrieval import retrieve_memories, retrieve_memories_hybrid
 
     if mode == "hybrid":
-        results = await retrieve_memories_hybrid(user_id, query, db, limit, 0.0)
+        results = await retrieve_memories_hybrid(user_id, org_id, query, db, limit, 0.0)
     else:
-        results = await retrieve_memories(user_id, query, db, limit, 0.0)
+        results = await retrieve_memories(user_id, org_id, query, db, limit, 0.0)
     return [str(r["content"]) for r in results]
 
 
@@ -86,9 +94,9 @@ async def evaluate(mode: str) -> dict[str, float]:
 
     db = await asyncpg.connect(database_url)
     try:
-        _, user_id = await seed_user(db)
+        _, user_id, org_id = await seed_user(db)
         for entry in golden:
-            await seed_memory(db, user_id, entry["memory"])
+            await seed_memory(db, user_id, org_id, entry["memory"])
 
         total_precision = 0.0
         total_recall = 0.0
@@ -103,7 +111,7 @@ async def evaluate(mode: str) -> dict[str, float]:
         for entry in golden:
             print(f"\n[{entry['id']}] Target: {entry['memory'][:60]}...")
             for query in entry["queries"]:
-                retrieved = await run_query(db, user_id, query, mode)
+                retrieved = await run_query(db, user_id, org_id, query, mode)
                 p, r = precision_recall(retrieved, entry["memory"])
                 total_precision += p
                 total_recall += r
@@ -111,7 +119,7 @@ async def evaluate(mode: str) -> dict[str, float]:
                 hit = "✓" if r else "✗"
                 print(f"  {hit} Q: {query[:50]!r:<52}  P={p:.2f} R={r:.0f}")
             for non_query in entry.get("non_queries", []):
-                retrieved = await run_query(db, user_id, non_query, mode)
+                retrieved = await run_query(db, user_id, org_id, non_query, mode)
                 hit = any(entry["memory"].lower() in r.lower() for r in retrieved)
                 if hit:
                     total_non_query_hits += 1

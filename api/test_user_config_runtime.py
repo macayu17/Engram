@@ -11,15 +11,16 @@ from api.services.users import regenerate_user_key, update_user_provider_config
 async def test_proxy_uses_user_retrieval_config(monkeypatch) -> None:
     captured: dict[str, object] = {}
 
-    async def fake_retrieve_memories(user_id, query, db, limit=None, threshold=None, namespace="default"):
+    async def fake_retrieve_memories(user_id, org_id, query, db, limit=None, threshold=None, namespace="default"):
         captured["user_id"] = user_id
+        captured["org_id"] = org_id
         captured["query"] = query
         captured["limit"] = limit
         captured["threshold"] = threshold
         captured["namespace"] = namespace
         return []
 
-    async def fake_log_retrieval(user_id, conversation_id, query, memories, db):
+    async def fake_log_retrieval(user_id, org_id, conversation_id, query, memories, db):
         captured["logged"] = True
 
     async def fake_forward_to_provider(body, resolved, incoming_headers):
@@ -52,8 +53,10 @@ async def test_proxy_uses_user_retrieval_config(monkeypatch) -> None:
     monkeypatch.setattr(proxy, "resolve_user_provider", fake_resolve_user_provider)
 
     user_id = uuid4()
+    org_id = uuid4()
     await proxy.build_proxy_result(
         user_id,
+        org_id,
         "external-user",
         "external-user",
         {"messages": [{"role": "user", "content": "What stack should I use?"}]},
@@ -66,6 +69,7 @@ async def test_proxy_uses_user_retrieval_config(monkeypatch) -> None:
     )
 
     assert captured["user_id"] == user_id
+    assert captured["org_id"] == org_id
     assert captured["query"] == "What stack should I use?"
     assert captured["limit"] == 2
     assert captured["threshold"] == 0.72
@@ -77,6 +81,7 @@ async def test_extracted_memory_storage_uses_user_dedup_threshold(monkeypatch) -
 
     async def fake_store_memory_with_deduplication(
         user_id,
+        org_id,
         content,
         embedding,
         conversation_id,
@@ -104,6 +109,7 @@ async def test_extracted_memory_storage_uses_user_dedup_threshold(monkeypatch) -
     monkeypatch.setattr("api.services.embedding.embed_batch", fake_embed_batch)
 
     stored_count, _stored_refs = await extraction.store_extracted_memories(
+        uuid4(),
         uuid4(),
         uuid4(),
         ["User prefers FastAPI"],

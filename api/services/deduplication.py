@@ -13,6 +13,7 @@ class StoreMemoryResult(TypedDict):
 
 async def store_memory_with_deduplication(
     user_id: object,
+    org_id: object,
     content: str,
     embedding: list[float],
     conversation_id: object | None,
@@ -33,12 +34,14 @@ async def store_memory_with_deduplication(
                1 - (embedding <=> $1::vector) AS score
         FROM memories
         WHERE user_id = $2
-          AND namespace = $3
+          AND org_id = $3
+          AND namespace = $4
         ORDER BY score DESC
         LIMIT 1
         """,
         vector_literal,
         user_id,
+        org_id,
         namespace,
     )
     if nearest is not None and nearest["status"] != "rejected" and nearest["score"] > dedup_threshold_value:
@@ -51,11 +54,12 @@ async def store_memory_with_deduplication(
                 embedding = $2::vector,
                 source_conversation_id = COALESCE($3, source_conversation_id),
                 confidence = GREATEST(confidence, $4),
-                status = CASE WHEN status IN ('approved', 'rejected') THEN status ELSE $7 END,
-                category = $8,
-                source = $9
+                status = CASE WHEN status IN ('approved', 'rejected') THEN status ELSE $8 END,
+                category = $9,
+                source = $10
             WHERE user_id = $5
-              AND id = $6
+              AND org_id = $6
+              AND id = $7
             RETURNING id, content, confidence, access_count, last_accessed, created_at, source_conversation_id,
                       status, category, pinned, source, last_confirmed
             """,
@@ -64,6 +68,7 @@ async def store_memory_with_deduplication(
             conversation_id,
             confidence,
             user_id,
+            org_id,
             nearest["id"],
             status,
             category,
@@ -72,12 +77,13 @@ async def store_memory_with_deduplication(
         return {"action": "updated", "memory": dict(updated) if updated is not None else None}
     inserted = await db.fetchrow(
         """
-        INSERT INTO memories (user_id, content, embedding, source_conversation_id, confidence, status, category, source, namespace)
-        VALUES ($1, $2, $3::vector, $4, $5, $6, $7, $8, $9)
+        INSERT INTO memories (user_id, org_id, content, embedding, source_conversation_id, confidence, status, category, source, namespace)
+        VALUES ($1, $2, $3, $4::vector, $5, $6, $7, $8, $9, $10)
         RETURNING id, content, confidence, access_count, last_accessed, created_at, source_conversation_id,
                   status, category, pinned, source, last_confirmed
         """,
         user_id,
+        org_id,
         content,
         vector_literal,
         conversation_id,

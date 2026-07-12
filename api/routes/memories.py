@@ -58,7 +58,7 @@ async def list_memories_route(
     user: asyncpg.Record = Depends(get_current_user),
     db: asyncpg.Connection = Depends(get_db),
 ) -> dict[str, object]:
-    memories, total = await list_memories(user["id"], db, limit, offset, search, order, direction, status, category, namespace=namespace)
+    memories, total = await list_memories(user["id"], user["org_id"], db, limit, offset, search, order, direction, status, category, namespace=namespace)
     return {"memories": memories, "total": total, "limit": limit, "offset": offset}
 
 
@@ -68,7 +68,7 @@ async def create_memory_route(
     user: asyncpg.Record = Depends(get_current_user),
     db: asyncpg.Connection = Depends(get_db),
 ) -> dict[str, object]:
-    return await create_memory(user["id"], payload.content, db, float(user["dedup_threshold"]), payload.category, payload.pinned)
+    return await create_memory(user["id"], user["org_id"], payload.content, db, float(user["dedup_threshold"]), payload.category, payload.pinned)
 
 
 @router.delete("", status_code=status.HTTP_204_NO_CONTENT)
@@ -76,7 +76,7 @@ async def delete_all_memories_route(
     user: asyncpg.Record = Depends(get_current_user),
     db: asyncpg.Connection = Depends(get_db),
 ) -> Response:
-    await delete_all_memories(user["id"], db)
+    await delete_all_memories(user["id"], user["org_id"], db)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
@@ -87,7 +87,7 @@ async def list_review_memories_route(
     user: asyncpg.Record = Depends(get_current_user),
     db: asyncpg.Connection = Depends(get_db),
 ) -> dict[str, object]:
-    memories, total = await list_memories(user["id"], db, limit, offset, None, "created_at", "desc", "pending", None)
+    memories, total = await list_memories(user["id"], user["org_id"], db, limit, offset, None, "created_at", "desc", "pending", None)
     return {"memories": memories, "total": total, "limit": limit, "offset": offset}
 
 
@@ -96,7 +96,7 @@ async def export_memories_route(
     user: asyncpg.Record = Depends(get_current_user),
     db: asyncpg.Connection = Depends(get_db),
 ) -> dict[str, object]:
-    return {"memories": await export_memories(user["id"], db)}
+    return {"memories": await export_memories(user["id"], user["org_id"], db)}
 
 
 @router.post("/import", response_model=MemoryImportResponse, status_code=status.HTTP_201_CREATED)
@@ -105,7 +105,7 @@ async def import_memories_route(
     user: asyncpg.Record = Depends(get_current_user),
     db: asyncpg.Connection = Depends(get_db),
 ) -> dict[str, object]:
-    imported = await import_memories(user["id"], [item.model_dump() for item in payload.memories], db, float(user["dedup_threshold"]))
+    imported = await import_memories(user["id"], user["org_id"], [item.model_dump() for item in payload.memories], db, float(user["dedup_threshold"]))
     return {"imported": imported}
 
 
@@ -115,7 +115,7 @@ async def merge_suggestions_route(
     user: asyncpg.Record = Depends(get_current_user),
     db: asyncpg.Connection = Depends(get_db),
 ) -> dict[str, object]:
-    return {"suggestions": await list_merge_suggestions(user["id"], db, limit)}
+    return {"suggestions": await list_merge_suggestions(user["id"], user["org_id"], db, limit)}
 
 
 @router.post("/merge", response_model=MemoryResponse)
@@ -124,7 +124,7 @@ async def merge_memories_route(
     user: asyncpg.Record = Depends(get_current_user),
     db: asyncpg.Connection = Depends(get_db),
 ) -> dict[str, object]:
-    memory = await merge_memories(user["id"], payload.primary_id, payload.duplicate_id, payload.content, db)
+    memory = await merge_memories(user["id"], user["org_id"], payload.primary_id, payload.duplicate_id, payload.content, db)
     if memory is None:
         raise HTTPException(status_code=404, detail="Memory not found")
     return memory
@@ -135,7 +135,7 @@ async def decay_memories_route(
     user: asyncpg.Record = Depends(get_current_user),
     db: asyncpg.Connection = Depends(get_db),
 ) -> dict[str, object]:
-    return {"updated": await apply_confidence_decay(user["id"], db)}
+    return {"updated": await apply_confidence_decay(user["id"], user["org_id"], db)}
 
 
 @router.get("/timeline", response_model=MemoryTimelineResponse)
@@ -144,7 +144,7 @@ async def memory_timeline_route(
     user: asyncpg.Record = Depends(get_current_user),
     db: asyncpg.Connection = Depends(get_db),
 ) -> dict[str, object]:
-    return {"items": await timeline(user["id"], db, limit)}
+    return {"items": await timeline(user["id"], user["org_id"], db, limit)}
 
 
 @router.post("/capture", response_model=ConversationCaptureResponse, status_code=status.HTTP_201_CREATED)
@@ -158,6 +158,7 @@ async def capture_conversation_route(
     try:
         return await capture_conversation_memories(
             user["id"],
+            user["org_id"],
             payload.user_message,
             payload.assistant_response,
             payload.source,
@@ -177,7 +178,7 @@ async def search_memories_route(
     user: asyncpg.Record = Depends(get_current_user),
     db: asyncpg.Connection = Depends(get_db),
 ) -> dict[str, object]:
-    results = await search_memories(user["id"], payload.query, payload.limit, payload.threshold, db)
+    results = await search_memories(user["id"], user["org_id"], payload.query, payload.limit, payload.threshold, db)
     return {"results": results}
 
 
@@ -187,7 +188,7 @@ async def get_memory_source_route(
     user: asyncpg.Record = Depends(get_current_user),
     db: asyncpg.Connection = Depends(get_db),
 ) -> dict[str, object]:
-    source = await get_memory_source(user["id"], memory_id, db)
+    source = await get_memory_source(user["id"], user["org_id"], memory_id, db)
     if source is None:
         raise HTTPException(status_code=404, detail="Memory not found")
     return source
@@ -199,7 +200,7 @@ async def get_memory_route(
     user: asyncpg.Record = Depends(get_current_user),
     db: asyncpg.Connection = Depends(get_db),
 ) -> dict[str, object]:
-    memory = await get_memory(user["id"], memory_id, db)
+    memory = await get_memory(user["id"], user["org_id"], memory_id, db)
     if memory is None:
         raise HTTPException(status_code=404, detail="Memory not found")
     return memory
@@ -212,7 +213,7 @@ async def update_memory_route(
     user: asyncpg.Record = Depends(get_current_user),
     db: asyncpg.Connection = Depends(get_db),
 ) -> dict[str, object]:
-    memory = await update_memory(user["id"], memory_id, payload.content, db, payload.category, payload.pinned, payload.status)
+    memory = await update_memory(user["id"], user["org_id"], memory_id, payload.content, db, payload.category, payload.pinned, payload.status)
     if memory is None:
         raise HTTPException(status_code=404, detail="Memory not found")
     return memory
@@ -224,7 +225,7 @@ async def delete_memory_route(
     user: asyncpg.Record = Depends(get_current_user),
     db: asyncpg.Connection = Depends(get_db),
 ) -> Response:
-    deleted = await delete_memory(user["id"], memory_id, db)
+    deleted = await delete_memory(user["id"], user["org_id"], memory_id, db)
     if not deleted:
         raise HTTPException(status_code=404, detail="Memory not found")
     return Response(status_code=status.HTTP_204_NO_CONTENT)

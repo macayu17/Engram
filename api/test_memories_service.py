@@ -17,14 +17,14 @@ async def test_delete_all_memories_returns_count() -> None:
     db = FakeDb('DELETE 7')
     user_id = 'user-1'
 
-    result = await memories.delete_all_memories(user_id, db)
+    result = await memories.delete_all_memories(user_id, 'org-1', db)
 
     assert result == 7
     assert len(db.calls) == 1
     query, params = db.calls[0]
     assert 'DELETE FROM memories' in query
     assert 'user_id = $1' in query
-    assert params == ('user-1',)
+    assert params == ('user-1', 'org-1')
 
 
 @pytest.mark.asyncio
@@ -33,7 +33,7 @@ async def test_delete_all_memories_handles_zero_rows() -> None:
         async def execute(self, query, *args):
             return 'DELETE 0'
 
-    result = await memories.delete_all_memories('user-2', FakeDb())
+    result = await memories.delete_all_memories('user-2', 'org-2', FakeDb())
 
     assert result == 0
 
@@ -61,10 +61,10 @@ async def test_apply_confidence_decay_returns_updated_count() -> None:
             assert 'confidence * 0.92' in query
             assert "status = 'approved'" in query
             assert 'pinned = false' in query
-            assert args == ('user-3',)
+            assert args == ('user-3', 'org-3')
             return 'UPDATE 4'
 
-    assert await memories.apply_confidence_decay('user-3', FakeDb()) == 4
+    assert await memories.apply_confidence_decay('user-3', 'org-3', FakeDb()) == 4
 
 
 @pytest.mark.asyncio
@@ -116,7 +116,7 @@ async def test_list_merge_suggestions_filters_by_category_and_similarity() -> No
                 },
             ]
 
-    suggestions = await memories.list_merge_suggestions('user-4', FakeDb(), 5)
+    suggestions = await memories.list_merge_suggestions('user-4', 'org-4', FakeDb(), 5)
 
     assert len(suggestions) == 1
     assert suggestions[0]['primary']['id'] == '1'
@@ -132,6 +132,7 @@ async def test_search_listing_total_counts_all_filtered_matches(monkeypatch) -> 
         async def fetch(self, query, *args):
             assert 'LIMIT' not in query
             assert args[0] == 'user-5'
+            assert args[1] == 'org-5'
             return [
                 memory_row('1', 'First memory', 0.91),
                 memory_row('2', 'Second memory', 0.84),
@@ -139,14 +140,14 @@ async def test_search_listing_total_counts_all_filtered_matches(monkeypatch) -> 
             ]
 
         async def execute(self, query, *args):
-            self.updated_ids = args[1]
+            self.updated_ids = args[2]
             return 'UPDATE 1'
 
     monkeypatch.setattr(memories, 'build_retrieval_texts', lambda query: [query])
     monkeypatch.setattr(memories, 'embed', lambda text: [0.0] * 384)
 
     db = FakeDb()
-    page, total = await memories.list_memories('user-5', db, 1, 1, 'memory', 'created_at', 'desc', 'approved', None)
+    page, total = await memories.list_memories('user-5', 'org-5', db, 1, 1, 'memory', 'created_at', 'desc', 'approved', None)
 
     assert total == 3
     assert [row['id'] for row in page] == ['2']
@@ -178,9 +179,9 @@ async def test_merge_memories_is_transactional_and_preserves_duplicate_stats(mon
 
         async def fetchrow(self, query, *args):
             assert self.in_transaction
-            if 'FOR UPDATE' in query and args[1] == 'primary':
+            if 'FOR UPDATE' in query and args[2] == 'primary':
                 return memory_row('primary', 'Primary', 0.6, access_count=4, pinned=False)
-            if 'FOR UPDATE' in query and args[1] == 'duplicate':
+            if 'FOR UPDATE' in query and args[2] == 'duplicate':
                 return memory_row('duplicate', 'Duplicate', 0.9, access_count=7, pinned=True)
             if 'UPDATE memories' in query:
                 self.update_args = args
@@ -190,14 +191,14 @@ async def test_merge_memories_is_transactional_and_preserves_duplicate_stats(mon
         async def execute(self, query, *args):
             assert self.in_transaction
             assert 'DELETE FROM memories' in query
-            assert args == ('user-6', 'duplicate')
+            assert args == ('user-6', 'org-6', 'duplicate')
             self.deleted = True
             return 'DELETE 1'
 
     monkeypatch.setattr(memories, 'embed', lambda text: [0.0] * 384)
 
     db = FakeDb()
-    merged = await memories.merge_memories('user-6', 'primary', 'duplicate', None, db)
+    merged = await memories.merge_memories('user-6', 'org-6', 'primary', 'duplicate', None, db)
 
     assert merged is not None
     assert merged['content'] == 'Primary\nDuplicate'

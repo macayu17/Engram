@@ -59,9 +59,10 @@ def _parse_entity_strings(raw: list[str]) -> list[dict[str, str]]:
 
 
 async def extract_entities_for_memory(
+    user_id: UUID,
+    org_id: UUID,
     memory_id: UUID,
     content: str,
-    user_id: UUID,
     resolved: ResolvedProvider,
     db: asyncpg.Connection,
 ) -> int:
@@ -76,13 +77,14 @@ async def extract_entities_for_memory(
     for entity in entities:
         row = await db.fetchrow(
             """
-            INSERT INTO memory_entities (user_id, name, entity_type)
-            VALUES ($1, $2, $3)
-            ON CONFLICT (user_id, name, entity_type)
+            INSERT INTO memory_entities (user_id, org_id, name, entity_type)
+            VALUES ($1, $2, $3, $4)
+            ON CONFLICT (org_id, user_id, name, entity_type)
             DO UPDATE SET name = EXCLUDED.name
             RETURNING id
             """,
             user_id,
+            org_id,
             entity["name"],
             entity["type"],
         )
@@ -91,50 +93,63 @@ async def extract_entities_for_memory(
         await db.execute(
             """
             INSERT INTO memory_entity_links (memory_id, entity_id)
-            VALUES ($1, $2)
+            SELECT $1, $2
+            WHERE EXISTS (
+                SELECT 1 FROM memories
+                WHERE id = $1 AND user_id = $3 AND org_id = $4
+            )
             ON CONFLICT DO NOTHING
             """,
             memory_id,
             row["id"],
+            user_id,
+            org_id,
         )
         inserted += 1
     return inserted
 
 
-async def list_entity_edges(user_id: UUID, db: asyncpg.Connection) -> list[dict[str, object]]:
+async def list_entity_edges(user_id: UUID, org_id: UUID, db: asyncpg.Connection) -> list[dict[str, object]]:
     rows = await db.fetch(
         """
         SELECT a.entity_id AS source, b.entity_id AS target, COUNT(*) AS weight
         FROM memory_entity_links a
         JOIN memory_entity_links b ON a.memory_id = b.memory_id AND a.entity_id < b.entity_id
         JOIN memory_entities ea ON ea.id = a.entity_id
-        WHERE ea.user_id = $1
+        JOIN memory_entities eb ON eb.id = b.entity_id
+        JOIN memories m ON m.id = a.memory_id
+        WHERE ea.user_id = $1 AND ea.org_id = $2
+          AND eb.user_id = $1 AND eb.org_id = $2
+          AND m.user_id = $1 AND m.org_id = $2
         GROUP BY a.entity_id, b.entity_id
         """,
         user_id,
+        org_id,
     )
     return [dict(row) for row in rows]
 
 
-async def list_user_entities(user_id: UUID, db: asyncpg.Connection) -> list[dict[str, object]]:
+async def list_user_entities(user_id: UUID, org_id: UUID, db: asyncpg.Connection) -> list[dict[str, object]]:
     rows = await db.fetch(
         """
         SELECT e.id, e.name, e.entity_type, COUNT(mel.memory_id) AS memory_count
         FROM memory_entities e
         LEFT JOIN memory_entity_links mel ON mel.entity_id = e.id
-        WHERE e.user_id = $1
+        WHERE e.user_id = $1 AND e.org_id = $2
         GROUP BY e.id, e.name, e.entity_type
         ORDER BY memory_count DESC, e.name ASC
         """,
         user_id,
+        org_id,
     )
     return [dict(row) for row in rows]
 
 
 async def list_memories_for_entity(
+    user_id: UUID,
+    org_id: UUID,
     entity_type: str,
     entity_name: str,
-    user_id: UUID,
     db: asyncpg.Connection,
 ) -> list[dict[str, object]]:
     rows = await db.fetch(
@@ -143,11 +158,14 @@ async def list_memories_for_entity(
         FROM memories m
         JOIN memory_entity_links mel ON mel.memory_id = m.id
         JOIN memory_entities e ON e.id = mel.entity_id
-        WHERE e.user_id = $1 AND e.name = $2 AND e.entity_type = $3
+        WHERE e.user_id = $1 AND e.org_id = $2
+          AND e.name = $3 AND e.entity_type = $4
+          AND m.user_id = $1 AND m.org_id = $2
           AND m.status = 'approved'
         ORDER BY m.confidence DESC, m.created_at DESC
         """,
         user_id,
+        org_id,
         entity_name,
         entity_type,
     )
@@ -155,8 +173,9 @@ async def list_memories_for_entity(
 
 
 async def get_memory_neighbors(
-    memory_id: UUID,
     user_id: UUID,
+    org_id: UUID,
+    memory_id: UUID,
     db: asyncpg.Connection,
     limit: int = 20,
 ) -> list[dict[str, object]]:
@@ -166,24 +185,32 @@ async def get_memory_neighbors(
         FROM memories m
         JOIN memory_entity_links mel ON mel.memory_id = m.id
         WHERE mel.entity_id IN (
-            SELECT entity_id FROM memory_entity_links WHERE memory_id = $1
+            SELECT source_link.entity_id
+            FROM memory_entity_links source_link
+            JOIN memories source_memory ON source_memory.id = source_link.memory_id
+            WHERE source_link.memory_id = $3
+              AND source_memory.user_id = $1
+              AND source_memory.org_id = $2
         )
-        AND m.id != $1
-        AND m.user_id = $2
+        AND m.id != $3
+        AND m.user_id = $1
+        AND m.org_id = $2
         AND m.status = 'approved'
         ORDER BY m.confidence DESC
-        LIMIT $3
+        LIMIT $4
         """,
-        memory_id,
         user_id,
+        org_id,
+        memory_id,
         limit,
     )
     return [dict(row) for row in rows]
 
 
 async def get_memory_entities(
-    memory_id: UUID,
     user_id: UUID,
+    org_id: UUID,
+    memory_id: UUID,
     db: asyncpg.Connection,
 ) -> list[dict[str, object]]:
     rows = await db.fetch(
@@ -191,17 +218,22 @@ async def get_memory_entities(
         SELECT e.id, e.name, e.entity_type
         FROM memory_entities e
         JOIN memory_entity_links mel ON mel.entity_id = e.id
-        WHERE mel.memory_id = $1 AND e.user_id = $2
+        JOIN memories m ON m.id = mel.memory_id
+        WHERE mel.memory_id = $3
+          AND e.user_id = $1 AND e.org_id = $2
+          AND m.user_id = $1 AND m.org_id = $2
         ORDER BY e.name ASC
         """,
-        memory_id,
         user_id,
+        org_id,
+        memory_id,
     )
     return [dict(row) for row in rows]
 
 
 async def backfill_entities_for_user(
     user_id: UUID,
+    org_id: UUID,
     db: asyncpg.Connection,
     resolved: ResolvedProvider,
     concurrency: int = 5,
@@ -210,12 +242,13 @@ async def backfill_entities_for_user(
         """
         SELECT m.id, m.content
         FROM memories m
-        WHERE m.user_id = $1 AND m.status = 'approved'
+        WHERE m.user_id = $1 AND m.org_id = $2 AND m.status = 'approved'
           AND NOT EXISTS (
             SELECT 1 FROM memory_entity_links mel WHERE mel.memory_id = m.id
           )
         """,
         user_id,
+        org_id,
     )
     if not memories:
         return {"processed": 0, "entities_created": 0}
@@ -228,7 +261,7 @@ async def backfill_entities_for_user(
             async with pool.acquire() as conn:
                 try:
                     return await extract_entities_for_memory(
-                        memory_row["id"], str(memory_row["content"]), user_id, resolved, conn
+                        user_id, org_id, memory_row["id"], str(memory_row["content"]), resolved, conn
                     )
                 except Exception as error:
                     logger.warning("Backfill failed for memory %s: %s", memory_row["id"], error)

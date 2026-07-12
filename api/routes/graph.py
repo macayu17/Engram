@@ -29,7 +29,7 @@ async def list_entities_route(
     user: asyncpg.Record = Depends(get_current_user),
     db: asyncpg.Connection = Depends(get_db),
 ) -> dict[str, object]:
-    return {"entities": await list_user_entities(user["id"], db)}
+    return {"entities": await list_user_entities(user["id"], user["org_id"], db)}
 
 
 @router.get("/edges")
@@ -37,7 +37,7 @@ async def list_edges_route(
     user: asyncpg.Record = Depends(get_current_user),
     db: asyncpg.Connection = Depends(get_db),
 ) -> dict[str, object]:
-    return {"edges": await list_entity_edges(user["id"], db)}
+    return {"edges": await list_entity_edges(user["id"], user["org_id"], db)}
 
 
 @router.get("/entities/{entity_type}/{entity_name}/memories", response_model=EntityMemoriesResponse)
@@ -47,7 +47,7 @@ async def list_entity_memories_route(
     user: asyncpg.Record = Depends(get_current_user),
     db: asyncpg.Connection = Depends(get_db),
 ) -> dict[str, object]:
-    memories = await list_memories_for_entity(entity_type, entity_name, user["id"], db)
+    memories = await list_memories_for_entity(user["id"], user["org_id"], entity_type, entity_name, db)
     return {"entity_name": entity_name, "entity_type": entity_type, "memories": memories}
 
 
@@ -57,8 +57,8 @@ async def memory_neighbors_route(
     user: asyncpg.Record = Depends(get_current_user),
     db: asyncpg.Connection = Depends(get_db),
 ) -> dict[str, object]:
-    neighbors = await get_memory_neighbors(memory_id, user["id"], db)
-    entities = await get_memory_entities(memory_id, user["id"], db)
+    neighbors = await get_memory_neighbors(user["id"], user["org_id"], memory_id, db)
+    entities = await get_memory_entities(user["id"], user["org_id"], memory_id, db)
     return {"memory_id": memory_id, "neighbors": neighbors, "entities": entities}
 
 
@@ -73,4 +73,4 @@ async def extract_graph_route(
         resolved = resolve_user_provider(user)
     except ProviderConfigError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
-    return await backfill_entities_for_user(user["id"], db, resolved)
+    return await backfill_entities_for_user(user["id"], user["org_id"], db, resolved)

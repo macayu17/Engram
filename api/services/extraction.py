@@ -73,6 +73,7 @@ async def extract_memories(conversation: str, resolved: ResolvedProvider) -> lis
 
 async def run_extraction_task(
     user_id: UUID,
+    org_id: UUID,
     conversation_id: UUID,
     request_body: dict[str, object],
     response_body: bytes,
@@ -84,14 +85,19 @@ async def run_extraction_task(
     try:
         conversation = build_conversation_text(request_body, response_body)
         async with get_pool().acquire() as db:
-            await record_conversation(user_id, conversation_id, request_body, response_body, "running", 0, db)
+            await record_conversation(user_id, org_id, conversation_id, request_body, response_body, "running", 0, db)
             user_row = await db.fetchrow(
                 f"""
                 SELECT {_USER_COLUMNS}
                 FROM users
                 WHERE id = $1
+                  AND EXISTS (
+                      SELECT 1 FROM org_memberships
+                      WHERE user_id = users.id AND org_id = $2
+                  )
                 """,
                 user_id,
+                org_id,
             )
             if user_row is None:
                 raise RuntimeError("User not found during extraction")
@@ -105,10 +111,11 @@ async def run_extraction_task(
                 raise RuntimeError(str(error)) from error
             extracted = await extract_memories(conversation, resolved)
             inserted_count, stored_refs = await store_extracted_memories(
-                user_id, conversation_id, extracted, db, dedup_threshold, namespace=namespace, resolved=resolved
+                user_id, org_id, conversation_id, extracted, db, dedup_threshold, namespace=namespace, resolved=resolved
             )
             await record_conversation(
                 user_id,
+                org_id,
                 conversation_id,
                 request_body,
                 response_body,
@@ -117,18 +124,19 @@ async def run_extraction_task(
                 db,
             )
         if settings.enable_graph and stored_refs:
-            asyncio.create_task(_run_graph_extraction(user_id, stored_refs, resolved))
+            asyncio.create_task(_run_graph_extraction(user_id, org_id, stored_refs, resolved))
     except Exception as error:
         logger.warning("Memory extraction failed: %s", error)
         try:
             async with get_pool().acquire() as db:
-                await mark_conversation_failed(user_id, conversation_id, request_body, response_body, db)
+                await mark_conversation_failed(user_id, org_id, conversation_id, request_body, response_body, db)
         except Exception as status_error:
             logger.warning("Failed to record extraction status: %s", status_error)
 
 
 async def store_extracted_memories(
     user_id: UUID,
+    org_id: UUID,
     conversation_id: UUID,
     memories: list[str],
     db: asyncpg.Connection,
@@ -141,7 +149,7 @@ async def store_extracted_memories(
     from api.services.embedding import embed_batch
 
     embeddings = embed_batch(memories)
-    decisions = await reconcile_memories(user_id, memories, embeddings, db, resolved, namespace)
+    decisions = await reconcile_memories(user_id, org_id, memories, embeddings, db, resolved, namespace)
     stored_count = 0
     stored_refs: list[tuple[UUID, str]] = []
     for index, content in enumerate(memories):
@@ -150,7 +158,7 @@ async def store_extracted_memories(
             continue
         if action == "update" and target_id is not None:
             updated = await apply_memory_update(
-                user_id, target_id, content, embeddings[index], conversation_id, db
+                user_id, org_id, target_id, content, embeddings[index], conversation_id, db
             )
             if updated is not None:
                 stored_count += 1
@@ -158,6 +166,7 @@ async def store_extracted_memories(
             continue
         result = await store_memory_with_deduplication(
             user_id,
+            org_id,
             content,
             embeddings[index],
             conversation_id,
@@ -179,6 +188,7 @@ async def store_extracted_memories(
 
 async def reconcile_memories(
     user_id: UUID,
+    org_id: UUID,
     memories: list[str],
     embeddings: list[list[float]],
     db: asyncpg.Connection,
@@ -197,15 +207,17 @@ async def reconcile_memories(
             SELECT id, content, 1 - (embedding <=> $1::vector) AS score
             FROM memories
             WHERE user_id = $2
-              AND namespace = $3
+              AND org_id = $3
+              AND namespace = $4
               AND status IN ('approved', 'pending')
-              AND 1 - (embedding <=> $1::vector) >= $4
-              AND 1 - (embedding <=> $1::vector) < $5
+              AND 1 - (embedding <=> $1::vector) >= $5
+              AND 1 - (embedding <=> $1::vector) < $6
             ORDER BY score DESC
             LIMIT 3
             """,
             format_embedding_for_pgvector(embedding),
             user_id,
+            org_id,
             namespace,
             settings.reconcile_threshold,
             settings.memory_refinement_threshold,
@@ -264,6 +276,7 @@ def parse_update_target(raw_decision: str, candidates: list[dict[str, object]]) 
 
 async def apply_memory_update(
     user_id: UUID,
+    org_id: UUID,
     memory_id: UUID,
     content: str,
     embedding: list[float],
@@ -281,7 +294,8 @@ async def apply_memory_update(
             category = $4,
             source = 'extraction'
         WHERE user_id = $5
-          AND id = $6
+          AND org_id = $6
+          AND id = $7
         RETURNING id
         """,
         content,
@@ -289,6 +303,7 @@ async def apply_memory_update(
         conversation_id,
         infer_category(content),
         user_id,
+        org_id,
         memory_id,
     )
     return dict(row) if row is not None else None
@@ -296,6 +311,7 @@ async def apply_memory_update(
 
 async def _run_graph_extraction(
     user_id: UUID,
+    org_id: UUID,
     memory_refs: list[tuple[UUID, str]],
     resolved: ResolvedProvider,
 ) -> None:
@@ -310,7 +326,7 @@ async def _run_graph_extraction(
         async with semaphore:
             try:
                 async with pool.acquire() as db:
-                    await extract_entities_for_memory(memory_id, content, user_id, resolved, db)
+                    await extract_entities_for_memory(user_id, org_id, memory_id, content, resolved, db)
             except Exception as inner_error:
                 logger.warning("Entity extraction failed for memory %s: %s", memory_id, inner_error)
 
@@ -322,6 +338,7 @@ async def _run_graph_extraction(
 
 async def capture_conversation_memories(
     user_id: UUID,
+    org_id: UUID,
     user_message: str,
     assistant_response: str,
     source: str,
@@ -340,8 +357,13 @@ async def capture_conversation_memories(
         SELECT {_USER_COLUMNS}
         FROM users
         WHERE id = $1
+          AND EXISTS (
+              SELECT 1 FROM org_memberships
+              WHERE user_id = users.id AND org_id = $2
+          )
         """,
         user_id,
+        org_id,
     )
     if user_row is None:
         raise RuntimeError("User not found during capture")
@@ -358,11 +380,11 @@ async def capture_conversation_memories(
     stored_refs: list[tuple[UUID, str]] = []
     if extracted_memories:
         memories_extracted, stored_refs = await store_extracted_memories(
-            user_id, conversation_id, extracted_memories, db, dedup_threshold, resolved=resolved
+            user_id, org_id, conversation_id, extracted_memories, db, dedup_threshold, resolved=resolved
         )
-    await record_conversation(user_id, conversation_id, request_body, response_body, "completed", memories_extracted, db)
+    await record_conversation(user_id, org_id, conversation_id, request_body, response_body, "completed", memories_extracted, db)
     if settings.enable_graph and stored_refs:
-        asyncio.create_task(_run_graph_extraction(user_id, stored_refs, resolved))
+        asyncio.create_task(_run_graph_extraction(user_id, org_id, stored_refs, resolved))
     return {
         "conversation_id": conversation_id,
         "memories_extracted": memories_extracted,
@@ -467,6 +489,7 @@ def stringify_message_content(content: object) -> str:
 
 async def record_conversation(
     user_id: UUID,
+    org_id: UUID,
     conversation_id: UUID,
     request_body: dict[str, object],
     response_body: bytes,
@@ -476,15 +499,18 @@ async def record_conversation(
 ) -> None:
     await db.execute(
         """
-        INSERT INTO conversations (id, user_id, extraction_status, memories_extracted, raw_exchange)
-        VALUES ($1, $2, $3, $4, $5::jsonb)
+        INSERT INTO conversations (id, user_id, org_id, extraction_status, memories_extracted, raw_exchange)
+        VALUES ($1, $2, $3, $4, $5, $6::jsonb)
         ON CONFLICT (id) DO UPDATE
         SET extraction_status = EXCLUDED.extraction_status,
             memories_extracted = EXCLUDED.memories_extracted,
             raw_exchange = EXCLUDED.raw_exchange
+        WHERE conversations.user_id = EXCLUDED.user_id
+          AND conversations.org_id = EXCLUDED.org_id
         """,
         conversation_id,
         user_id,
+        org_id,
         status,
         memories_extracted,
         json.dumps({"request": request_body, "response": response_body.decode("utf-8", errors="replace")}),
@@ -493,9 +519,10 @@ async def record_conversation(
 
 async def mark_conversation_failed(
     user_id: UUID,
+    org_id: UUID,
     conversation_id: UUID,
     request_body: dict[str, object],
     response_body: bytes,
     db: asyncpg.Connection,
 ) -> None:
-    await record_conversation(user_id, conversation_id, request_body, response_body, "failed", 0, db)
+    await record_conversation(user_id, org_id, conversation_id, request_body, response_body, "failed", 0, db)

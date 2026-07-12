@@ -90,6 +90,7 @@ def build_log_embedding_text(query: str) -> str:
 
 async def retrieve_memories(
     user_id: object,
+    org_id: object,
     query: str,
     db: asyncpg.Connection,
     limit: int | None = None,
@@ -109,18 +110,20 @@ async def retrieve_memories(
                    status, category, pinned, source, last_confirmed,
                    1 - (embedding <=> $1::vector)
                      + CASE WHEN pinned THEN 0.08 ELSE 0 END
-                     + $6 * exp(-0.6931471805599453 * GREATEST(extract(epoch FROM now() - COALESCE(last_accessed, created_at)), 0) / ($7 * 86400.0))
-                     + $8 * LEAST(access_count, 20) / 20.0 AS score
+                     + $7 * exp(-0.6931471805599453 * GREATEST(extract(epoch FROM now() - COALESCE(last_accessed, created_at)), 0) / ($8 * 86400.0))
+                     + $9 * LEAST(access_count, 20) / 20.0 AS score
             FROM memories
             WHERE user_id = $2
+              AND org_id = $3
               AND status = 'approved'
-              AND namespace = $5
-              AND (1 - (embedding <=> $1::vector) > $3 OR pinned = true)
+              AND namespace = $6
+              AND (1 - (embedding <=> $1::vector) > $4 OR pinned = true)
             ORDER BY score DESC
-            LIMIT $4
+            LIMIT $5
             """,
             query_embedding,
             user_id,
+            org_id,
             threshold_value,
             limit_value,
             namespace,
@@ -152,9 +155,11 @@ async def retrieve_memories(
             SET access_count = access_count + 1,
                 last_accessed = now()
             WHERE user_id = $1
-              AND id = ANY($2::uuid[])
+              AND org_id = $2
+              AND id = ANY($3::uuid[])
             """,
             user_id,
+            org_id,
             memory_ids,
         )
     return memories
@@ -195,6 +200,7 @@ def rrf_merge(
 
 async def retrieve_memories_fulltext(
     user_id: object,
+    org_id: object,
     query: str,
     db: asyncpg.Connection,
     limit: int,
@@ -210,14 +216,16 @@ async def retrieve_memories_fulltext(
                ts_rank_cd(content_tsv, to_tsquery('english', $1)) AS score
         FROM memories
         WHERE user_id = $2
+          AND org_id = $3
           AND status = 'approved'
-          AND namespace = $4
+          AND namespace = $5
           AND content_tsv @@ to_tsquery('english', $1)
         ORDER BY score DESC
-        LIMIT $3
+        LIMIT $4
         """,
         ts_query,
         user_id,
+        org_id,
         limit * 2,
         namespace,
     )
@@ -226,6 +234,7 @@ async def retrieve_memories_fulltext(
 
 async def retrieve_memories_hybrid(
     user_id: object,
+    org_id: object,
     query: str,
     db: asyncpg.Connection,
     limit: int | None = None,
@@ -233,13 +242,14 @@ async def retrieve_memories_hybrid(
     namespace: str = "default",
 ) -> list[dict[str, object]]:
     limit_value = settings.max_memories_injected if limit is None else limit
-    vector_hits = await retrieve_memories(user_id, query, db, limit_value * 2, threshold, namespace=namespace)
-    fulltext_hits = await retrieve_memories_fulltext(user_id, query, db, limit_value, namespace=namespace)
+    vector_hits = await retrieve_memories(user_id, org_id, query, db, limit_value * 2, threshold, namespace=namespace)
+    fulltext_hits = await retrieve_memories_fulltext(user_id, org_id, query, db, limit_value, namespace=namespace)
     return rrf_merge(vector_hits, fulltext_hits, limit_value)
 
 
 async def retrieve_memories_graph(
     user_id: object,
+    org_id: object,
     query: str,
     db: asyncpg.Connection,
     limit: int | None = None,
@@ -247,7 +257,7 @@ async def retrieve_memories_graph(
     namespace: str = "default",
 ) -> list[dict[str, object]]:
     limit_value = settings.max_memories_injected if limit is None else limit
-    seeds = await retrieve_memories(user_id, query, db, limit_value * 2, threshold, namespace=namespace)
+    seeds = await retrieve_memories(user_id, org_id, query, db, limit_value * 2, threshold, namespace=namespace)
     if not seeds:
         return []
     seed_ids = [memory["id"] for memory in seeds]
@@ -263,12 +273,14 @@ async def retrieve_memories_graph(
         )
         AND m.id != ALL($1::uuid[])
         AND m.user_id = $2
+        AND m.org_id = $3
         AND m.status = 'approved'
-        AND m.namespace = $3
-        LIMIT $4
+        AND m.namespace = $4
+        LIMIT $5
         """,
         seed_ids,
         user_id,
+        org_id,
         namespace,
         limit_value * 2,
     )
@@ -286,6 +298,7 @@ async def retrieve_memories_graph(
 
 async def log_retrieval(
     user_id: object,
+    org_id: object,
     conversation_id: str,
     query: str,
     memories: list[dict[str, object]],
@@ -295,10 +308,11 @@ async def log_retrieval(
     await db.execute(
         """
         INSERT INTO retrieval_logs
-          (user_id, query, query_embedding, retrieved_memory_ids, retrieved_scores, conversation_id)
-        VALUES ($1, $2, $3::vector, $4, $5, $6)
+          (user_id, org_id, query, query_embedding, retrieved_memory_ids, retrieved_scores, conversation_id)
+        VALUES ($1, $2, $3, $4::vector, $5, $6, $7)
         """,
         user_id,
+        org_id,
         query,
         query_embedding,
         [memory["id"] for memory in memories],

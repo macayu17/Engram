@@ -5,6 +5,7 @@ import asyncpg
 
 async def list_retrieval_logs(
     user_id: object,
+    org_id: object,
     db: asyncpg.Connection,
     limit: int,
     offset: int,
@@ -16,11 +17,13 @@ async def list_retrieval_logs(
             SELECT id, query, retrieved_memory_ids, retrieved_scores, conversation_id, created_at
             FROM retrieval_logs
             WHERE user_id = $1
+              AND org_id = $2
             ORDER BY created_at DESC
-            LIMIT $2
-            OFFSET $3
+            LIMIT $3
+            OFFSET $4
             """,
             user_id,
+            org_id,
             limit,
             offset,
         )
@@ -29,8 +32,10 @@ async def list_retrieval_logs(
             SELECT COUNT(*)
             FROM retrieval_logs
             WHERE user_id = $1
+              AND org_id = $2
             """,
             user_id,
+            org_id,
         )
     else:
         rows = await db.fetch(
@@ -38,12 +43,14 @@ async def list_retrieval_logs(
             SELECT id, query, retrieved_memory_ids, retrieved_scores, conversation_id, created_at
             FROM retrieval_logs
             WHERE user_id = $1
-              AND conversation_id = $2
+              AND org_id = $2
+              AND conversation_id = $3
             ORDER BY created_at DESC
-            LIMIT $3
-            OFFSET $4
+            LIMIT $4
+            OFFSET $5
             """,
             user_id,
+            org_id,
             conversation_id,
             limit,
             offset,
@@ -53,16 +60,19 @@ async def list_retrieval_logs(
             SELECT COUNT(*)
             FROM retrieval_logs
             WHERE user_id = $1
-              AND conversation_id = $2
+              AND org_id = $2
+              AND conversation_id = $3
             """,
             user_id,
+            org_id,
             conversation_id,
         )
-    return [await hydrate_log_row(user_id, row, db) for row in rows], int(total)
+    return [await hydrate_log_row(user_id, org_id, row, db) for row in rows], int(total)
 
 
 async def get_retrieval_log(
     user_id: object,
+    org_id: object,
     log_id: object,
     db: asyncpg.Connection,
 ) -> dict[str, object] | None:
@@ -71,19 +81,21 @@ async def get_retrieval_log(
         SELECT id, query, query_embedding, retrieved_memory_ids, retrieved_scores, conversation_id, created_at
         FROM retrieval_logs
         WHERE user_id = $1
-          AND id = $2
+          AND org_id = $2
+          AND id = $3
         """,
         user_id,
+        org_id,
         log_id,
     )
     if row is None:
         return None
-    hydrated = await hydrate_log_row(user_id, row, db)
+    hydrated = await hydrate_log_row(user_id, org_id, row, db)
     hydrated["query_embedding_dimensions"] = get_vector_dimensions(row["query_embedding"])
     return hydrated
 
 
-async def list_clients(user_id: object, db: asyncpg.Connection) -> list[dict[str, object]]:
+async def list_clients(user_id: object, org_id: object, db: asyncpg.Connection) -> list[dict[str, object]]:
     rows = await db.fetch(
         """
         SELECT COALESCE(raw_exchange->'request'->>'source', 'proxy') AS source,
@@ -92,17 +104,24 @@ async def list_clients(user_id: object, db: asyncpg.Connection) -> list[dict[str
                MAX(created_at) AS last_seen
         FROM conversations
         WHERE user_id = $1
+          AND org_id = $2
         GROUP BY source
         ORDER BY last_seen DESC
         """,
         user_id,
+        org_id,
     )
     return [dict(row) for row in rows]
 
 
-async def hydrate_log_row(user_id: object, row: asyncpg.Record, db: asyncpg.Connection) -> dict[str, object]:
+async def hydrate_log_row(
+    user_id: object,
+    org_id: object,
+    row: asyncpg.Record,
+    db: asyncpg.Connection,
+) -> dict[str, object]:
     memory_ids = list(row["retrieved_memory_ids"])
-    content_by_id = await get_memory_content_map(user_id, memory_ids, db)
+    content_by_id = await get_memory_content_map(user_id, org_id, memory_ids, db)
     scores = list(row["retrieved_scores"])
     retrieved_memories = [
         {
@@ -123,6 +142,7 @@ async def hydrate_log_row(user_id: object, row: asyncpg.Record, db: asyncpg.Conn
 
 async def get_memory_content_map(
     user_id: object,
+    org_id: object,
     memory_ids: Sequence[object],
     db: asyncpg.Connection,
 ) -> dict[str, str]:
@@ -133,9 +153,11 @@ async def get_memory_content_map(
         SELECT id, content
         FROM memories
         WHERE user_id = $1
-          AND id = ANY($2::uuid[])
+          AND org_id = $2
+          AND id = ANY($3::uuid[])
         """,
         user_id,
+        org_id,
         list(memory_ids),
     )
     return {str(row["id"]): row["content"] for row in rows}

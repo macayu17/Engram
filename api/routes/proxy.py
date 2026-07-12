@@ -136,6 +136,7 @@ async def build_proxy_response_with_available_auth(
             raise HTTPException(status_code=401, detail="Invalid API key")
         result = await build_proxy_result(
             user["id"],
+            user["org_id"],
             user["external_id"],
             requested_external_id,
             body,
@@ -166,6 +167,7 @@ async def build_proxy_response_with_available_auth(
             asyncio.create_task(
                 run_extraction_task(
                     user["id"],
+                    user["org_id"],
                     result.conversation_id,
                     body,
                     result.content,
@@ -213,6 +215,7 @@ async def build_streaming_proxy_response(
         try:
             generator, conversation_id, injected_count = await build_proxy_stream_result(
                 user["id"],
+                user["org_id"],
                 user["external_id"],
                 requested_external_id,
                 body,
@@ -240,6 +243,7 @@ async def build_streaming_proxy_response(
             logger.warning("Database connection release failed: %s", error)
 
     user_id = user["id"]
+    org_id = user["org_id"]
     dedup_threshold = float(user["dedup_threshold"])
 
     async def stream_and_extract() -> AsyncIterator[bytes]:
@@ -255,6 +259,7 @@ async def build_streaming_proxy_response(
                     asyncio.create_task(
                         run_extraction_task(
                             user_id,
+                            org_id,
                             conversation_id,
                             body,
                             content,

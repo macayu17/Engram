@@ -34,6 +34,7 @@ class ProxyResult:
 
 async def _dispatch_retrieve(
     user_id: UUID,
+    org_id: UUID,
     query: str,
     db: asyncpg.Connection,
     retrieval_mode: str,
@@ -42,14 +43,15 @@ async def _dispatch_retrieve(
     namespace: str = "default",
 ) -> list[dict[str, object]]:
     if retrieval_mode == "hybrid":
-        return await retrieve_memories_hybrid(user_id, query, db, max_memories_injected, retrieval_threshold, namespace=namespace)
+        return await retrieve_memories_hybrid(user_id, org_id, query, db, max_memories_injected, retrieval_threshold, namespace=namespace)
     if retrieval_mode == "graph":
-        return await retrieve_memories_graph(user_id, query, db, max_memories_injected, retrieval_threshold, namespace=namespace)
-    return await retrieve_memories(user_id, query, db, max_memories_injected, retrieval_threshold, namespace=namespace)
+        return await retrieve_memories_graph(user_id, org_id, query, db, max_memories_injected, retrieval_threshold, namespace=namespace)
+    return await retrieve_memories(user_id, org_id, query, db, max_memories_injected, retrieval_threshold, namespace=namespace)
 
 
 async def build_proxy_result(
     user_id: UUID,
+    org_id: UUID,
     external_id: str,
     requested_external_id: str | None,
     request_body: dict[str, object],
@@ -72,10 +74,10 @@ async def build_proxy_result(
     query = get_retrieval_query(body)
     if not disable_injection:
         try:
-            memories = await _dispatch_retrieve(user_id, query, db, retrieval_mode, max_memories_injected, retrieval_threshold, namespace=namespace)
+            memories = await _dispatch_retrieve(user_id, org_id, query, db, retrieval_mode, max_memories_injected, retrieval_threshold, namespace=namespace)
             injected_count = len(memories)
             body = inject_memories(body, memories)
-            await log_retrieval(user_id, str(conversation_id), query, memories, db)
+            await log_retrieval(user_id, org_id, str(conversation_id), query, memories, db)
         except Exception as error:
             injected_count = 0
             logger.warning("Retrieval failed, proceeding without memories: %s", error)
@@ -83,8 +85,14 @@ async def build_proxy_result(
         """SELECT id, external_id, extraction_provider,
                   extraction_model,
                   openai_api_key_encrypted, gemini_api_key_encrypted, anthropic_api_key_encrypted
-           FROM users WHERE id = $1""",
+           FROM users
+           WHERE id = $1
+             AND EXISTS (
+                 SELECT 1 FROM org_memberships
+                 WHERE user_id = users.id AND org_id = $2
+             )""",
         user_id,
+        org_id,
     )
     if user_row is None:
         raise PermissionError("Authenticated user no longer exists")
@@ -246,6 +254,7 @@ async def forward_to_anthropic_streaming(
 
 async def build_proxy_stream_result(
     user_id: UUID,
+    org_id: UUID,
     external_id: str,
     requested_external_id: str | None,
     request_body: dict[str, object],
@@ -268,10 +277,10 @@ async def build_proxy_stream_result(
     query = get_retrieval_query(body)
     if not disable_injection:
         try:
-            memories = await _dispatch_retrieve(user_id, query, db, retrieval_mode, max_memories_injected, retrieval_threshold, namespace=namespace)
+            memories = await _dispatch_retrieve(user_id, org_id, query, db, retrieval_mode, max_memories_injected, retrieval_threshold, namespace=namespace)
             injected_count = len(memories)
             body = inject_memories(body, memories)
-            await log_retrieval(user_id, str(conversation_id), query, memories, db)
+            await log_retrieval(user_id, org_id, str(conversation_id), query, memories, db)
         except Exception as error:
             injected_count = 0
             logger.warning("Retrieval failed, proceeding without memories: %s", error)
@@ -279,8 +288,14 @@ async def build_proxy_stream_result(
         """SELECT id, external_id, extraction_provider,
                   extraction_model,
                   openai_api_key_encrypted, gemini_api_key_encrypted, anthropic_api_key_encrypted
-           FROM users WHERE id = $1""",
+           FROM users
+           WHERE id = $1
+             AND EXISTS (
+                 SELECT 1 FROM org_memberships
+                 WHERE user_id = users.id AND org_id = $2
+             )""",
         user_id,
+        org_id,
     )
     if user_row is None:
         raise PermissionError("Authenticated user no longer exists")

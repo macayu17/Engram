@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from pydantic import BaseModel, HttpUrl
+from pydantic import BaseModel, HttpUrl, UUID4
 
 
 class UsageValues(BaseModel):
@@ -22,3 +22,8 @@ class WorkspaceUsageResponse(BaseModel):
 
 class BillingUrlResponse(BaseModel):
     url: HttpUrl
+
+
+class BillingWorkspaceRequest(BaseModel):
+    external_id: str
+    org_id: UUID4

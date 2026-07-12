@@ -8,7 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from api.config import settings
 from api.db.connection import check_database, close_pool, init_pool
 from api.db.schema import apply_schema
-from api.routes import graph, logs, memories, orgs, proxy, users
+from api.routes import billing, graph, logs, memories, orgs, proxy, users
 from api.services.embedding import is_model_loaded, is_reranker_loaded, load_model, load_reranker
 
 
@@ -43,6 +43,7 @@ app.include_router(users.router, prefix="/users", tags=["users"])
 app.include_router(logs.router, prefix="/logs", tags=["logs"])
 app.include_router(orgs.router, prefix="/orgs", tags=["orgs"])
 app.include_router(graph.router, prefix="/graph", tags=["graph"])
+app.include_router(billing.router, prefix="/billing", tags=["billing"])
 
 
 @app.get("/health")

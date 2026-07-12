@@ -38,6 +38,10 @@ class Settings(BaseSettings):
     log_level: str = "info"
     cors_origins: str = "http://localhost:3001"
     engram_service_key: str = ""
+    stripe_secret_key: str = ""
+    stripe_webhook_secret: str = ""
+    stripe_pro_price_id: str = ""
+    dashboard_url: str = "http://localhost:3001"
     proxy_auth_cache_ttl_seconds: int = 300
     proxy_auth_cache_max_entries: int = 4096
     engram_test_api_url: str = "http://localhost:8000"

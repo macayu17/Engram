@@ -1,18 +1,18 @@
 import { ClerkProvider } from "@clerk/nextjs";
 import type { Metadata } from "next";
-import Link from "next/link";
+import { Geist, Geist_Mono, Newsreader } from "next/font/google";
 
-import { AuthControls } from "@/components/AuthControls";
-import { ClerkEngramBridge } from "@/components/ClerkEngramBridge";
-import { CommandPalette } from "@/components/CommandPalette";
-import { EngramLogo } from "@/components/EngramLogo";
+import { AppFrame } from "@/components/AppFrame";
 import { Providers } from "@/components/Providers";
-import { ThemeToggle } from "@/components/ThemeToggle";
 import "./globals.css";
 
+const newsreader = Newsreader({ subsets: ["latin"], variable: "--font-newsreader", display: "swap" });
+const geist = Geist({ subsets: ["latin"], variable: "--font-geist", display: "swap" });
+const geistMono = Geist_Mono({ subsets: ["latin"], variable: "--font-geist-mono", display: "swap" });
+
 export const metadata: Metadata = {
-  title: "Engram Dashboard",
-  description: "Developer dashboard for Engram memory inspection",
+  title: "Engram | Self-hostable AI memory",
+  description: "Open-source memory infrastructure for AI products, with inspectable retrieval and MCP support.",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
@@ -20,87 +20,19 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className="min-h-screen bg-paper text-ink antialiased">
+      <body className={`${newsreader.variable} ${geist.variable} ${geistMono.variable} min-h-screen bg-paper text-ink antialiased`}>
         {clerkPublishableKey ? (
           <ClerkProvider publishableKey={clerkPublishableKey}>
-            <DashboardShell authEnabled>{children}</DashboardShell>
+            <Providers>
+              <AppFrame authEnabled>{children}</AppFrame>
+            </Providers>
           </ClerkProvider>
         ) : (
-          <DashboardShell authEnabled={false}>{children}</DashboardShell>
+          <Providers>
+            <AppFrame authEnabled={false}>{children}</AppFrame>
+          </Providers>
         )}
       </body>
     </html>
-  );
-}
-
-function DashboardShell({ authEnabled, children }: { authEnabled: boolean; children: React.ReactNode }) {
-  return (
-    <Providers>
-      {authEnabled && <ClerkEngramBridge />}
-      <div className="min-h-screen">
-        <header className="sticky top-0 z-40 border-b border-line bg-paper/95 backdrop-blur">
-          <div className="mx-auto grid min-h-14 max-w-[1400px] grid-cols-[1fr_auto] items-center gap-4 px-4 py-3 lg:grid-cols-[220px_minmax(20rem,34rem)_auto] lg:px-8">
-            <Link href="/" className="group">
-              <EngramLogo />
-            </Link>
-            <div className="col-span-2 row-start-2 flex w-full min-w-0 justify-center lg:col-span-1 lg:row-start-auto">
-              <CommandPalette />
-            </div>
-            <nav className="flex items-center justify-end gap-3 font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-muted">
-              <div className="hidden items-center gap-5 xl:flex">
-                <Link className="hover:text-signal" href="/memories">
-                  Memories
-                </Link>
-                <Link className="hover:text-signal" href="/chat">
-                  Chat
-                </Link>
-                <Link className="hover:text-signal" href="/logs">
-                  Logs
-                </Link>
-                <Link className="hover:text-signal" href="/graph">
-                  Graph
-                </Link>
-                <Link className="hover:text-signal" href="/docs">
-                  Docs
-                </Link>
-                <Link className="hover:text-signal" href="/settings">
-                  Settings
-                </Link>
-              </div>
-              <div className="hidden items-center sm:flex">
-                <AuthControls enabled={authEnabled} />
-              </div>
-              <ThemeToggle />
-            </nav>
-          </div>
-        </header>
-        <main className="mx-auto max-w-[1400px] px-4 pb-16 pt-10 sm:px-8 sm:pb-10 md:py-16">{children}</main>
-        <footer className="mx-auto max-w-[1400px] border-t border-line px-4 pb-28 pt-6 sm:px-8 sm:pb-10">
-          <p className="font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-muted">
-            Copyright (c) 2026 Ayush
-          </p>
-        </footer>
-        <nav className="fixed bottom-0 left-0 z-40 grid w-screen max-w-[100vw] grid-cols-6 overflow-hidden border-t border-line bg-paper/95 px-2 py-3 text-center font-sans text-[10px] font-medium uppercase tracking-[0.08em] text-muted backdrop-blur xl:hidden">
-          <Link className="hover:text-signal" href="/memories">
-            Memories
-          </Link>
-          <Link className="hover:text-signal" href="/chat">
-            Chat
-          </Link>
-          <Link className="hover:text-signal" href="/logs">
-            Logs
-          </Link>
-          <Link className="hover:text-signal" href="/graph">
-            Graph
-          </Link>
-          <Link className="hover:text-signal" href="/docs">
-            Docs
-          </Link>
-          <Link className="hover:text-signal" href="/settings">
-            Settings
-          </Link>
-        </nav>
-      </div>
-    </Providers>
   );
 }

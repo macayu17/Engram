@@ -10,9 +10,10 @@
   --color-muted: 166 160 148;
   --color-line: 55 51 44;
   --color-tag: 35 32 27;
-  --color-signal: 200 145 74;
+  --color-signal: 90 168 158;
   --color-caution: 210 175 88;
   --color-fault: 255 107 94;
+  --color-high: 110 176 118;
   --theme-wave-x: 100vw;
   --theme-wave-y: 0px;
   --theme-wave-radius: 150vmax;
@@ -29,9 +30,10 @@
   --color-muted: 112 105 95;
   --color-line: 219 211 198;
   --color-tag: 235 227 213;
-  --color-signal: 122 85 40;
+  --color-signal: 37 116 107;
   --color-caution: 139 111 45;
   --color-fault: 180 35 24;
+  --color-high: 52 120 74;
 }
 
 [data-theme="dark"] {
@@ -39,12 +41,13 @@
 }
 
 html {
-  overflow-x: hidden;
+  overflow-x: clip;
+  scroll-behavior: smooth;
 }
 
 body {
   background: rgb(var(--color-paper));
-  overflow-x: hidden;
+  overflow-x: clip;
 }
 
 .theme-transition-active *,
@@ -107,6 +110,121 @@ body {
   background: rgb(var(--color-paper));
 }
 
+.landing-grid {
+  isolation: isolate;
+}
+
+.landing-grid::before {
+  background-image:
+    linear-gradient(rgb(var(--color-line) / 0.32) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(var(--color-line) / 0.32) 1px, transparent 1px);
+  background-size: 42px 42px;
+  content: "";
+  inset: 0;
+  mask-image: linear-gradient(to bottom, rgb(0 0 0 / 0.72), transparent 96%);
+  pointer-events: none;
+  position: absolute;
+  z-index: 0;
+}
+
+.landing-beam {
+  animation: landing-beam 5.4s ease-in-out infinite;
+  background: linear-gradient(to bottom, rgb(var(--color-signal) / 0.15), transparent);
+  transform: translateY(-100%);
+}
+
+.landing-pulse {
+  animation: landing-pulse 3.6s ease-in-out infinite;
+}
+
+.landing-memory-row {
+  animation: landing-memory 6s ease-in-out infinite;
+}
+
+.landing-delay-1 {
+  animation-delay: 900ms;
+}
+
+.landing-delay-2 {
+  animation-delay: 1800ms;
+}
+
+.landing-cursor {
+  animation: landing-cursor 1s steps(1) infinite;
+}
+
+.landing-cta::before {
+  background-image:
+    linear-gradient(rgb(var(--color-line) / 0.24) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(var(--color-line) / 0.24) 1px, transparent 1px);
+  background-size: 36px 36px;
+  content: "";
+  inset: 0;
+  mask-image: linear-gradient(to bottom, transparent, rgb(0 0 0 / 0.8), transparent);
+  pointer-events: none;
+  position: absolute;
+}
+
+@keyframes landing-beam {
+  0%, 18% {
+    opacity: 0;
+    transform: translateY(-100%);
+  }
+
+  42%, 70% {
+    opacity: 1;
+    transform: translateY(145%);
+  }
+
+  100% {
+    opacity: 0;
+    transform: translateY(145%);
+  }
+}
+
+@keyframes landing-pulse {
+  0%, 12% {
+    left: 4%;
+    opacity: 0;
+  }
+
+  24%, 78% {
+    opacity: 1;
+  }
+
+  90%, 100% {
+    left: 94%;
+    opacity: 0;
+  }
+}
+
+@keyframes landing-memory {
+  0%, 12%, 100% {
+    color: rgb(var(--color-ink));
+    transform: translateX(0);
+  }
+
+  18%, 26% {
+    color: rgb(var(--color-signal));
+    transform: translateX(4px);
+  }
+
+  34% {
+    color: rgb(var(--color-ink));
+    transform: translateX(0);
+  }
+}
+
+@keyframes landing-cursor {
+  0%, 49% {
+    opacity: 1;
+  }
+
+  50%, 100% {
+    opacity: 0;
+  }
+}
+
 @keyframes theme-fallback-wave {
   from {
     transform: scale(0);
@@ -118,6 +236,10 @@ body {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
   body {
     transition: none;
   }
@@ -129,5 +251,12 @@ body {
   .theme-fallback-wave {
     animation: none;
     transform: scale(1);
+  }
+
+  .landing-beam,
+  .landing-pulse,
+  .landing-memory-row,
+  .landing-cursor {
+    animation: none;
   }
 }

@@ -16,6 +16,7 @@ const packageJson = JSON.parse(read("package.json"));
 const proxyPath = existsSync(join(root, "src", "proxy.ts")) ? "src/proxy.ts" : "proxy.ts";
 const proxySource = existsSync(join(root, proxyPath)) ? read(proxyPath) : "";
 const layoutSource = read("src/app/layout.tsx");
+const appFrameSource = read("src/components/AppFrame.tsx");
 const authControlsSource = read("src/components/AuthControls.tsx");
 const apiSource = read("src/lib/api.ts");
 const bridgePath = "src/components/ClerkEngramBridge.tsx";
@@ -44,7 +45,8 @@ assertCheck("hides missing publishable key warning", !layoutSource.includes(miss
 assertCheck("uses Show components", authControlsSource.includes("<Show when=\"signed-out\">") && authControlsSource.includes("<Show when=\"signed-in\">"));
 assertCheck("uses one signed-out auth action", authControlsSource.includes("SignInButton") && !authControlsSource.includes("SignUpButton"));
 assertCheck("does not use deprecated signed components", !layoutSource.includes("SignedIn") && !layoutSource.includes("SignedOut") && !authControlsSource.includes("SignedIn") && !authControlsSource.includes("SignedOut"));
-assertCheck("renders Clerk Engram bridge", layoutSource.includes("ClerkEngramBridge"));
+assertCheck("renders route-aware app frame", layoutSource.includes("AppFrame"));
+assertCheck("renders Clerk Engram bridge", appFrameSource.includes("ClerkEngramBridge") && appFrameSource.includes("authEnabled &&"));
 assertCheck("has Clerk Engram bridge component", Boolean(bridgeSource));
 assertCheck("bridge reads Clerk user", bridgeSource.includes("useUser") && bridgeSource.includes("from \"@clerk/nextjs\""));
 assertCheck("bridge ensures Engram user key", bridgeSource.includes("api.users.ensureClerkKey"));

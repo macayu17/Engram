@@ -4,6 +4,11 @@ const config: Config = {
   content: ["./src/**/*.{ts,tsx}"],
   theme: {
     extend: {
+      fontFamily: {
+        serif: ["var(--font-newsreader)", "Georgia", "serif"],
+        sans: ["var(--font-geist)", "system-ui", "sans-serif"],
+        mono: ["var(--font-geist-mono)", "ui-monospace", "monospace"],
+      },
       colors: {
         paper: "rgb(var(--color-paper) / <alpha-value>)",
         ink: "rgb(var(--color-ink) / <alpha-value>)",
@@ -14,6 +19,7 @@ const config: Config = {
         signal: "rgb(var(--color-signal) / <alpha-value>)",
         caution: "rgb(var(--color-caution) / <alpha-value>)",
         fault: "rgb(var(--color-fault) / <alpha-value>)",
+        high: "rgb(var(--color-high) / <alpha-value>)",
       },
     },
   },

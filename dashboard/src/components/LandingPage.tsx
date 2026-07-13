@@ -156,7 +156,8 @@ export function LandingPage() {
             </div>
             <div data-motion="loop-grid" className="mt-11 grid grid-flow-dense gap-px overflow-hidden rounded-lg border border-line bg-line md:grid-cols-3">
               {loopSteps.map(([number, title, body]) => (
-                <article key={number} data-motion="loop-card" className="group bg-paper p-7 transition hover:bg-tag/25">
+                <article key={number} data-motion="loop-card" className="group relative overflow-hidden bg-paper p-7 transition duration-300 hover:-translate-y-1 hover:bg-tag/25 hover:shadow-[0_18px_50px_rgb(0_0_0_/_0.16)] motion-reduce:transform-none motion-reduce:transition-none">
+                  <span aria-hidden="true" className="absolute inset-x-0 top-0 h-0.5 origin-left scale-x-0 bg-signal transition-transform duration-500 ease-out group-hover:scale-x-100 motion-reduce:transition-none" />
                   <p className="font-mono text-xs text-signal">{number}</p>
                   <h3 className="mt-4 font-serif text-2xl font-semibold">{title}</h3>
                   <p className="mt-3 font-serif text-base leading-6 text-muted">{body}</p>
@@ -172,7 +173,8 @@ export function LandingPage() {
             <SectionHeading className="mt-3 max-w-[40rem]">One memory backend. <em>Three</em> interfaces.</SectionHeading>
             <div data-motion="interfaces-track" className="mt-11 grid gap-5 lg:flex lg:w-max">
               {interfaces.map((item) => (
-                <article key={item.title} className="group flex min-h-[22rem] flex-col overflow-hidden rounded-lg border border-line bg-panel transition hover:-translate-y-1 hover:border-signal/60 lg:w-[min(72vw,48rem)] lg:shrink-0">
+                <article key={item.title} className="group relative flex min-h-[22rem] flex-col overflow-hidden rounded-lg border border-line bg-panel transition duration-300 hover:-translate-y-1 hover:border-signal/60 hover:shadow-[0_24px_64px_rgb(0_0_0_/_0.18)] motion-reduce:transform-none motion-reduce:transition-none lg:w-[min(72vw,48rem)] lg:shrink-0">
+                  <span aria-hidden="true" className="absolute inset-x-0 top-0 z-10 h-0.5 origin-left scale-x-0 bg-signal transition-transform duration-500 ease-out group-hover:scale-x-100 motion-reduce:transition-none" />
                   <div className="p-6">
                     <p className="font-mono text-[11px] uppercase tracking-[0.1em] text-muted">{item.label}</p>
                     <h3 className="mt-3 font-serif text-[1.6rem] font-semibold">{item.title}</h3>
@@ -318,7 +320,7 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 }
 
 function SectionHeading({ children, className }: { children: React.ReactNode; className?: string }) {
-  return <h2 className={cn("font-serif text-[clamp(2rem,3.4vw,3rem)] font-semibold leading-[1.06] tracking-[-0.02em] [&_em]:font-normal [&_em]:text-signal", className)}>{children}</h2>;
+  return <h2 data-motion="section-heading" className={cn("font-serif text-[clamp(2rem,3.4vw,3rem)] font-semibold leading-[1.06] tracking-[-0.02em] [&_em]:font-normal [&_em]:text-signal", className)}>{children}</h2>;
 }
 
 function StatusDots() {

@@ -36,28 +36,49 @@ export function LandingMotion({ children, className }: { children: React.ReactNo
         },
       );
 
-      gsap.from("[data-motion='loop-card']", {
-        autoAlpha: 0,
-        y: 34,
-        duration: 0.65,
-        stagger: 0.08,
-        ease: "power3.out",
-        scrollTrigger: {
-          trigger: "[data-motion='loop-grid']",
-          start: "top 78%",
-          once: true,
-        },
+      gsap.utils.toArray<HTMLElement>("[data-motion='loop-card']").forEach((element, index) => {
+        gsap.from(element, {
+          y: 30,
+          scale: 0.985,
+          duration: 0.65,
+          delay: (index % 3) * 0.06,
+          ease: "power3.out",
+          immediateRender: false,
+          scrollTrigger: {
+            trigger: element,
+            start: "top 88%",
+            once: true,
+          },
+        });
       });
 
       gsap.utils.toArray<HTMLElement>("[data-motion='reveal']").forEach((element) => {
         gsap.from(element, {
-          autoAlpha: 0,
           y: 28,
+          scale: 0.99,
           duration: 0.7,
           ease: "power3.out",
+          immediateRender: false,
           scrollTrigger: {
             trigger: element,
             start: "top 84%",
+            once: true,
+          },
+        });
+      });
+
+      gsap.utils.toArray<HTMLElement>("[data-motion='section-heading']").forEach((element) => {
+        gsap.from(element, {
+          y: 22,
+          rotateX: 4,
+          transformPerspective: 800,
+          transformOrigin: "50% 100%",
+          duration: 0.75,
+          ease: "power3.out",
+          immediateRender: false,
+          scrollTrigger: {
+            trigger: element,
+            start: "top 86%",
             once: true,
           },
         });

@@ -33,6 +33,9 @@ assert.match(landingMotion, /prefers-reduced-motion/, "Landing motion must honor
 assert.match(landingMotion, /context\.revert\(\)/, "Landing motion must clean up on unmount");
 assert.match(landing, /LandingMotion/, "Landing page must use the motion controller");
 assert.match(landing, /data-motion="interfaces-track"/, "Interfaces must expose a horizontal motion track");
+assert.doesNotMatch(landingMotion, /\[data-motion='loop-card'\][\s\S]{0,240}autoAlpha/, "Loop cards must never depend on animation-owned visibility");
+assert.match(landingMotion, /\[data-motion='loop-card'\][\s\S]{0,500}immediateRender: false/, "Loop cards must remain visible until their reveal starts");
+assert.match(landing, /data-motion="section-heading"/, "Landing sections must expose heading motion hooks");
 assert.doesNotMatch(landingMotion, /Lenis|cursor-ring|preloader/, "Balanced motion must exclude cinematic behavior");
 assert.match(appFrame, /pathname === "\/"/, "Public root must bypass product dashboard chrome");
 assert.doesNotMatch(globalStyles, /memory-hero-orbit|memory-constellation/, "Global styles must not retain rejected visual layers");

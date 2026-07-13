@@ -16,7 +16,9 @@ const packageJson = JSON.parse(read("package.json"));
 const proxyPath = existsSync(join(root, "src", "proxy.ts")) ? "src/proxy.ts" : "proxy.ts";
 const proxySource = existsSync(join(root, proxyPath)) ? read(proxyPath) : "";
 const layoutSource = read("src/app/layout.tsx");
+const pageSource = read("src/app/page.tsx");
 const appFrameSource = read("src/components/AppFrame.tsx");
+const landingPageSource = read("src/components/LandingPage.tsx");
 const authControlsSource = read("src/components/AuthControls.tsx");
 const apiSource = read("src/lib/api.ts");
 const bridgePath = "src/components/ClerkEngramBridge.tsx";
@@ -47,6 +49,8 @@ assertCheck("uses one signed-out auth action", authControlsSource.includes("Sign
 assertCheck("does not use deprecated signed components", !layoutSource.includes("SignedIn") && !layoutSource.includes("SignedOut") && !authControlsSource.includes("SignedIn") && !authControlsSource.includes("SignedOut"));
 assertCheck("renders route-aware app frame", layoutSource.includes("AppFrame"));
 assertCheck("renders Clerk Engram bridge", appFrameSource.includes("ClerkEngramBridge") && appFrameSource.includes("authEnabled &&"));
+assertCheck("passes auth availability to landing", pageSource.includes("authEnabled") && pageSource.includes("LandingPage authEnabled={authEnabled}"));
+assertCheck("renders auth controls in landing header", landingPageSource.includes("AuthControls") && landingPageSource.includes("<AuthControls enabled={authEnabled}"));
 assertCheck("has Clerk Engram bridge component", Boolean(bridgeSource));
 assertCheck("bridge reads Clerk user", bridgeSource.includes("useUser") && bridgeSource.includes("from \"@clerk/nextjs\""));
 assertCheck("bridge ensures Engram user key", bridgeSource.includes("api.users.ensureClerkKey"));

@@ -4,6 +4,7 @@ import { ArrowRight, Check, Copy, Github } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 
+import { AuthControls } from "@/components/AuthControls";
 import { EngramLogo } from "@/components/EngramLogo";
 import { LandingMotion } from "@/components/LandingMotion";
 import { ThemeToggle } from "@/components/ThemeToggle";
@@ -70,7 +71,7 @@ curl localhost:8000/v1/chat \\
   -H "X-Engram-Key: ek_..." \\
   -d '{"model":"gpt-4o-mini", ... }'`;
 
-export function LandingPage() {
+export function LandingPage({ authEnabled }: { authEnabled: boolean }) {
   const [copied, setCopied] = useState(false);
 
   async function copyQuickstart() {
@@ -86,7 +87,7 @@ export function LandingPage() {
   return (
     <LandingMotion className="min-h-screen w-full max-w-full overflow-x-clip bg-paper text-ink">
       <a href="#main-content" className="sr-only fixed left-4 top-4 z-50 rounded-md bg-signal px-4 py-2 font-sans text-sm font-semibold text-paper focus:not-sr-only">Skip to content</a>
-      <LandingHeader />
+      <LandingHeader authEnabled={authEnabled} />
       <main id="main-content" tabIndex={-1}>
         <section id="top" className="landing-grid relative scroll-mt-16 overflow-hidden border-b border-line">
           <PageContainer className="relative z-10 grid gap-14 py-20 lg:grid-cols-[1.05fr_.95fr] lg:items-center lg:py-24 xl:py-28">
@@ -266,7 +267,7 @@ export function LandingPage() {
   );
 }
 
-function LandingHeader() {
+function LandingHeader({ authEnabled }: { authEnabled: boolean }) {
   return (
     <header className="sticky top-0 z-40 border-b border-line bg-paper/90 backdrop-blur-xl">
       <PageContainer className="flex min-h-16 items-center justify-between gap-4 py-3">
@@ -276,6 +277,7 @@ function LandingHeader() {
         </nav>
         <div className="flex items-center gap-2.5">
           <a href="https://github.com/macayu17/Engram" target="_blank" rel="noreferrer" className="hidden min-h-9 items-center gap-2 rounded-full border border-line px-3.5 font-sans text-[11px] font-semibold uppercase tracking-[0.1em] text-ink transition hover:border-signal hover:text-signal focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-signal sm:inline-flex"><Github size={14} aria-hidden="true" />GitHub</a>
+          <AuthControls enabled={authEnabled} />
           <ThemeToggle />
         </div>
       </PageContainer>

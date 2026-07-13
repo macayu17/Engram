@@ -19,8 +19,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   const clerkPublishableKey = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY?.trim();
 
   return (
-    <html lang="en" suppressHydrationWarning>
-      <body className={`${newsreader.variable} ${geist.variable} ${geistMono.variable} min-h-screen bg-paper text-ink antialiased`}>
+    <html lang="en" className={`${newsreader.variable} ${geist.variable} ${geistMono.variable}`} suppressHydrationWarning>
+      <body className="min-h-screen bg-paper text-ink antialiased">
         {clerkPublishableKey ? (
           <ClerkProvider publishableKey={clerkPublishableKey}>
             <Providers>

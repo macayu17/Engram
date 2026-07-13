@@ -14,6 +14,18 @@
   --color-caution: 210 175 88;
   --color-fault: 255 107 94;
   --color-high: 110 176 118;
+  --clerk-font-family: var(--font-geist), system-ui, sans-serif;
+  --clerk-font-family-buttons: var(--font-geist), system-ui, sans-serif;
+  --clerk-font-family-mono: var(--font-geist-mono), ui-monospace, monospace;
+  --clerk-color-primary: rgb(var(--color-signal));
+  --clerk-color-primary-foreground: rgb(var(--color-paper));
+  --clerk-color-foreground: rgb(var(--color-ink));
+  --clerk-color-background: rgb(var(--color-panel));
+  --clerk-color-muted: rgb(var(--color-tag));
+  --clerk-color-muted-foreground: rgb(var(--color-muted));
+  --clerk-color-neutral: rgb(var(--color-muted));
+  --clerk-color-danger: rgb(var(--color-fault));
+  --clerk-border-radius: 0.5rem;
   --theme-wave-x: 100vw;
   --theme-wave-y: 0px;
   --theme-wave-radius: 150vmax;

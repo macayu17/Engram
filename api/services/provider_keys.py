@@ -130,12 +130,3 @@ def summarize_provider_for_response(
         "has_user_api_key": decrypted is not None,
         "user_api_key_preview": mask_provider_key(decrypted),
     }
-
-
-def supported_providers() -> list[dict[str, str]]:
-    return [
-        {"name": "openai", "supports_override_key": "true"},
-        {"name": "gemini", "supports_override_key": "true"},
-        {"name": "ollama", "supports_override_key": "false"},
-        {"name": "anthropic", "supports_override_key": "true"},
-    ]

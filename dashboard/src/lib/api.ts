@@ -193,8 +193,8 @@ export type GraphMemoryItem = {
   created_at: string;
 };
 
-export const CLERK_API_KEY_STORAGE_PREFIX = "engram_api_key:clerk:";
-export const ACTIVE_API_KEY_CHANGED_EVENT = "engram-api-key-changed";
+const CLERK_API_KEY_STORAGE_PREFIX = "engram_api_key:clerk:";
+const ACTIVE_API_KEY_CHANGED_EVENT = "engram-api-key-changed";
 
 function storageAvailable(): boolean {
   return typeof window !== "undefined";

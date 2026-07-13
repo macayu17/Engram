@@ -457,7 +457,7 @@ function ProviderConfigSection({ apiKey, onError }: { apiKey: string; onError: (
 
   const updateMutation = useMutation({
     mutationFn: (payload: UserProviderConfigUpdate) => api.users.updateProvider(payload),
-    onSuccess: (response: UserProviderConfig) => {
+    onSuccess: () => {
       setSaveMessage("Saved.");
       setApiKeyInput("");
       void queryClient.invalidateQueries({ queryKey: ["user-provider"] });

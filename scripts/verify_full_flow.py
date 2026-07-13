@@ -200,7 +200,7 @@ def main() -> None:
             "model": "gpt-4o-mini",
             "messages": [{"role": "user", "content": "What tech stack should I use for my next project?"}],
         }
-        _, second_payload, second_headers = json_request("POST", f"{API_URL}/v1/chat", second_body, auth_headers)
+        _, _, second_headers = json_request("POST", f"{API_URL}/v1/chat", second_body, auth_headers)
         injected_count = int(get_header(second_headers, "X-Engram-Memories-Injected", "0"))
         assert_true(injected_count == 1, "Second proxy call did not respect max_memories_injected user config")
         completions_headers = {"Authorization": f"Bearer {api_key}"}

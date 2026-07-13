@@ -248,16 +248,6 @@ async def open_provider_stream(
     return ProviderStream(client, response)
 
 
-def get_openai_compatible_url(provider: str) -> str:
-    if provider == "openai":
-        return build_chat_completions_url(settings.openai_base_url)
-    if provider == "gemini":
-        return build_chat_completions_url(settings.gemini_base_url)
-    if provider == "ollama":
-        return build_chat_completions_url(f"{settings.ollama_base_url.rstrip('/')}/v1")
-    raise ValueError(f"Unsupported provider: {provider}")
-
-
 def build_provider_headers(resolved: ResolvedProvider, incoming_headers: Mapping[str, str]) -> dict[str, str]:
     headers = sanitize_passthrough_headers(incoming_headers)
     headers["content-type"] = "application/json"

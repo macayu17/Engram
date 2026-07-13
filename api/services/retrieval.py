@@ -27,23 +27,6 @@ QUERY_EXPANSIONS = {
 }
 
 
-def get_last_user_message(body: Mapping[str, object]) -> str:
-    messages = body.get("messages")
-    if not isinstance(messages, list):
-        return ""
-    for message in reversed(messages):
-        if not isinstance(message, dict):
-            continue
-        if message.get("role") != "user":
-            continue
-        content = message.get("content")
-        if isinstance(content, str):
-            return content
-        if isinstance(content, list):
-            return extract_text_from_content_parts(content)
-    return ""
-
-
 def get_retrieval_query(body: Mapping[str, object], max_user_messages: int = 6) -> str:
     messages = body.get("messages")
     if not isinstance(messages, list):

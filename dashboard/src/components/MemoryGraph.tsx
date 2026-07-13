@@ -410,7 +410,6 @@ export function MemoryGraph() {
     [searchMatches, hoveredId, isHighlighted],
   );
 
-  // Cluster hulls: per-type centroid + bounding radius, drawn before nodes.
   const renderFramePre = useCallback(
     (ctx: CanvasRenderingContext2D) => {
       const positionedNodes = graphData.nodes.filter(
@@ -463,7 +462,6 @@ export function MemoryGraph() {
       const weightThickness = Math.min(2.4, 0.5 + Math.sqrt(link.weight) * 0.55);
       const thickness = highlighted ? weightThickness + 1 : weightThickness;
 
-      // Bezier control for curved edge
       const dx = tx - sx;
       const dy = ty - sy;
       const mx = (sx + tx) / 2;
@@ -511,7 +509,6 @@ export function MemoryGraph() {
       const pulse = 0.5 + Math.sin(time * 1.3 + node.phase) * 0.5;
       ctx.save();
 
-      // Hover spotlight glow
       if (isHovered) {
         const glowRadius = node.radius + 18;
         const glow = ctx.createRadialGradient(drawX, drawY, 0, drawX, drawY, glowRadius);
@@ -524,7 +521,6 @@ export function MemoryGraph() {
         ctx.fill();
       }
 
-      // Search match emphasis ring
       if (isSearchMatch && !isHovered) {
         ctx.beginPath();
         ctx.arc(drawX, drawY, node.radius + 6, 0, Math.PI * 2);
@@ -532,21 +528,18 @@ export function MemoryGraph() {
         ctx.fill();
       }
 
-      // Ambient halo
       ctx.beginPath();
       ctx.arc(drawX, drawY, node.radius + 5 + pulse * 2, 0, Math.PI * 2);
       ctx.fillStyle = baseColor;
       ctx.globalAlpha = dimmed ? palette.haloAlphaDim : palette.haloAlphaBase + pulse * 0.08;
       ctx.fill();
 
-      // Main dot
       ctx.beginPath();
       ctx.arc(drawX, drawY, node.radius, 0, Math.PI * 2);
       ctx.fillStyle = baseColor;
       ctx.globalAlpha = dimmed ? 0.3 : 1;
       ctx.fill();
 
-      // Selected ring
       if (isSelected) {
         ctx.beginPath();
         ctx.arc(drawX, drawY, node.radius + 3, 0, Math.PI * 2);
@@ -556,7 +549,6 @@ export function MemoryGraph() {
         ctx.stroke();
       }
 
-      // Pinned indicator (small inner dot)
       if (isPinned) {
         ctx.beginPath();
         ctx.arc(drawX, drawY, Math.max(1.2, node.radius * 0.3), 0, Math.PI * 2);
@@ -565,7 +557,6 @@ export function MemoryGraph() {
         ctx.fill();
       }
 
-      // Zoom-aware label
       const labelOpacityFromZoom = globalScale <= LABEL_FADE_ZOOM
         ? 0
         : globalScale >= LABEL_FULL_ZOOM
@@ -600,7 +591,6 @@ export function MemoryGraph() {
 
   const handleNodeClick = useCallback(
     async (node: ForceNode, event: MouseEvent) => {
-      // Shift+click pins/unpins
       if (event.shiftKey) {
         setPinnedIds((prev) => {
           const next = new Set(prev);
@@ -699,7 +689,6 @@ export function MemoryGraph() {
     fgRef.current?.zoomToFit(600, 60);
   }, []);
 
-  // Keyboard shortcuts
   useEffect(() => {
     const handler = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement | null;
@@ -729,7 +718,6 @@ export function MemoryGraph() {
     return () => window.removeEventListener("keydown", handler);
   }, [handleResetView, handleFitView]);
 
-  // Dismiss context menu on outside click
   useEffect(() => {
     if (!contextMenu) return;
     const handler = () => setContextMenu(null);

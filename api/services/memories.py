@@ -544,16 +544,6 @@ def build_memory_filters(
     return status_clause, category_clause, params
 
 
-def filter_memory_rows(rows: list[dict[str, object]], status: MemoryStatus | None, category: str | None) -> list[dict[str, object]]:
-    normalized_category = normalize_category(category) if category else None
-    return [
-        row
-        for row in rows
-        if (status is None or row.get("status") == status)
-        and (normalized_category is None or row.get("category") == normalized_category)
-    ]
-
-
 def normalize_category(category: str | None) -> str:
     if not category:
         return "general"

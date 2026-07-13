@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from pydantic import BaseModel, Field, UUID4
+from pydantic import BaseModel, UUID4
 
 
 class RetrievedMemoryLog(BaseModel):
@@ -37,9 +37,3 @@ class ClientRegistryResponse(BaseModel):
 
 class RetrievalLogDetailResponse(RetrievalLogResponse):
     query_embedding_dimensions: int | None
-
-
-class RetrievalLogListParams(BaseModel):
-    limit: int = Field(default=20, ge=1, le=100)
-    offset: int = Field(default=0, ge=0)
-    conversation_id: UUID4 | None = None

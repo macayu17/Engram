@@ -24,12 +24,12 @@
 
 [data-theme="light"] {
   color-scheme: light;
-  --color-paper: 244 239 229;
-  --color-ink: 26 26 24;
-  --color-panel: 249 245 237;
-  --color-muted: 112 105 95;
-  --color-line: 219 211 198;
-  --color-tag: 235 227 213;
+  --color-paper: 224 222 215;
+  --color-ink: 25 27 25;
+  --color-panel: 233 231 224;
+  --color-muted: 91 96 90;
+  --color-line: 194 197 190;
+  --color-tag: 208 211 204;
   --color-signal: 37 116 107;
   --color-caution: 139 111 45;
   --color-fault: 180 35 24;
@@ -99,7 +99,7 @@ body {
 }
 
 .theme-fallback-wave-light {
-  background: rgb(251 251 249);
+  background: rgb(224 222 215);
 }
 
 .theme-fallback-wave-dark {

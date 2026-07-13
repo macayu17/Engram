@@ -27,6 +27,8 @@ assert.match(landing, /id="how"[\s\S]*id="interfaces"[\s\S]*id="start"[\s\S]*id=
 assert.doesNotMatch(landing, /engram_accent|Accent color|onAccentChange/, "Temporary accent controls must not ship");
 assert.match(globalStyles, /--color-signal: 90 168 158;/, "Dark mode must default to teal");
 assert.match(globalStyles, /\[data-theme="light"\][\s\S]*--color-signal: 37 116 107;/, "Light mode must default to teal");
+assert.match(globalStyles, /\[data-theme="light"\][\s\S]*--color-paper: 224 222 215;/, "Light mode must use a restrained paper tone");
+assert.match(globalStyles, /\[data-theme="light"\][\s\S]*--color-panel: 233 231 224;/, "Light panels must remain distinct without becoming white");
 assert.match(landingMotion, /gsap\.context/, "Landing motion must be scoped to its root");
 assert.match(landingMotion, /gsap\.matchMedia/, "Landing pinning must be responsive");
 assert.match(landingMotion, /prefers-reduced-motion/, "Landing motion must honor reduced motion");

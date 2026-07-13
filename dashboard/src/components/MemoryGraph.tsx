@@ -131,13 +131,13 @@ type ThemePalette = {
 };
 
 const DARK_PALETTE: ThemePalette = {
-  canvasBg: "#0b0d12",
-  sidebarBg: "rgba(11,13,18,0.92)",
-  dotGrid: "rgba(148, 163, 184, 0.08)",
-  labelColor: "#cbd5e1",
-  labelDimColor: "#475569",
-  selectedRingColor: "#f8fafc",
-  pinnedDotColor: "#0f172a",
+  canvasBg: "#0b0a09",
+  sidebarBg: "rgba(18,17,15,0.96)",
+  dotGrid: "rgba(166,160,148,0.10)",
+  labelColor: "#f4efe5",
+  labelDimColor: "#6f6a61",
+  selectedRingColor: "#5aa89e",
+  pinnedDotColor: "#12110f",
   edgeBaseAlpha: 0.32,
   edgeHighlightAlpha: 0.7,
   edgeFadeAlpha: 0.15,
@@ -146,13 +146,13 @@ const DARK_PALETTE: ThemePalette = {
 };
 
 const LIGHT_PALETTE: ThemePalette = {
-  canvasBg: "#f4efe5",
-  sidebarBg: "rgba(244,239,229,0.94)",
-  dotGrid: "rgba(15, 23, 42, 0.07)",
-  labelColor: "#1f2937",
-  labelDimColor: "#94a3b8",
-  selectedRingColor: "#1a1a18",
-  pinnedDotColor: "#fafafa",
+  canvasBg: "#e0ded7",
+  sidebarBg: "rgba(233,231,224,0.96)",
+  dotGrid: "rgba(25,27,25,0.08)",
+  labelColor: "#191b19",
+  labelDimColor: "#5b605a",
+  selectedRingColor: "#25746b",
+  pinnedDotColor: "#e9e7e0",
   edgeBaseAlpha: 0.45,
   edgeHighlightAlpha: 0.85,
   edgeFadeAlpha: 0.18,
@@ -225,8 +225,8 @@ function getNodeY(end: string | ForceNode): number | undefined {
   return typeof end === "string" ? undefined : end.y;
 }
 function getNodeColor(end: string | ForceNode): string {
-  if (typeof end === "string") return "#94a3b8";
-  return TYPE_COLORS[end.entityType] ?? "#94a3b8";
+  if (typeof end === "string") return "#6f6a61";
+  return TYPE_COLORS[end.entityType] ?? "#6f6a61";
 }
 function getNodeId(end: string | ForceNode): string {
   return typeof end === "string" ? end : end.id;
@@ -435,7 +435,7 @@ export function MemoryGraph() {
           if (d > maxDist) maxDist = d;
         }
         const radius = maxDist + 14;
-        const color = TYPE_COLORS[type] ?? "#94a3b8";
+        const color = TYPE_COLORS[type] ?? "#6f6a61";
         const gradient = ctx.createRadialGradient(cx, cy, 0, cx, cy, radius);
         gradient.addColorStop(0, withAlpha(color, 0.08));
         gradient.addColorStop(0.7, withAlpha(color, 0.03));
@@ -497,7 +497,7 @@ export function MemoryGraph() {
   const drawNode = useCallback(
     (node: ForceNode, ctx: CanvasRenderingContext2D, globalScale: number) => {
       if (node.x === undefined || node.y === undefined) return;
-      const baseColor = TYPE_COLORS[node.entityType] ?? "#94a3b8";
+      const baseColor = TYPE_COLORS[node.entityType] ?? "#6f6a61";
       const dimmed = isDimmed(node.id);
       const isSearchMatch = searchMatches !== null && searchMatches.has(node.id);
       const isPinned = pinnedIds.has(node.id);
@@ -781,7 +781,7 @@ export function MemoryGraph() {
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search entities  ( / )"
-              className="w-full rounded-md border border-line/40 bg-[rgba(255,255,255,0.03)] px-3 py-2 font-sans text-[11px] text-ink placeholder:text-muted focus:border-line focus:outline-none"
+              className="w-full rounded-md border border-line/60 bg-paper/40 px-3 py-2 font-sans text-[11px] text-ink placeholder:text-muted focus:border-signal focus:outline-none"
             />
           </label>
           {searchMatches !== null && (
@@ -879,7 +879,7 @@ export function MemoryGraph() {
         {loading ? (
           <div className="flex h-full items-center justify-center font-serif text-base text-muted">Loading graph…</div>
         ) : error ? (
-          <div className="flex h-full items-center justify-center font-serif text-base text-rose-500">{error}</div>
+          <div className="flex h-full items-center justify-center font-serif text-base text-fault">{error}</div>
         ) : entities.length === 0 ? (
           <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center font-serif text-base text-muted">
             <p>No entities yet. Click <em>Backfill entities</em> in the sidebar to extract them from your existing memories.</p>
@@ -1065,7 +1065,7 @@ export function MemoryGraph() {
                         <span
                           key={e.id}
                           className="rounded-full px-2 py-0.5 font-sans text-[10px] font-medium"
-                          style={{ background: TYPE_COLORS[e.entity_type] ?? "#94a3b8", color: "#0f172a" }}
+                          style={{ background: TYPE_COLORS[e.entity_type] ?? "#6f6a61", color: "#0b0a09" }}
                         >
                           {e.name}
                         </span>
@@ -1153,7 +1153,7 @@ function Minimap({ nodes, size, palette }: { nodes: ForceNode[]; size: { width: 
             cx={((n.x ?? 0) - minX + padding) * scaleX}
             cy={((n.y ?? 0) - minY + padding) * scaleY}
             r={Math.max(1, Math.min(3, n.radius * 0.35))}
-            fill={TYPE_COLORS[n.entityType] ?? "#94a3b8"}
+            fill={TYPE_COLORS[n.entityType] ?? "#6f6a61"}
             opacity={0.85}
           />
         ))}

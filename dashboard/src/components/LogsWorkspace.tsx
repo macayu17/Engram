@@ -6,6 +6,7 @@ import { FormEvent, useState } from "react";
 
 import { api } from "@/lib/api";
 import { LogEntry } from "./LogEntry";
+import { ProductPageHeader } from "./ProductPageHeader";
 
 
 const PAGE_SIZE = 20;
@@ -36,23 +37,17 @@ export function LogsWorkspace() {
 
   return (
     <section className="space-y-12">
-      <div className="flex flex-col gap-4 border-b border-line pb-5 md:flex-row md:items-end md:justify-between">
-        <div>
-          <p className="font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-muted">§ II — Retrieval trace</p>
-          <h1 className="mt-2 font-serif text-5xl font-semibold leading-tight text-ink">Logs</h1>
-          <p className="mt-4 max-w-2xl font-serif text-lg leading-8 text-muted">
-            Every retrieval event is kept as an editorial trail: the query, the memories surfaced, and the conversation that caused it.
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={() => logsQuery.refetch()}
-          className="inline-flex items-center gap-2 border border-line px-4 py-2 font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-muted hover:border-signal hover:text-signal"
-        >
-          <RefreshCw size={16} aria-hidden="true" />
-          Refresh
-        </button>
-      </div>
+      <ProductPageHeader
+        eyebrow="§ II — Retrieval trace"
+        title="Logs"
+        description="Every retrieval event is kept as an editorial trail: the query, the memories surfaced, and the conversation that caused it."
+        actions={(
+          <button type="button" onClick={() => logsQuery.refetch()} className="inline-flex min-h-10 items-center gap-2 rounded-full border border-line px-4 font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-muted transition hover:border-signal hover:text-signal active:translate-y-px">
+            <RefreshCw size={16} aria-hidden="true" />
+            Refresh
+          </button>
+        )}
+      />
 
       <form onSubmit={submitFilter} className="flex flex-col gap-3 sm:flex-row">
         <label className="flex min-h-12 flex-1 items-center gap-3 rounded-lg border border-line bg-panel px-4 text-sm text-ink transition focus-within:border-signal focus-within:ring-1 focus-within:ring-signal/30">

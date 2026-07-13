@@ -8,6 +8,7 @@ import { ChangeEvent, FormEvent, ReactNode, useState } from "react";
 import { api, type MemorySourceResponse, type MemoryUpdatePayload, type SearchResponse } from "@/lib/api";
 import { MemoryCard } from "./MemoryCard";
 import { MemoryTable } from "./MemoryTable";
+import { ProductPageHeader } from "./ProductPageHeader";
 import { SearchBar } from "./SearchBar";
 
 
@@ -133,13 +134,11 @@ export function MemoryWorkspace() {
 
   return (
     <section className="space-y-16">
-      <header>
-        <p className="font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-muted">§ — Memory ledger</p>
-        <h1 className="mt-2 font-serif text-5xl font-semibold leading-tight text-ink">Memories</h1>
-        <p className="mt-3 max-w-2xl font-serif text-lg leading-8 text-muted">
-          {total.toLocaleString()} entries · browse, search, edit, merge, and approve everything Engram has captured.
-        </p>
-      </header>
+      <ProductPageHeader
+        eyebrow="§ I — Memory ledger"
+        title="Memories"
+        description={<>{total.toLocaleString()} entries · browse, search, edit, merge, and approve everything Engram has captured.</>}
+      />
 
       <div className="space-y-8">
         <div className="flex flex-col gap-4 border-b border-line pb-5 md:flex-row md:items-end md:justify-between">
@@ -147,11 +146,11 @@ export function MemoryWorkspace() {
             <p className="font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-muted">§ I — The ledger</p>
             <h2 className="mt-2 font-serif text-4xl font-semibold text-ink">Browse the memory store</h2>
           </div>
-          <div className="flex gap-3">
+          <div className="flex flex-wrap gap-3">
             <button
               type="button"
               onClick={() => memoriesQuery.refetch()}
-              className="inline-flex items-center gap-2 border border-line px-4 py-2 font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-muted hover:border-signal hover:text-signal"
+              className="inline-flex min-h-10 items-center gap-2 rounded-full border border-line px-4 font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-muted transition hover:border-signal hover:text-signal active:translate-y-px"
             >
               <RefreshCw size={16} aria-hidden="true" />
               Refresh
@@ -159,12 +158,12 @@ export function MemoryWorkspace() {
             <button
               type="button"
               onClick={() => void exportMemorySnapshot()}
-              className="inline-flex items-center gap-2 border border-line px-4 py-2 font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-muted hover:border-signal hover:text-signal"
+              className="inline-flex min-h-10 items-center gap-2 rounded-full border border-line px-4 font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-muted transition hover:border-signal hover:text-signal active:translate-y-px"
             >
               <Download size={16} aria-hidden="true" />
               Export
             </button>
-            <label className="inline-flex cursor-pointer items-center gap-2 border border-line px-4 py-2 font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-muted hover:border-signal hover:text-signal">
+            <label className="inline-flex min-h-10 cursor-pointer items-center gap-2 rounded-full border border-line px-4 font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-muted transition hover:border-signal hover:text-signal active:translate-y-px">
               <Upload size={16} aria-hidden="true" />
               Import
               <input type="file" accept="application/json,.json" onChange={(event) => void importMemorySnapshot(event)} className="sr-only" />
@@ -173,7 +172,7 @@ export function MemoryWorkspace() {
               type="button"
               onClick={() => decayMutation.mutate()}
               disabled={decayMutation.isPending}
-              className="inline-flex items-center gap-2 border border-line px-4 py-2 font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-muted hover:border-signal hover:text-signal disabled:opacity-50"
+              className="inline-flex min-h-10 items-center gap-2 rounded-full border border-line px-4 font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-muted transition hover:border-signal hover:text-signal active:translate-y-px disabled:opacity-50"
             >
               <Clock size={16} aria-hidden="true" />
               Decay
@@ -181,7 +180,7 @@ export function MemoryWorkspace() {
             <button
               type="button"
               onClick={() => setIsAddOpen(true)}
-              className="inline-flex items-center gap-2 border border-ink px-4 py-2 font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-ink hover:border-signal hover:text-signal"
+              className="inline-flex min-h-10 items-center gap-2 rounded-full bg-signal px-4 font-sans text-[11px] font-semibold uppercase tracking-[0.12em] text-paper transition hover:bg-ink active:translate-y-px"
             >
               <Plus size={16} aria-hidden="true" />
               Add Memory

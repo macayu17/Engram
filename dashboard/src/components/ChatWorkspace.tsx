@@ -7,6 +7,7 @@ import { FormEvent, KeyboardEvent, useMemo, useState } from "react";
 import { api, type ChatMessage } from "@/lib/api";
 import { cn } from "@/lib/cn";
 import { useActiveApiKey } from "@/lib/useActiveApiKey";
+import { ProductPageHeader } from "./ProductPageHeader";
 
 type VisualMessage = {
   id: string;
@@ -101,22 +102,16 @@ export function ChatWorkspace() {
 
   return (
     <section className="space-y-10">
-      <div className="flex flex-col gap-4 border-b border-line pb-5 md:flex-row md:items-end md:justify-between">
-        <div>
-          <p className="font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-muted">§ IV — Visual proxy</p>
-          <h1 className="mt-2 font-serif text-5xl font-semibold leading-tight text-ink">Chat</h1>
-          <p className="mt-4 max-w-2xl font-serif text-lg leading-8 text-muted">
-            Send messages through Engram and watch memory injection happen without writing request JSON.
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={clearChat}
-          className="inline-flex items-center gap-2 border border-line px-4 py-2 font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-muted hover:border-signal hover:text-signal"
-        >
-          Clear View
-        </button>
-      </div>
+      <ProductPageHeader
+        eyebrow="§ IV — Visual proxy"
+        title="Chat"
+        description="Send messages through Engram and watch memory injection happen without writing request JSON."
+        actions={(
+          <button type="button" onClick={clearChat} className="inline-flex min-h-10 items-center rounded-full border border-line px-4 font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-muted transition hover:border-signal hover:text-signal active:translate-y-px">
+            Clear view
+          </button>
+        )}
+      />
 
       <div className="grid gap-8 lg:grid-cols-[1fr_280px]">
         <div className="space-y-5">

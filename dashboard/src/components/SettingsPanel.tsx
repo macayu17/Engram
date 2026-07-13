@@ -6,6 +6,7 @@ import { FormEvent, useEffect, useState } from "react";
 
 import { api, clearActiveApiKey, readActiveApiKey, setActiveApiKey, type UserProviderConfig, type UserProviderConfigUpdate } from "@/lib/api";
 import { useActiveApiKey } from "@/lib/useActiveApiKey";
+import { ProductPageHeader } from "./ProductPageHeader";
 
 export function SettingsPanel() {
   const queryClient = useQueryClient();
@@ -200,13 +201,11 @@ export function SettingsPanel() {
 
   return (
     <section className="space-y-12">
-      <div>
-        <p className="font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-muted">§ III — Local key</p>
-        <h1 className="mt-2 font-serif text-5xl font-semibold leading-tight text-ink">Settings</h1>
-        <p className="mt-4 max-w-2xl font-serif text-lg leading-8 text-muted">
-          The dashboard stores one Engram key in this browser. Workspace provider keys are encrypted by the API.
-        </p>
-      </div>
+      <ProductPageHeader
+        eyebrow="§ VII — Workspace control"
+        title="Settings"
+        description="The dashboard stores one Engram key in this browser. Workspace provider keys are encrypted by the API."
+      />
 
       <div className="grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
         <form onSubmit={saveApiKey} className="border-y border-line py-6">

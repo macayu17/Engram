@@ -277,7 +277,7 @@ function LandingHeader({ authEnabled }: { authEnabled: boolean }) {
         </nav>
         <div className="flex items-center gap-2.5">
           <a href="https://github.com/macayu17/Engram" target="_blank" rel="noreferrer" className="hidden min-h-9 items-center gap-2 rounded-full border border-line px-3.5 font-sans text-[11px] font-semibold uppercase tracking-[0.1em] text-ink transition hover:border-signal hover:text-signal focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-signal sm:inline-flex"><Github size={14} aria-hidden="true" />GitHub</a>
-          <AuthControls enabled={authEnabled} />
+          <AuthControls enabled={authEnabled} showDashboardLink />
           <ThemeToggle />
         </div>
       </PageContainer>

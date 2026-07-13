@@ -49,6 +49,7 @@ assertCheck("uses Show components", authControlsSource.includes("<Show when=\"si
 assertCheck("uses one signed-out auth action", authControlsSource.includes("SignInButton") && !authControlsSource.includes("SignUpButton"));
 assertCheck("redirects sign in to overview", authControlsSource.includes('forceRedirectUrl="/overview"'));
 assertCheck("shows dashboard action when signed in", authControlsSource.includes('href="/overview"') && authControlsSource.includes("Dashboard"));
+assertCheck("shows dashboard auth action only on landing", authControlsSource.includes("showDashboardLink") && landingPageSource.includes("showDashboardLink"));
 assertCheck("uses Engram font in Clerk", globalStylesSource.includes("--clerk-font-family: var(--font-geist)"));
 assertCheck("uses Engram colors in Clerk", globalStylesSource.includes("--clerk-color-primary: rgb(var(--color-signal))"));
 assertCheck("exposes font variables to Clerk portal", layoutSource.includes('<html lang="en" className={`${newsreader.variable} ${geist.variable} ${geistMono.variable}`}'));

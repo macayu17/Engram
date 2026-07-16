@@ -49,4 +49,4 @@ def test_workspace_deletion_cascades_and_entity_uniqueness_is_scoped() -> None:
     schema = SCHEMA_PATH.read_text(encoding="utf-8")
 
     assert "FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE CASCADE" in schema
-    assert "ON memory_entities(org_id, user_id, name, entity_type)" in schema
+    assert "ON memory_entities (org_id, user_id, lower(name))" in schema

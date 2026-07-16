@@ -112,8 +112,8 @@ const TYPE_COLORS: Record<string, string> = {
   organization: "#22d3ee",
 };
 
-const LABEL_FULL_ZOOM = 1.6;
-const LABEL_FADE_ZOOM = 0.55;
+const LABEL_FULL_ZOOM = 1.1;
+const LABEL_FADE_ZOOM = 0.3;
 
 type ThemePalette = {
   canvasBg: string;
@@ -138,8 +138,8 @@ const DARK_PALETTE: ThemePalette = {
   labelDimColor: "#6f6a61",
   selectedRingColor: "#5aa89e",
   pinnedDotColor: "#12110f",
-  edgeBaseAlpha: 0.32,
-  edgeHighlightAlpha: 0.7,
+  edgeBaseAlpha: 0.45,
+  edgeHighlightAlpha: 0.8,
   edgeFadeAlpha: 0.15,
   haloAlphaBase: 0.14,
   haloAlphaDim: 0.05,

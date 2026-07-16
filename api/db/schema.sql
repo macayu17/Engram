@@ -359,8 +359,6 @@ ALTER TABLE memories ADD CONSTRAINT memories_org_id_fkey
     FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE CASCADE;
 
 ALTER TABLE memory_entities DROP CONSTRAINT IF EXISTS memory_entities_user_id_name_entity_type_key;
-CREATE UNIQUE INDEX IF NOT EXISTS memory_entities_org_user_name_type_idx
-    ON memory_entities(org_id, user_id, name, entity_type);
 CREATE UNIQUE INDEX IF NOT EXISTS user_api_keys_user_org_name_idx
     ON user_api_keys(user_id, org_id, name);
 
@@ -379,6 +377,28 @@ ALTER TABLE retrieval_logs ALTER COLUMN org_id SET NOT NULL;
 ALTER TABLE conversations ALTER COLUMN org_id SET NOT NULL;
 ALTER TABLE memory_entities ALTER COLUMN org_id SET NOT NULL;
 ALTER TABLE memory_relationships ALTER COLUMN org_id SET NOT NULL;
+
+-- Merge case/type-variant duplicate entities ("Cutscene" vs "cutscene"|topic) into one node per (org, user, lower(name)).
+INSERT INTO memory_entity_links (memory_id, entity_id)
+SELECT mel.memory_id, k.keeper_id
+FROM memory_entity_links mel
+JOIN (
+    SELECT id, first_value(id) OVER (PARTITION BY org_id, user_id, lower(name) ORDER BY created_at, id) AS keeper_id
+    FROM memory_entities
+) k ON k.id = mel.entity_id AND k.id <> k.keeper_id
+ON CONFLICT DO NOTHING;
+
+DELETE FROM memory_entities e
+USING (
+    SELECT id, first_value(id) OVER (PARTITION BY org_id, user_id, lower(name) ORDER BY created_at, id) AS keeper_id
+    FROM memory_entities
+) k
+WHERE e.id = k.id AND k.id <> k.keeper_id;
+
+DROP INDEX IF EXISTS memory_entities_user_lower_name_idx;
+DROP INDEX IF EXISTS memory_entities_org_user_name_type_idx;
+CREATE UNIQUE INDEX IF NOT EXISTS memory_entities_org_user_lower_name_idx
+    ON memory_entities (org_id, user_id, lower(name));
 
 ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.memories ENABLE ROW LEVEL SECURITY;

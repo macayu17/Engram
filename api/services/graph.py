@@ -1,5 +1,7 @@
 import asyncio
 import logging
+import re
+from itertools import combinations
 from uuid import UUID
 
 import asyncpg
@@ -20,8 +22,9 @@ ENTITY_EXTRACTION_PROMPT = """Extract named entities from this memory. For each 
 RULES:
 1. Only extract concrete named entities (e.g. "FastAPI", "Engram", "Alice"). Skip generic terms.
 2. Use the most specific type that fits.
-3. Maximum 5 entities per memory.
-4. Return ONLY a valid JSON array of strings, no preamble.
+3. Use one canonical short name per entity and reuse it consistently (e.g. "Cutscene", never "the cutscene project" or "cutscene system").
+4. Maximum 5 entities per memory.
+5. Return ONLY a valid JSON array of strings, no preamble.
 
 Examples:
 Memory: "User prefers FastAPI over Flask for Python backends"
@@ -50,7 +53,7 @@ def _parse_entity_strings(raw: list[str]) -> list[dict[str, str]]:
         entity_type = type_part.strip().lower()
         if not name or entity_type not in VALID_ENTITY_TYPES:
             continue
-        key = (name.lower(), entity_type)
+        key = (name.lower(),)
         if key in seen:
             continue
         seen.add(key)
@@ -79,8 +82,8 @@ async def extract_entities_for_memory(
             """
             INSERT INTO memory_entities (user_id, org_id, name, entity_type)
             VALUES ($1, $2, $3, $4)
-            ON CONFLICT (org_id, user_id, name, entity_type)
-            DO UPDATE SET name = EXCLUDED.name
+            ON CONFLICT (org_id, user_id, lower(name))
+            DO UPDATE SET name = memory_entities.name
             RETURNING id
             """,
             user_id,
@@ -109,6 +112,21 @@ async def extract_entities_for_memory(
     return inserted
 
 
+def _containment_edges(entities: list[dict[str, object]]) -> list[tuple[UUID, UUID]]:
+    """Pairs whose name word-sets contain one another ("Cutscene" ⊆ "Cutscene System")."""
+    words: dict[UUID, frozenset[str]] = {}
+    for entity in entities:
+        tokens = frozenset(re.findall(r"[a-z0-9]+", str(entity["name"]).lower()))
+        if tokens:
+            words[entity["id"]] = tokens  # type: ignore[index]
+    # ponytail: O(n²) over per-user entities; index with pg_trgm if counts ever hurt
+    return [
+        (a, b)
+        for a, b in combinations(words, 2)
+        if words[a] <= words[b] or words[b] <= words[a]
+    ]
+
+
 async def list_entity_edges(user_id: UUID, org_id: UUID, db: asyncpg.Connection) -> list[dict[str, object]]:
     rows = await db.fetch(
         """
@@ -126,7 +144,19 @@ async def list_entity_edges(user_id: UUID, org_id: UUID, db: asyncpg.Connection)
         user_id,
         org_id,
     )
-    return [dict(row) for row in rows]
+    edges: dict[tuple[str, str], dict[str, object]] = {}
+    for row in rows:
+        key = tuple(sorted((str(row["source"]), str(row["target"]))))
+        edges[key] = dict(row)
+    entities = await db.fetch(
+        "SELECT id, name FROM memory_entities WHERE user_id = $1 AND org_id = $2",
+        user_id,
+        org_id,
+    )
+    for source, target in _containment_edges([dict(e) for e in entities]):
+        key = tuple(sorted((str(source), str(target))))
+        edges.setdefault(key, {"source": source, "target": target, "weight": 1})
+    return list(edges.values())
 
 
 async def list_user_entities(user_id: UUID, org_id: UUID, db: asyncpg.Connection) -> list[dict[str, object]]:

@@ -11,6 +11,29 @@ class StoreMemoryResult(TypedDict):
     memory: dict[str, object] | None
 
 
+async def record_memory_revision(
+    user_id: object,
+    org_id: object,
+    memory_id: object,
+    db: asyncpg.Connection,
+) -> None:
+    await db.execute(
+        """
+        INSERT INTO memory_revisions (
+            org_id, user_id, memory_id, content, source_conversation_id, status, category, source
+        )
+        SELECT org_id, user_id, id, content, source_conversation_id, status, category, source
+        FROM memories
+        WHERE user_id = $1
+          AND org_id = $2
+          AND id = $3
+        """,
+        user_id,
+        org_id,
+        memory_id,
+    )
+
+
 async def store_memory_with_deduplication(
     user_id: object,
     org_id: object,
@@ -47,6 +70,7 @@ async def store_memory_with_deduplication(
     if nearest is not None and nearest["status"] != "rejected" and nearest["score"] > dedup_threshold_value:
         return {"action": "skipped", "memory": dict(nearest)}
     if nearest is not None and nearest["score"] > settings.memory_refinement_threshold:
+        await record_memory_revision(user_id, org_id, nearest["id"], db)
         updated = await db.fetchrow(
             """
             UPDATE memories

@@ -4,8 +4,9 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Clock, Download, GitMerge, Plus, RefreshCw, ShieldCheck, Upload, UsersRound } from "lucide-react";
 import { ChangeEvent, FormEvent, ReactNode, useState } from "react";
 
-import { api, type MemorySourceResponse, type MemoryUpdatePayload, type SearchResponse } from "@/lib/api";
+import { api, type MemoryConflictResolution, type MemorySourceResponse, type MemoryUpdatePayload, type SearchResponse } from "@/lib/api";
 import { MemoryCard } from "./MemoryCard";
+import { MemoryConflictReview } from "./MemoryConflictReview";
 import { MemoryTable } from "./MemoryTable";
 import { ProductPageHeader } from "./ProductPageHeader";
 import { SearchBar } from "./SearchBar";
@@ -27,6 +28,10 @@ export function MemoryWorkspace() {
   const reviewQuery = useQuery({
     queryKey: ["memories", "review"],
     queryFn: () => api.memories.review({ limit: 8, offset: 0 }),
+  });
+  const conflictQuery = useQuery({
+    queryKey: ["memories", "conflicts"],
+    queryFn: () => api.memories.conflicts({ limit: 8, offset: 0 }),
   });
   const clientsQuery = useQuery({
     queryKey: ["logs", "clients"],
@@ -73,9 +78,15 @@ export function MemoryWorkspace() {
     mutationFn: (items: Array<{ content: string; category?: string; pinned?: boolean }>) => api.memories.importMany(items),
     onSuccess: () => void invalidateMemoryViews(),
   });
+  const resolveConflictMutation = useMutation({
+    mutationFn: ({ id, resolution }: { id: string; resolution: MemoryConflictResolution }) =>
+      api.memories.resolveConflict(id, resolution),
+    onSuccess: () => void invalidateMemoryViews(),
+  });
 
   function invalidateMemoryViews() {
     void queryClient.invalidateQueries({ queryKey: ["memories"] });
+    void queryClient.invalidateQueries({ queryKey: ["memories", "conflicts"] });
     void queryClient.invalidateQueries({ queryKey: ["logs", "clients"] });
   }
 
@@ -127,6 +138,10 @@ export function MemoryWorkspace() {
   }
 
   const memories = memoriesQuery.data?.memories ?? [];
+  const conflicts = conflictQuery.data?.conflicts ?? [];
+  const conflictProposalIds = new Set(conflicts.map((conflict) => conflict.proposed_memory.id));
+  const pendingMemories = (reviewQuery.data?.memories ?? []).filter((memory) => !conflictProposalIds.has(memory.id));
+  const pendingReviewTotal = Math.max(0, (reviewQuery.data?.total ?? 0) - (conflictQuery.data?.total ?? 0));
   const total = memoriesQuery.data?.total ?? 0;
   const hasNextPage = (page + 1) * PAGE_SIZE < total;
   const isBusy = createMutation.isPending || updateMutation.isPending || deleteMutation.isPending || sourceMutation.isPending;
@@ -190,9 +205,34 @@ export function MemoryWorkspace() {
         <SearchBar onResults={setSearchResults} />
       </div>
 
+      {(conflictQuery.isLoading || conflicts.length > 0 || conflictQuery.isError || resolveConflictMutation.isError) && (
+        <section className="border-y border-line">
+          <div className="flex flex-col gap-2 border-b border-line py-5 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <p className="font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-muted">Review queue</p>
+              <h2 className="mt-2 font-serif text-3xl font-semibold text-ink">Resolve conflicting memories</h2>
+            </div>
+            <span className="font-sans text-[11px] uppercase tracking-[0.12em] text-muted">
+              {conflictQuery.data?.total ?? 0} open
+            </span>
+          </div>
+          {conflictQuery.isLoading && <p className="py-6 font-serif text-base text-muted">Loading conflicts...</p>}
+          {conflictQuery.isError && <p className="py-6 font-serif text-base text-fault">Could not load memory conflicts.</p>}
+          {resolveConflictMutation.isError && <p className="py-4 font-serif text-base text-fault">The conflict could not be resolved. Refresh and try again.</p>}
+          {conflicts.map((conflict) => (
+            <MemoryConflictReview
+              key={conflict.id}
+              conflict={conflict}
+              disabled={resolveConflictMutation.isPending}
+              onResolve={(id, resolution) => resolveConflictMutation.mutate({ id, resolution })}
+            />
+          ))}
+        </section>
+      )}
+
       <div className="grid gap-5 lg:grid-cols-4">
-        <LedgerPanel icon={<ShieldCheck size={16} aria-hidden="true" />} title="Review Queue" value={`${reviewQuery.data?.total ?? 0} pending`}>
-          {(reviewQuery.data?.memories ?? []).slice(0, 3).map((memory) => (
+        <LedgerPanel icon={<ShieldCheck size={16} aria-hidden="true" />} title="Review Queue" value={`${pendingReviewTotal} pending`}>
+          {pendingMemories.slice(0, 3).map((memory) => (
             <PanelRow key={memory.id} text={memory.content} meta={memory.category} />
           ))}
         </LedgerPanel>

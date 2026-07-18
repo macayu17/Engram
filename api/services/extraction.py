@@ -8,7 +8,7 @@ import asyncpg
 
 from api.config import settings
 from api.db.connection import get_pool
-from api.services.deduplication import store_memory_with_deduplication
+from api.services.deduplication import record_memory_revision, store_memory_with_deduplication
 from api.services.entitlements import enforce_workspace_limit, get_workspace_usage, remaining_capacity
 from api.services.memories import infer_category
 from api.services.providers.base import ExtractionProvider
@@ -46,17 +46,19 @@ RECONCILE_PROMPT = """You are a memory reconciliation system. New facts were ext
 
 Decide one action per new fact:
 - "ADD" if the fact is genuinely new information not covered by existing memories
-- "UPDATE <memory_id>" if the fact supersedes, corrects, or contradicts that existing memory (the new fact will replace its content)
+- "UPDATE <memory_id>" if the fact is an unambiguous correction or newer value that safely replaces that existing memory
+- "CONFLICT <memory_id>" if the new and existing claims contradict each other but either claim may still be valid or needs user clarification
 - "DISCARD" if existing memories already fully cover this fact
 
 RULES:
 1. Prefer UPDATE over ADD when the fact is a newer version of an existing memory (changed preference, corrected detail, progressed situation)
-2. Only DISCARD when the fact adds nothing at all
-3. Use the exact memory_id shown in the existing memory listing
+2. Use CONFLICT instead of UPDATE when replacement could erase a durable or high-impact claim that may still be true
+3. Only DISCARD when the fact adds nothing at all
+4. Use the exact memory_id shown in the existing memory listing
 
 OUTPUT FORMAT:
 Return ONLY a valid JSON array of strings, one per new fact, in the same order as the facts. No preamble, no markdown.
-Example: ["ADD", "UPDATE 3f2b8c9e-1a2b-4c5d-8e9f-0a1b2c3d4e5f", "DISCARD"]
+Example: ["ADD", "UPDATE 3f2b8c9e-1a2b-4c5d-8e9f-0a1b2c3d4e5f", "CONFLICT 7c7ea9d8-95c2-4ea8-b617-8a29f513f709", "DISCARD"]
 
 {sections}
 
@@ -79,7 +81,7 @@ def limit_add_decisions(
     additions_kept = 0
     limited: list[tuple[str, UUID | None]] = []
     for action, target_id in decisions:
-        if action != "add":
+        if action not in {"add", "conflict"}:
             limited.append((action, target_id))
         elif additions_kept < available:
             limited.append((action, target_id))
@@ -209,6 +211,23 @@ async def store_extracted_memories(
                 stored_count += 1
                 stored_refs.append((target_id, content))
             continue
+        if action == "conflict" and target_id is not None:
+            proposed = await store_memory_conflict(
+                user_id,
+                org_id,
+                target_id,
+                content,
+                memory_embeddings[index],
+                conversation_id,
+                namespace,
+                db,
+            )
+            if proposed is not None:
+                proposed_id = proposed["id"]
+                if isinstance(proposed_id, UUID):
+                    stored_count += 1
+                    stored_refs.append((proposed_id, content))
+            continue
         result = await store_memory_with_deduplication(
             user_id,
             org_id,
@@ -311,6 +330,11 @@ def parse_reconcile_decisions(
             if target is not None:
                 decisions.append(("update", target))
                 continue
+        if normalized.startswith("CONFLICT"):
+            target = parse_update_target(raw, candidates_per_fact[index])
+            if target is not None:
+                decisions.append(("conflict", target))
+                continue
         decisions.append(("add", None))
     return decisions
 
@@ -338,6 +362,7 @@ async def apply_memory_update(
 ) -> dict[str, object] | None:
     from api.services.embedding import format_embedding_for_pgvector
 
+    await record_memory_revision(user_id, org_id, memory_id, db)
     row = await db.fetchrow(
         """
         UPDATE memories
@@ -360,6 +385,68 @@ async def apply_memory_update(
         memory_id,
     )
     return dict(row) if row is not None else None
+
+
+async def store_memory_conflict(
+    user_id: UUID,
+    org_id: UUID,
+    existing_memory_id: UUID,
+    content: str,
+    embedding: list[float],
+    conversation_id: UUID,
+    namespace: str,
+    db: asyncpg.Connection,
+) -> dict[str, object] | None:
+    from api.services.embedding import format_embedding_for_pgvector
+
+    proposed = await db.fetchrow(
+        """
+        INSERT INTO memories (
+            user_id, org_id, content, embedding, source_conversation_id, confidence,
+            status, category, source, namespace
+        )
+        VALUES ($1, $2, $3, $4::vector, $5, $6, $7, $8, $9, $10)
+        RETURNING id
+        """,
+        user_id,
+        org_id,
+        content,
+        format_embedding_for_pgvector(embedding),
+        conversation_id,
+        1.0,
+        "pending",
+        infer_category(content),
+        "extraction",
+        namespace,
+    )
+    if proposed is None:
+        return None
+    proposed_memory_id = proposed["id"]
+    conflict = await db.fetchrow(
+        """
+        INSERT INTO memory_conflicts (user_id, org_id, existing_memory_id, proposed_memory_id)
+        SELECT $1, $2, id, $4
+        FROM memories
+        WHERE user_id = $1
+          AND org_id = $2
+          AND id = $3
+          AND status = 'approved'
+        RETURNING id
+        """,
+        user_id,
+        org_id,
+        existing_memory_id,
+        proposed_memory_id,
+    )
+    if conflict is None:
+        await db.execute(
+            "DELETE FROM memories WHERE user_id = $1 AND org_id = $2 AND id = $3",
+            user_id,
+            org_id,
+            proposed_memory_id,
+        )
+        return None
+    return dict(proposed)
 
 
 async def _run_graph_extraction(

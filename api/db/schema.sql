@@ -378,6 +378,45 @@ ALTER TABLE conversations ALTER COLUMN org_id SET NOT NULL;
 ALTER TABLE memory_entities ALTER COLUMN org_id SET NOT NULL;
 ALTER TABLE memory_relationships ALTER COLUMN org_id SET NOT NULL;
 
+CREATE TABLE IF NOT EXISTS memory_revisions (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    org_id UUID NOT NULL REFERENCES orgs(id) ON DELETE CASCADE,
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    memory_id UUID NOT NULL REFERENCES memories(id) ON DELETE CASCADE,
+    content TEXT NOT NULL,
+    source_conversation_id UUID,
+    status TEXT NOT NULL,
+    category TEXT NOT NULL,
+    source TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS memory_revisions_org_user_memory_idx
+    ON memory_revisions(org_id, user_id, memory_id, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS memory_conflicts (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    org_id UUID NOT NULL REFERENCES orgs(id) ON DELETE CASCADE,
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    existing_memory_id UUID NOT NULL REFERENCES memories(id) ON DELETE CASCADE,
+    proposed_memory_id UUID NOT NULL REFERENCES memories(id) ON DELETE CASCADE,
+    status TEXT NOT NULL DEFAULT 'open',
+    resolution TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    resolved_at TIMESTAMPTZ,
+    UNIQUE (existing_memory_id, proposed_memory_id),
+    CHECK (existing_memory_id <> proposed_memory_id),
+    CHECK (status IN ('open', 'resolved')),
+    CHECK (resolution IS NULL OR resolution IN ('accept_new', 'keep_old', 'keep_both')),
+    CHECK (
+        (status = 'open' AND resolution IS NULL AND resolved_at IS NULL)
+        OR (status = 'resolved' AND resolution IS NOT NULL AND resolved_at IS NOT NULL)
+    )
+);
+
+CREATE INDEX IF NOT EXISTS memory_conflicts_org_user_status_idx
+    ON memory_conflicts(org_id, user_id, status, created_at DESC);
+
 -- Merge case/type-variant duplicate entities ("Cutscene" vs "cutscene"|topic) into one node per (org, user, lower(name)).
 INSERT INTO memory_entity_links (memory_id, entity_id)
 SELECT mel.memory_id, k.keeper_id
@@ -410,6 +449,8 @@ ALTER TABLE public.org_memberships ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.memory_entities ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.memory_entity_links ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.memory_relationships ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.memory_revisions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.memory_conflicts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.stripe_events ENABLE ROW LEVEL SECURITY;
 
 DO $$
@@ -417,7 +458,7 @@ DECLARE
     target_table TEXT;
     target_role TEXT;
 BEGIN
-    FOREACH target_table IN ARRAY ARRAY['users', 'memories', 'user_api_keys', 'retrieval_logs', 'conversations', 'orgs', 'org_memberships', 'memory_entities', 'memory_entity_links', 'memory_relationships', 'stripe_events'] LOOP
+    FOREACH target_table IN ARRAY ARRAY['users', 'memories', 'user_api_keys', 'retrieval_logs', 'conversations', 'orgs', 'org_memberships', 'memory_entities', 'memory_entity_links', 'memory_relationships', 'memory_revisions', 'memory_conflicts', 'stripe_events'] LOOP
         EXECUTE format('DROP POLICY IF EXISTS engram_server_access ON public.%I', target_table);
         EXECUTE format(
             'CREATE POLICY engram_server_access ON public.%I FOR ALL TO %I USING (true) WITH CHECK (true)',

@@ -4,7 +4,7 @@ import pytest
 
 from api.routes.proxy import resolve_bearer_api_key
 from api.services import extraction
-from api.services.extraction import parse_reconcile_decisions, parse_update_target
+from api.services.extraction import limit_add_decisions, parse_reconcile_decisions, parse_update_target
 
 
 def make_candidates(*memory_ids: object) -> list[dict[str, object]]:
@@ -46,6 +46,17 @@ def test_parse_reconcile_decisions_rejects_invalid_conflict_target() -> None:
     )
 
     assert decisions == [("add", None), ("add", None)]
+
+
+def test_limit_add_decisions_counts_conflict_proposals_against_capacity() -> None:
+    target = uuid4()
+
+    decisions = limit_add_decisions(
+        [("conflict", target), ("add", None), ("update", target)],
+        available=1,
+    )
+
+    assert decisions == [("conflict", target), ("discard", None), ("update", target)]
 
 
 def test_parse_update_target_requires_valid_uuid() -> None:

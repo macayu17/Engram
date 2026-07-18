@@ -81,7 +81,7 @@ def limit_add_decisions(
     additions_kept = 0
     limited: list[tuple[str, UUID | None]] = []
     for action, target_id in decisions:
-        if action != "add":
+        if action not in {"add", "conflict"}:
             limited.append((action, target_id))
         elif additions_kept < available:
             limited.append((action, target_id))

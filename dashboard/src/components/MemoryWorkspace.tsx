@@ -141,6 +141,7 @@ export function MemoryWorkspace() {
   const conflicts = conflictQuery.data?.conflicts ?? [];
   const conflictProposalIds = new Set(conflicts.map((conflict) => conflict.proposed_memory.id));
   const pendingMemories = (reviewQuery.data?.memories ?? []).filter((memory) => !conflictProposalIds.has(memory.id));
+  const pendingReviewTotal = Math.max(0, (reviewQuery.data?.total ?? 0) - (conflictQuery.data?.total ?? 0));
   const total = memoriesQuery.data?.total ?? 0;
   const hasNextPage = (page + 1) * PAGE_SIZE < total;
   const isBusy = createMutation.isPending || updateMutation.isPending || deleteMutation.isPending || sourceMutation.isPending;
@@ -230,7 +231,7 @@ export function MemoryWorkspace() {
       )}
 
       <div className="grid gap-5 lg:grid-cols-4">
-        <LedgerPanel icon={<ShieldCheck size={16} aria-hidden="true" />} title="Review Queue" value={`${pendingMemories.length} pending`}>
+        <LedgerPanel icon={<ShieldCheck size={16} aria-hidden="true" />} title="Review Queue" value={`${pendingReviewTotal} pending`}>
           {pendingMemories.slice(0, 3).map((memory) => (
             <PanelRow key={memory.id} text={memory.content} meta={memory.category} />
           ))}

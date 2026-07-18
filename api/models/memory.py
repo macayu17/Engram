@@ -5,6 +5,7 @@ from pydantic import BaseModel, Field, UUID4
 
 
 MemoryStatus = Literal["pending", "approved", "rejected"]
+MemoryConflictResolution = Literal["accept_new", "keep_old", "keep_both"]
 
 
 class MemoryCreate(BaseModel):
@@ -104,3 +105,24 @@ class MemoryTimelineResponse(BaseModel):
 
 class MemoryDecayResponse(BaseModel):
     updated: int
+
+
+class MemoryConflictResolveRequest(BaseModel):
+    resolution: MemoryConflictResolution
+
+
+class MemoryConflictResponse(BaseModel):
+    id: UUID4
+    status: Literal["open", "resolved"]
+    resolution: MemoryConflictResolution | None
+    created_at: datetime
+    resolved_at: datetime | None
+    existing_memory: MemoryResponse
+    proposed_memory: MemoryResponse
+
+
+class MemoryConflictListResponse(BaseModel):
+    conflicts: list[MemoryConflictResponse]
+    total: int
+    limit: int
+    offset: int

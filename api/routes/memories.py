@@ -9,6 +9,9 @@ from api.dependencies import get_current_user, get_db
 from api.models.conversation import ConversationCaptureRequest, ConversationCaptureResponse
 from api.models.memory import (
     MemoryCreate,
+    MemoryConflictListResponse,
+    MemoryConflictResolveRequest,
+    MemoryConflictResponse,
     MemoryDecayResponse,
     MemoryExportResponse,
     MemoryImportRequest,
@@ -35,8 +38,10 @@ from api.services.memories import (
     get_memory_source,
     import_memories,
     list_memories,
+    list_memory_conflicts,
     list_merge_suggestions,
     merge_memories,
+    resolve_memory_conflict,
     search_memories,
     timeline,
     update_memory,
@@ -99,6 +104,37 @@ async def list_review_memories_route(
 ) -> dict[str, object]:
     memories, total = await list_memories(user["id"], user["org_id"], db, limit, offset, None, "created_at", "desc", "pending", None)
     return {"memories": memories, "total": total, "limit": limit, "offset": offset}
+
+
+@router.get("/conflicts", response_model=MemoryConflictListResponse)
+async def list_memory_conflicts_route(
+    limit: int = Query(default=20, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    user: asyncpg.Record = Depends(get_current_user),
+    db: asyncpg.Connection = Depends(get_db),
+) -> dict[str, object]:
+    conflicts, total = await list_memory_conflicts(user["id"], user["org_id"], db, limit, offset)
+    return {"conflicts": conflicts, "total": total, "limit": limit, "offset": offset}
+
+
+@router.post("/conflicts/{conflict_id}/resolve", response_model=MemoryConflictResponse)
+async def resolve_memory_conflict_route(
+    conflict_id: UUID4,
+    payload: MemoryConflictResolveRequest,
+    user: asyncpg.Record = Depends(get_current_user),
+    db: asyncpg.Connection = Depends(get_db),
+) -> dict[str, object]:
+    async with db.transaction():
+        conflict = await resolve_memory_conflict(
+            user["id"],
+            user["org_id"],
+            conflict_id,
+            payload.resolution,
+            db,
+        )
+    if conflict is None:
+        raise HTTPException(status_code=404, detail="Open memory conflict not found")
+    return conflict
 
 
 @router.get("/export", response_model=MemoryExportResponse)

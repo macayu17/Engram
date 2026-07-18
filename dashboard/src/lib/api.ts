@@ -29,6 +29,25 @@ export type MemoryListResponse = {
   offset: number;
 };
 
+export type MemoryConflictResolution = "accept_new" | "keep_old" | "keep_both";
+
+export type MemoryConflict = {
+  id: string;
+  status: "open" | "resolved";
+  resolution: MemoryConflictResolution | null;
+  created_at: string;
+  resolved_at: string | null;
+  existing_memory: Memory;
+  proposed_memory: Memory;
+};
+
+export type MemoryConflictListResponse = {
+  conflicts: MemoryConflict[];
+  total: number;
+  limit: number;
+  offset: number;
+};
+
 export type SearchResponse = {
   results: Array<{ memory: Memory; score: number }>;
 };
@@ -384,6 +403,10 @@ export const api = {
     delete: (id: string) => request<void>("DELETE", `/memories/${id}`),
     deleteAll: deleteAllMemories,
     review: (params?: { limit?: number; offset?: number }) => request<MemoryListResponse>("GET", `/memories/review${toQuery(params)}`),
+    conflicts: (params?: { limit?: number; offset?: number }) =>
+      request<MemoryConflictListResponse>("GET", `/memories/conflicts${toQuery(params)}`),
+    resolveConflict: (id: string, resolution: MemoryConflictResolution) =>
+      request<MemoryConflict>("POST", `/memories/conflicts/${id}/resolve`, { resolution }),
     exportAll: () => request<{ memories: Memory[] }>("GET", "/memories/export"),
     importMany: (memories: Array<{ content: string; category?: string; pinned?: boolean }>) =>
       request<{ imported: number }>("POST", "/memories/import", { memories }),

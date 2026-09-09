@@ -30,6 +30,7 @@ export type MemoryListResponse = {
 };
 
 export type MemoryConflictResolution = "accept_new" | "keep_old" | "keep_both";
+export type MemoryConflictStatus = "open" | "resolved" | "all";
 
 export type MemoryConflict = {
   id: string;
@@ -403,7 +404,7 @@ export const api = {
     delete: (id: string) => request<void>("DELETE", `/memories/${id}`),
     deleteAll: deleteAllMemories,
     review: (params?: { limit?: number; offset?: number }) => request<MemoryListResponse>("GET", `/memories/review${toQuery(params)}`),
-    conflicts: (params?: { limit?: number; offset?: number }) =>
+    conflicts: (params?: { limit?: number; offset?: number; status?: MemoryConflictStatus }) =>
       request<MemoryConflictListResponse>("GET", `/memories/conflicts${toQuery(params)}`),
     resolveConflict: (id: string, resolution: MemoryConflictResolution) =>
       request<MemoryConflict>("POST", `/memories/conflicts/${id}/resolve`, { resolution }),

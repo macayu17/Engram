@@ -110,10 +110,11 @@ async def list_review_memories_route(
 async def list_memory_conflicts_route(
     limit: int = Query(default=20, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
+    conflict_status: Literal["open", "resolved", "all"] = Query(default="open", alias="status"),
     user: asyncpg.Record = Depends(get_current_user),
     db: asyncpg.Connection = Depends(get_db),
 ) -> dict[str, object]:
-    conflicts, total = await list_memory_conflicts(user["id"], user["org_id"], db, limit, offset)
+    conflicts, total = await list_memory_conflicts(user["id"], user["org_id"], db, limit, offset, conflict_status)
     return {"conflicts": conflicts, "total": total, "limit": limit, "offset": offset}
 
 

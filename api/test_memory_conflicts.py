@@ -67,7 +67,7 @@ async def test_list_memory_conflicts_filters_open_rows_by_owner() -> None:
 
         async def fetchval(self, query: str, *args: object) -> int:
             assert "COUNT(*)" in query
-            assert args == ("user-1", "org-1")
+            assert args == ("user-1", "org-1", "open")
             return 0
 
     db = FakeDb()
@@ -77,10 +77,29 @@ async def test_list_memory_conflicts_filters_open_rows_by_owner() -> None:
     assert conflicts == []
     assert total == 0
     assert "memory_conflicts" in db.query
-    assert "status = 'open'" in db.query
+    assert "status = $3" in db.query
     assert "user_id = $1" in db.query
     assert "org_id = $2" in db.query
-    assert db.args == ("user-1", "org-1", 8, 0)
+    assert db.args == ("user-1", "org-1", "open", 8, 0)
+
+
+@pytest.mark.asyncio
+async def test_list_memory_conflicts_can_return_resolved_history() -> None:
+    class FakeDb:
+        async def fetch(self, query: str, *args: object) -> list[dict[str, object]]:
+            assert "status = $3" in query
+            assert args == ("user-1", "org-1", "resolved", 8, 0)
+            return []
+
+        async def fetchval(self, query: str, *args: object) -> int:
+            assert "status = $3" in query
+            assert args == ("user-1", "org-1", "resolved")
+            return 0
+
+    conflicts, total = await memories.list_memory_conflicts("user-1", "org-1", FakeDb(), 8, 0, "resolved")
+
+    assert conflicts == []
+    assert total == 0
 
 
 @pytest.mark.asyncio

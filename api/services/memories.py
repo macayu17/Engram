@@ -25,20 +25,22 @@ async def list_memory_conflicts(
     db: asyncpg.Connection,
     limit: int,
     offset: int,
+    status: Literal["open", "resolved", "all"] = "open",
 ) -> tuple[list[dict[str, object]], int]:
+    status_clause = "" if status == "all" else "AND status = $3"
+    query_args: tuple[object, ...] = (user_id, org_id) if status == "all" else (user_id, org_id, status)
     rows = await db.fetch(
-        """
+        f"""
         SELECT id, existing_memory_id, proposed_memory_id, status, resolution, created_at, resolved_at
         FROM memory_conflicts
         WHERE user_id = $1
           AND org_id = $2
-          AND status = 'open'
+          {status_clause}
         ORDER BY created_at DESC
-        LIMIT $3
-        OFFSET $4
+        LIMIT ${len(query_args) + 1}
+        OFFSET ${len(query_args) + 2}
         """,
-        user_id,
-        org_id,
+        *query_args,
         limit,
         offset,
     )
@@ -61,15 +63,14 @@ async def list_memory_conflicts(
             }
         )
     total = await db.fetchval(
-        """
+        f"""
         SELECT COUNT(*)
         FROM memory_conflicts
         WHERE user_id = $1
           AND org_id = $2
-          AND status = 'open'
+          {status_clause}
         """,
-        user_id,
-        org_id,
+        *query_args,
     )
     return conflicts, int(total)
 

@@ -33,6 +33,10 @@ export function MemoryWorkspace() {
     queryKey: ["memories", "conflicts"],
     queryFn: () => api.memories.conflicts({ limit: 8, offset: 0 }),
   });
+  const conflictHistoryQuery = useQuery({
+    queryKey: ["memories", "conflicts", "resolved"],
+    queryFn: () => api.memories.conflicts({ limit: 5, offset: 0, status: "resolved" }),
+  });
   const clientsQuery = useQuery({
     queryKey: ["logs", "clients"],
     queryFn: () => api.logs.clients(),
@@ -87,6 +91,7 @@ export function MemoryWorkspace() {
   function invalidateMemoryViews() {
     void queryClient.invalidateQueries({ queryKey: ["memories"] });
     void queryClient.invalidateQueries({ queryKey: ["memories", "conflicts"] });
+    void queryClient.invalidateQueries({ queryKey: ["memories", "conflicts", "resolved"] });
     void queryClient.invalidateQueries({ queryKey: ["logs", "clients"] });
   }
 
@@ -139,6 +144,7 @@ export function MemoryWorkspace() {
 
   const memories = memoriesQuery.data?.memories ?? [];
   const conflicts = conflictQuery.data?.conflicts ?? [];
+  const resolvedConflicts = conflictHistoryQuery.data?.conflicts ?? [];
   const conflictProposalIds = new Set(conflicts.map((conflict) => conflict.proposed_memory.id));
   const pendingMemories = (reviewQuery.data?.memories ?? []).filter((memory) => !conflictProposalIds.has(memory.id));
   const pendingReviewTotal = Math.max(0, (reviewQuery.data?.total ?? 0) - (conflictQuery.data?.total ?? 0));
@@ -227,6 +233,21 @@ export function MemoryWorkspace() {
               onResolve={(id, resolution) => resolveConflictMutation.mutate({ id, resolution })}
             />
           ))}
+          {resolvedConflicts.length > 0 && (
+            <div className="border-t border-line py-5">
+              <p className="font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-muted">Recently resolved</p>
+              <div className="mt-3 space-y-3">
+                {resolvedConflicts.map((conflict) => (
+                  <div key={conflict.id} className="flex flex-col gap-1 border-l-2 border-signal/50 pl-3 sm:flex-row sm:items-baseline sm:justify-between sm:gap-4">
+                    <p className="line-clamp-2 font-serif text-base leading-6 text-ink">{conflict.proposed_memory.content}</p>
+                    <p className="shrink-0 font-sans text-[10px] uppercase tracking-[0.12em] text-muted">
+                      {conflict.resolution?.replace("_", " ")}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </section>
       )}
 

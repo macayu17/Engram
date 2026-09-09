@@ -19,11 +19,11 @@ const TYPE_COLORS: Record<string, string> = {
   organization: "#22d3ee",
 };
 
-const QUICK_LINKS = [
-  { href: "/memories", title: "Ledger", description: "Browse, search, edit, and approve memories." },
-  { href: "/chat", title: "Chat", description: "Talk to a model with your memories in context." },
-  { href: "/graph", title: "Graph", description: "Entities woven across your memories." },
-  { href: "/logs", title: "Logs", description: "Every retrieval, what it returned, and why." },
+const WORKSPACE_SURFACES = [
+  { href: "/memories", title: "Memory ledger", description: "Review, search, and edit captured context." },
+  { href: "/chat", title: "Proxy test", description: "Send a request and inspect injected context." },
+  { href: "/graph", title: "Entity graph", description: "Follow connections across approved memories." },
+  { href: "/logs", title: "Retrieval log", description: "See what was returned for each query." },
 ];
 
 export function HomeDashboard() {
@@ -76,14 +76,14 @@ export function HomeDashboard() {
       <section className="memory-hero-frame -mx-4 -mt-10 border-b border-line px-4 pt-10 sm:-mx-6 sm:px-6 md:-mt-16 md:pt-14">
         <div className="mx-auto grid min-h-[26rem] min-w-0 max-w-7xl gap-10 pb-10 lg:grid-cols-[minmax(0,0.9fr)_minmax(28rem,1.1fr)] lg:items-center lg:gap-16 lg:pb-12">
           <div className="min-w-0 max-w-xl">
-            <p className="font-sans text-[10px] font-medium uppercase tracking-[0.14em] text-signal">Memory infrastructure you can audit</p>
+            <p className="font-sans text-[10px] font-medium uppercase tracking-[0.14em] text-signal">Workspace overview</p>
             <h1 className="mt-5 font-serif text-[2.7rem] font-bold leading-[1.02] text-ink sm:text-5xl lg:text-6xl">
-              Memory that
+              Your memory,
               <br />
-              <span className="italic text-signal">explains itself.</span>
+              <span className="italic text-signal">in view.</span>
             </h1>
             <p className="mt-5 max-w-[36rem] font-serif text-lg leading-8 text-muted">
-              Retrieve durable user context, inspect every match, and control exactly what reaches the model.
+              See what has been captured, what needs attention, and what your assistant is retrieving.
             </p>
             <div className="mt-7 flex flex-wrap items-center gap-4">
               <Link
@@ -204,21 +204,27 @@ export function HomeDashboard() {
       </section>
 
       <section>
-        <p className="font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-muted">§ IV — Go anywhere</p>
-        <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          {QUICK_LINKS.map((link) => (
+        <div className="flex items-end justify-between gap-4 border-b border-line pb-3">
+          <div>
+            <p className="font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-muted">Workspace surfaces</p>
+            <h2 className="mt-2 font-serif text-3xl font-semibold leading-tight text-ink">Open a view</h2>
+          </div>
+          <span className="hidden font-mono text-[10px] uppercase tracking-[0.12em] text-muted sm:block">4 routes</span>
+        </div>
+        <nav className="mt-4 grid divide-y divide-line border-y border-line sm:grid-cols-2 sm:divide-x sm:divide-y-0 lg:grid-cols-4">
+          {WORKSPACE_SURFACES.map((link) => (
             <Link
               key={link.href}
               href={link.href}
-              className="group block rounded-lg border border-line bg-paper p-5 transition hover:border-signal hover:bg-paper/80"
+              className="group block px-4 py-5 transition hover:bg-tag/30 sm:px-5"
             >
-              <p className="font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-muted group-hover:text-signal">
+              <p className="font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-ink group-hover:text-signal">
                 {link.title}
               </p>
-              <p className="mt-2 font-serif text-base leading-6 text-ink/85">{link.description}</p>
+              <p className="mt-2 font-serif text-base leading-6 text-muted">{link.description}</p>
             </Link>
           ))}
-        </div>
+        </nav>
       </section>
     </div>
   );

@@ -147,7 +147,7 @@ export function MemoryWorkspace() {
   const resolvedConflicts = conflictHistoryQuery.data?.conflicts ?? [];
   const conflictProposalIds = new Set(conflicts.map((conflict) => conflict.proposed_memory.id));
   const pendingMemories = (reviewQuery.data?.memories ?? []).filter((memory) => !conflictProposalIds.has(memory.id));
-  const pendingReviewTotal = Math.max(0, (reviewQuery.data?.total ?? 0) - (conflictQuery.data?.total ?? 0));
+  const pendingReviewTotal = reviewQuery.data?.total ?? 0;
   const total = memoriesQuery.data?.total ?? 0;
   const hasNextPage = (page + 1) * PAGE_SIZE < total;
   const isBusy = createMutation.isPending || updateMutation.isPending || deleteMutation.isPending || sourceMutation.isPending;

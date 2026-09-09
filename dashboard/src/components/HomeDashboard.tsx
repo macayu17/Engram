@@ -39,6 +39,11 @@ export function HomeDashboard() {
     queryFn: () => api.memories.list({ limit: 1, offset: 0, status: "pending" }),
     enabled: connected,
   });
+  const conflictsQuery = useQuery({
+    queryKey: ["dashboard", "open-conflict-count"],
+    queryFn: () => api.memories.conflicts({ limit: 1, offset: 0, status: "open" }),
+    enabled: connected,
+  });
   const timelineQuery = useQuery({
     queryKey: ["dashboard", "timeline"],
     queryFn: () => api.memories.timeline(8),
@@ -57,6 +62,7 @@ export function HomeDashboard() {
 
   const totalApproved = approvedQuery.data?.total ?? 0;
   const totalPending = pendingQuery.data?.total ?? 0;
+  const totalConflicts = conflictsQuery.data?.total ?? 0;
   const totalEntities = entitiesQuery.data?.entities.length ?? 0;
   const totalRetrievals = logsQuery.data?.total ?? 0;
 
@@ -99,9 +105,10 @@ export function HomeDashboard() {
           <RetrievalTrace />
         </div>
 
-        <div className="mx-auto grid max-w-7xl grid-cols-2 border-t border-line sm:grid-cols-4">
+        <div className="mx-auto grid max-w-7xl grid-cols-2 border-t border-line sm:grid-cols-5">
           <StatTile label="Approved memories" value={totalApproved} loading={connected && approvedQuery.isLoading} href="/memories" />
           <StatTile label="Pending review" value={totalPending} loading={connected && pendingQuery.isLoading} accent={totalPending > 0} href="/memories" />
+          <StatTile label="Open conflicts" value={totalConflicts} loading={connected && conflictsQuery.isLoading} accent={totalConflicts > 0} href="/memories" />
           <StatTile label="Entities" value={totalEntities} loading={connected && entitiesQuery.isLoading} href="/graph" />
           <StatTile label="Retrievals logged" value={totalRetrievals} loading={connected && logsQuery.isLoading} href="/logs" />
         </div>

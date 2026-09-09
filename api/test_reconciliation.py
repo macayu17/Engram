@@ -80,6 +80,8 @@ async def test_store_extracted_memory_preserves_conflict_as_pending_proposal(mon
 
         async def fetchrow(self, query: str, *args: object) -> dict[str, object]:
             self.calls.append((query, args))
+            if "FROM memory_conflicts" in query:
+                return None
             return {"id": proposed_memory_id}
 
         async def execute(self, query: str, *args: object) -> str:
@@ -104,10 +106,51 @@ async def test_store_extracted_memory_preserves_conflict_as_pending_proposal(mon
 
     assert stored_count == 1
     assert stored_refs == [(proposed_memory_id, "User now prefers Flask for this project")]
-    assert "INSERT INTO memories" in db.calls[0][0]
-    assert db.calls[0][1][6] == "pending"
-    assert "INSERT INTO memory_conflicts" in db.calls[1][0]
-    assert db.calls[1][1] == (user_id, org_id, existing_memory_id, proposed_memory_id)
+    assert "FROM memory_conflicts" in db.calls[0][0]
+    assert "INSERT INTO memories" in db.calls[1][0]
+    assert db.calls[1][1][6] == "pending"
+    assert "INSERT INTO memory_conflicts" in db.calls[2][0]
+    assert db.calls[2][1] == (user_id, org_id, existing_memory_id, proposed_memory_id)
+
+
+@pytest.mark.asyncio
+async def test_store_memory_conflict_reuses_existing_open_proposal(monkeypatch) -> None:
+    from api.services.extraction import store_memory_conflict
+
+    existing_memory_id = uuid4()
+    proposed_memory_id = uuid4()
+    user_id = uuid4()
+    org_id = uuid4()
+    conversation_id = uuid4()
+
+    class FakeDb:
+        def __init__(self) -> None:
+            self.calls: list[str] = []
+
+        async def fetchrow(self, query: str, *args: object) -> dict[str, object]:
+            self.calls.append(query)
+            return {"id": proposed_memory_id}
+
+        async def execute(self, query: str, *args: object) -> str:
+            raise AssertionError("an existing open conflict must not create another proposal")
+
+    monkeypatch.setattr("api.services.embedding.format_embedding_for_pgvector", lambda embedding: "vector")
+    db = FakeDb()
+
+    result = await store_memory_conflict(
+        user_id,
+        org_id,
+        existing_memory_id,
+        "User prefers Flask",
+        [0.0] * 384,
+        conversation_id,
+        "default",
+        db,
+    )
+
+    assert result == {"id": proposed_memory_id}
+    assert len(db.calls) == 1
+    assert "FROM memory_conflicts" in db.calls[0]
 
 
 def test_resolve_bearer_api_key_prefers_engram_header() -> None:

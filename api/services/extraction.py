@@ -399,6 +399,29 @@ async def store_memory_conflict(
 ) -> dict[str, object] | None:
     from api.services.embedding import format_embedding_for_pgvector
 
+    existing_proposal = await db.fetchrow(
+        """
+        SELECT proposed.id
+        FROM memory_conflicts AS conflict
+        JOIN memories AS proposed ON proposed.id = conflict.proposed_memory_id
+        WHERE conflict.user_id = $1
+          AND conflict.org_id = $2
+          AND conflict.existing_memory_id = $3
+          AND conflict.status = 'open'
+          AND proposed.source_conversation_id = $4
+          AND proposed.namespace = $5
+          AND proposed.content = $6
+        LIMIT 1
+        """,
+        user_id,
+        org_id,
+        existing_memory_id,
+        conversation_id,
+        namespace,
+        content,
+    )
+    if existing_proposal is not None:
+        return dict(existing_proposal)
     proposed = await db.fetchrow(
         """
         INSERT INTO memories (

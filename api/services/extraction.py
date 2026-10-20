@@ -1,8 +1,7 @@
 import asyncio
 import json
 import logging
-from uuid import UUID
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import asyncpg
 
@@ -11,9 +10,9 @@ from api.db.connection import get_pool
 from api.services.deduplication import store_memory_with_deduplication
 from api.services.entitlements import enforce_workspace_limit, get_workspace_usage, remaining_capacity
 from api.services.memories import infer_category
-from api.services.providers.base import ExtractionProvider
+from api.services.providers.base import stringify_message_content
 from api.services.providers.factory import build_extraction_provider
-from api.services.provider_keys import ProviderConfigError, resolve_user_provider, ResolvedProvider
+from api.services.provider_keys import ProviderConfigError, ResolvedProvider, resolve_user_provider
 from api.services.users import get_workspace_provider_context
 
 
@@ -63,12 +62,8 @@ Example: ["ADD", "UPDATE 3f2b8c9e-1a2b-4c5d-8e9f-0a1b2c3d4e5f", "DISCARD"]
 DECISIONS (JSON array only):"""
 
 
-def get_extraction_provider(resolved: ResolvedProvider) -> ExtractionProvider:
-    return build_extraction_provider(resolved)
-
-
 async def extract_memories(conversation: str, resolved: ResolvedProvider) -> list[str]:
-    provider = get_extraction_provider(resolved)
+    provider = build_extraction_provider(resolved)
     return await provider.extract(EXTRACTION_PROMPT.format(conversation=conversation))
 
 
@@ -101,74 +96,13 @@ async def run_extraction_task(
     namespace: str = "default",
 ) -> None:
     try:
-        conversation = build_conversation_text(request_body, response_body)
-        pool = get_pool()
-        async with pool.acquire() as db:
+        async with get_pool().acquire() as db:
             await record_conversation(user_id, org_id, conversation_id, request_body, response_body, "running", 0, db)
-            user_row = await get_workspace_provider_context(user_id, org_id, db)
-            if user_row is None:
-                raise RuntimeError("User not found during extraction")
-            memory_capacity = remaining_capacity(await get_workspace_usage(org_id, db), "memories")
-            if memory_capacity == 0:
-                await record_conversation(
-                    user_id, org_id, conversation_id, request_body, response_body, "completed", 0, db
-                )
-                return
-        try:
-            resolved = resolve_user_provider(
-                user_row,
-                override_provider=override_provider,
-                override_key=override_provider_key,
-            )
-        except ProviderConfigError as error:
-            raise RuntimeError(str(error)) from error
-        extracted = (await extract_memories(conversation, resolved))[:memory_capacity]
-        from api.services.embedding import embed_batch
-
-        embeddings = embed_batch(extracted) if extracted else []
-        candidates_per_fact: list[list[dict[str, object]]] = [[] for _ in extracted]
-        if extracted and settings.enable_reconciliation:
-            async with pool.acquire() as db:
-                candidates_per_fact = await load_reconciliation_candidates(
-                    user_id, org_id, embeddings, db, namespace
-                )
-        decisions = await reconcile_memories(user_id, org_id, extracted, candidates_per_fact, resolved)
-        if not extracted:
-            async with pool.acquire() as db:
-                await record_conversation(
-                    user_id, org_id, conversation_id, request_body, response_body, "completed", 0, db
-                )
-            return
-        async with pool.acquire() as db:
-            async with db.transaction():
-                locked_usage = await enforce_workspace_limit(org_id, "memories", db, amount=0)
-                limited_decisions = limit_add_decisions(
-                    decisions,
-                    remaining_capacity(locked_usage, "memories"),
-                )
-                inserted_count, stored_refs = await store_extracted_memories(
-                    user_id,
-                    org_id,
-                    conversation_id,
-                    extracted,
-                    db,
-                    dedup_threshold,
-                    namespace=namespace,
-                    embeddings=embeddings,
-                    decisions=limited_decisions,
-                )
-                await record_conversation(
-                    user_id,
-                    org_id,
-                    conversation_id,
-                    request_body,
-                    response_body,
-                    "completed",
-                    inserted_count,
-                    db,
-                )
-        if settings.enable_graph and stored_refs:
-            asyncio.create_task(_run_graph_extraction(user_id, org_id, stored_refs, resolved))
+        await process_conversation_memories(
+            user_id, org_id, conversation_id, request_body, response_body,
+            build_conversation_text(request_body, response_body), dedup_threshold,
+            override_provider, override_provider_key, namespace,
+        )
     except Exception as error:
         logger.warning("Memory extraction failed: %s", error)
         try:
@@ -203,11 +137,10 @@ async def store_extracted_memories(
             continue
         if action == "update" and target_id is not None:
             updated = await apply_memory_update(
-                user_id, org_id, target_id, content, memory_embeddings[index], conversation_id, db
+                user_id, org_id, target_id, content, memory_embeddings[index], conversation_id, db, namespace
             )
             if updated is not None:
                 stored_count += 1
-                stored_refs.append((target_id, content))
             continue
         result = await store_memory_with_deduplication(
             user_id,
@@ -223,6 +156,8 @@ async def store_extracted_memories(
             "extraction",
             namespace=namespace,
         )
+        if result["action"] == "proposed":
+            stored_count += 1
         if result["action"] in {"inserted", "updated"} and result["memory"] is not None:
             stored_count += 1
             memory_id = result["memory"].get("id")
@@ -252,7 +187,7 @@ async def reconcile_memories(
         else:
             sections.append("EXISTING MEMORIES: none")
     try:
-        provider = get_extraction_provider(resolved)
+        provider = build_extraction_provider(resolved)
         raw_decisions = await provider.extract(RECONCILE_PROMPT.format(sections="\n".join(sections)))
         return parse_reconcile_decisions(raw_decisions, candidates_per_fact)
     except Exception as error:
@@ -279,6 +214,7 @@ async def load_reconciliation_candidates(
               AND org_id = $3
               AND namespace = $4
               AND status IN ('approved', 'pending')
+              AND (expires_at IS NULL OR expires_at > now())
               AND 1 - (embedding <=> $1::vector) >= $5
               AND 1 - (embedding <=> $1::vector) < $6
             ORDER BY score DESC
@@ -328,38 +264,12 @@ def parse_update_target(raw_decision: str, candidates: list[dict[str, object]]) 
 
 
 async def apply_memory_update(
-    user_id: UUID,
-    org_id: UUID,
-    memory_id: UUID,
-    content: str,
-    embedding: list[float],
-    conversation_id: UUID,
-    db: asyncpg.Connection,
+    user_id: UUID, org_id: UUID, memory_id: UUID, content: str, embedding: list[float],
+    conversation_id: UUID, db: asyncpg.Connection, namespace: str = "default",
 ) -> dict[str, object] | None:
-    from api.services.embedding import format_embedding_for_pgvector
+    from api.services.revisions import propose_revision
 
-    row = await db.fetchrow(
-        """
-        UPDATE memories
-        SET content = $1,
-            embedding = $2::vector,
-            source_conversation_id = $3,
-            category = $4,
-            source = 'extraction'
-        WHERE user_id = $5
-          AND org_id = $6
-          AND id = $7
-        RETURNING id
-        """,
-        content,
-        format_embedding_for_pgvector(embedding),
-        conversation_id,
-        infer_category(content),
-        user_id,
-        org_id,
-        memory_id,
-    )
-    return dict(row) if row is not None else None
+    return await propose_revision(user_id, org_id, memory_id, content, conversation_id, db, namespace)
 
 
 async def _run_graph_extraction(
@@ -399,80 +309,26 @@ async def capture_conversation_memories(
     dedup_threshold: float | None = None,
     override_provider: str | None = None,
     override_provider_key: str | None = None,
+    namespace: str = "default",
 ) -> dict[str, object]:
     conversation_id = uuid4()
     request_body = build_capture_request_body(user_message, assistant_response, source, session_id)
     response_body = build_capture_response_body(assistant_response)
-    conversation = build_capture_conversation_text(user_message, assistant_response)
-    pool = get_pool()
-    async with pool.acquire() as db:
-        user_row = await get_workspace_provider_context(user_id, org_id, db)
-        memory_capacity = remaining_capacity(await get_workspace_usage(org_id, db), "memories")
-    if user_row is None:
-        raise RuntimeError("User not found during capture")
-    if memory_capacity == 0:
-        async with pool.acquire() as db:
-            await record_conversation(
-                user_id, org_id, conversation_id, request_body, response_body, "completed", 0, db
-            )
-        return {
-            "conversation_id": conversation_id,
-            "memories_extracted": 0,
-            "extracted_memories": [],
-            "source": source,
-            "session_id": session_id,
-        }
-    try:
-        resolved = resolve_user_provider(
-            user_row,
-            override_provider=override_provider,
-            override_key=override_provider_key,
-        )
-    except ProviderConfigError as error:
-        raise RuntimeError(str(error)) from error
-    extracted_memories = (await extract_memories(conversation, resolved))[:memory_capacity]
-    from api.services.embedding import embed_batch
+    request_body["namespace"] = namespace
+    from api.services.jobs import claim_job, persist_job, process_claimed_job
 
-    embeddings = embed_batch(extracted_memories) if extracted_memories else []
-    candidates_per_fact: list[list[dict[str, object]]] = [[] for _ in extracted_memories]
-    if extracted_memories and settings.enable_reconciliation:
-        async with pool.acquire() as db:
-            candidates_per_fact = await load_reconciliation_candidates(
-                user_id, org_id, embeddings, db
-            )
-    decisions = await reconcile_memories(
-        user_id, org_id, extracted_memories, candidates_per_fact, resolved
-    )
-    memories_extracted = 0
-    stored_refs: list[tuple[UUID, str]] = []
-    if extracted_memories:
-        async with pool.acquire() as db:
-            async with db.transaction():
-                locked_usage = await enforce_workspace_limit(org_id, "memories", db, amount=0)
-                limited_decisions = limit_add_decisions(
-                    decisions,
-                    remaining_capacity(locked_usage, "memories"),
-                )
-                memories_extracted, stored_refs = await store_extracted_memories(
-                    user_id,
-                    org_id,
-                    conversation_id,
-                    extracted_memories,
-                    db,
-                    dedup_threshold,
-                    embeddings=embeddings,
-                    decisions=limited_decisions,
-                )
-                await record_conversation(
-                    user_id, org_id, conversation_id, request_body, response_body, "completed", memories_extracted, db
-                )
-    else:
-        async with pool.acquire() as db:
-            await record_conversation(
-                user_id, org_id, conversation_id, request_body, response_body, "completed", 0, db
-            )
-    if settings.enable_graph and stored_refs:
-        asyncio.create_task(_run_graph_extraction(user_id, org_id, stored_refs, resolved))
+    await persist_job(user_id, org_id, conversation_id, request_body, response_body, dedup_threshold, override_provider, override_provider_key, namespace)
+    async with get_pool().acquire() as db:
+        job = await claim_job(db, conversation_id, allow_ephemeral=bool(override_provider_key))
+    if job is None:
+        return {
+            "conversation_id": conversation_id, "memories_extracted": 0, "extracted_memories": [],
+            "source": source, "session_id": session_id, "extraction_status": "queued",
+        }
+    result = await process_claimed_job(job, override_provider_key, propagate_errors=True)
+    if result is None:
+        raise RuntimeError("Capture could not be processed")
+    memories_extracted, extracted_memories = result
     return {
         "conversation_id": conversation_id,
         "memories_extracted": memories_extracted,
@@ -480,6 +336,93 @@ async def capture_conversation_memories(
         "source": source,
         "session_id": session_id,
     }
+
+
+async def validate_capture_lease(
+    user_id: UUID, org_id: UUID, conversation_id: UUID, job_token: UUID | None, db: asyncpg.Connection,
+) -> None:
+    if job_token is None:
+        return
+    active = await db.fetchval(
+        "SELECT id FROM conversations WHERE id=$1 AND user_id=$2 AND org_id=$3 AND lease_token=$4 AND extraction_status='running' AND lease_until>now() FOR UPDATE",
+        conversation_id, user_id, org_id, job_token,
+    )
+    if active is None:
+        raise RuntimeError("Capture lease is no longer active")
+
+
+async def process_conversation_memories(
+    user_id: UUID,
+    org_id: UUID,
+    conversation_id: UUID,
+    request_body: dict[str, object],
+    response_body: bytes,
+    conversation: str,
+    dedup_threshold: float | None = None,
+    override_provider: str | None = None,
+    override_provider_key: str | None = None,
+    namespace: str = "default",
+    job_token: UUID | None = None,
+) -> tuple[int, list[str]]:
+    request_body = {**request_body, "namespace": namespace}
+    pool = get_pool()
+    async with pool.acquire() as db:
+        user_row = await get_workspace_provider_context(user_id, org_id, db)
+        if user_row is None:
+            raise RuntimeError("User not found during extraction")
+        memory_capacity = remaining_capacity(await get_workspace_usage(org_id, db), "memories")
+        if memory_capacity == 0:
+            async with db.transaction():
+                await validate_capture_lease(user_id, org_id, conversation_id, job_token, db)
+                await record_conversation(
+                    user_id, org_id, conversation_id, request_body, response_body, "completed", 0, db
+                )
+            return 0, []
+    try:
+        resolved = resolve_user_provider(
+            user_row, override_provider=override_provider, override_key=override_provider_key,
+        )
+    except ProviderConfigError as error:
+        raise RuntimeError(str(error)) from error
+    extracted = (await extract_memories(conversation, resolved))[:memory_capacity]
+    if not extracted:
+        async with pool.acquire() as db:
+            async with db.transaction():
+                await validate_capture_lease(user_id, org_id, conversation_id, job_token, db)
+                await record_conversation(
+                    user_id, org_id, conversation_id, request_body, response_body, "completed", 0, db
+                )
+        return 0, []
+    from api.services.embedding import embed_batch
+
+    embeddings = embed_batch(extracted)
+    candidates_per_fact: list[list[dict[str, object]]] = [[] for _ in extracted]
+    if settings.enable_reconciliation:
+        async with pool.acquire() as db:
+            candidates_per_fact = await load_reconciliation_candidates(
+                user_id, org_id, embeddings, db, namespace
+            )
+    decisions = await reconcile_memories(user_id, org_id, extracted, candidates_per_fact, resolved)
+    stored_count = 0
+    stored_refs: list[tuple[UUID, str]] = []
+    async with pool.acquire() as db:
+        async with db.transaction():
+            await validate_capture_lease(user_id, org_id, conversation_id, job_token, db)
+            locked_usage = await enforce_workspace_limit(org_id, "memories", db, amount=0)
+            limited_decisions = limit_add_decisions(
+                decisions, remaining_capacity(locked_usage, "memories"),
+            )
+            stored_count, stored_refs = await store_extracted_memories(
+                user_id, org_id, conversation_id, extracted, db, dedup_threshold,
+                namespace=namespace, embeddings=embeddings, decisions=limited_decisions,
+            )
+            await record_conversation(
+                user_id, org_id, conversation_id, request_body, response_body, "completed", stored_count, db
+            )
+    if settings.enable_graph and stored_refs:
+        asyncio.create_task(_run_graph_extraction(user_id, org_id, stored_refs, resolved))
+    return stored_count, extracted
+
 
 
 def build_capture_request_body(
@@ -491,7 +434,6 @@ def build_capture_request_body(
     return {
         "messages": [
             {"role": "user", "content": user_message},
-            {"role": "assistant", "content": assistant_response},
         ],
         "source": source,
         "session_id": session_id,
@@ -509,10 +451,6 @@ def build_capture_response_body(assistant_response: str) -> bytes:
             },
         ],
     }).encode("utf-8")
-
-
-def build_capture_conversation_text(user_message: str, assistant_response: str) -> str:
-    return f"user: {user_message}\nassistant: {assistant_response}"
 
 
 def build_conversation_text(request_body: dict[str, object], response_body: bytes) -> str:
@@ -592,19 +530,6 @@ def extract_assistant_payload_text(decoded: object) -> str:
     return ""
 
 
-def stringify_message_content(content: object) -> str:
-    if isinstance(content, str):
-        return content
-    if isinstance(content, list):
-        parts = [
-            part["text"]
-            for part in content
-            if isinstance(part, dict) and isinstance(part.get("text"), str)
-        ]
-        return "\n".join(parts)
-    return ""
-
-
 async def record_conversation(
     user_id: UUID,
     org_id: UUID,
@@ -617,12 +542,15 @@ async def record_conversation(
 ) -> None:
     await db.execute(
         """
-        INSERT INTO conversations (id, user_id, org_id, extraction_status, memories_extracted, raw_exchange)
-        VALUES ($1, $2, $3, $4, $5, $6::jsonb)
+        INSERT INTO conversations (id, user_id, org_id, extraction_status, memories_extracted, raw_exchange, namespace)
+        VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7)
         ON CONFLICT (id) DO UPDATE
         SET extraction_status = EXCLUDED.extraction_status,
             memories_extracted = EXCLUDED.memories_extracted,
-            raw_exchange = EXCLUDED.raw_exchange
+            raw_exchange = EXCLUDED.raw_exchange,
+            namespace = EXCLUDED.namespace,
+            lease_until = CASE WHEN EXCLUDED.extraction_status IN ('completed','failed') THEN NULL ELSE conversations.lease_until END,
+            lease_token = CASE WHEN EXCLUDED.extraction_status IN ('completed','failed') THEN NULL ELSE conversations.lease_token END
         WHERE conversations.user_id = EXCLUDED.user_id
           AND conversations.org_id = EXCLUDED.org_id
         """,
@@ -632,6 +560,7 @@ async def record_conversation(
         status,
         memories_extracted,
         json.dumps({"request": request_body, "response": response_body.decode("utf-8", errors="replace")}),
+        str(request_body.get("namespace", "default")),
     )
 
 

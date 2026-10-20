@@ -1,6 +1,5 @@
 import logging
 from dataclasses import dataclass
-from typing import Literal
 
 import asyncpg
 
@@ -10,9 +9,7 @@ from api.services.security import decrypt_provider_key, mask_provider_key
 
 logger = logging.getLogger(__name__)
 
-ProviderName = Literal["openai", "gemini", "ollama", "anthropic"]
 _ALLOWED_PROVIDERS: frozenset[str] = frozenset({"openai", "gemini", "ollama", "anthropic"})
-_OVERRIDE_HEADER_PROVIDER: str = "x-engram-provider-key"
 _PROVIDER_KEY_COLUMNS: dict[str, str] = {
     "openai": "openai_api_key_encrypted",
     "gemini": "gemini_api_key_encrypted",
@@ -75,7 +72,7 @@ def resolve_user_provider(
             source = "server"
     if not api_key and chosen != "ollama":
         raise ProviderConfigError("Configure a provider API key for this workspace")
-    model = str(user.get("extraction_model") or fallback_model) if hasattr(user, "get") and user.get("extraction_model") else fallback_model
+    model = str(user.get("extraction_model") or fallback_model)
     return ResolvedProvider(name=chosen, api_key=api_key, base_url=base_url, model=model, source=source)
 
 

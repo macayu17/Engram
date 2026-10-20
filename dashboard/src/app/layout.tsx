@@ -1,11 +1,12 @@
 import { ClerkProvider } from "@clerk/nextjs";
 import type { Metadata } from "next";
-import { Geist, Geist_Mono, Newsreader } from "next/font/google";
+import { Archivo, Geist, Geist_Mono, Newsreader } from "next/font/google";
 
 import { AppFrame } from "@/components/AppFrame";
 import { Providers } from "@/components/Providers";
 import "./globals.css";
 
+const archivo = Archivo({ subsets: ["latin"], variable: "--font-archivo", display: "swap", axes: ["wdth"] });
 const newsreader = Newsreader({ subsets: ["latin"], variable: "--font-newsreader", display: "swap" });
 const geist = Geist({ subsets: ["latin"], variable: "--font-geist", display: "swap" });
 const geistMono = Geist_Mono({ subsets: ["latin"], variable: "--font-geist-mono", display: "swap" });
@@ -19,7 +20,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   const clerkPublishableKey = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY?.trim();
 
   return (
-    <html lang="en" className={`${newsreader.variable} ${geist.variable} ${geistMono.variable}`} suppressHydrationWarning>
+    <html lang="en" className={`${archivo.variable} ${newsreader.variable} ${geist.variable} ${geistMono.variable}`} suppressHydrationWarning>
       <body className="min-h-screen bg-paper text-ink antialiased">
         {clerkPublishableKey ? (
           <ClerkProvider publishableKey={clerkPublishableKey}>

@@ -108,6 +108,7 @@ def test_resolve_user_provider_accepts_override_for_anthropic() -> None:
 
 
 def test_resolve_user_provider_falls_back_to_server_env(monkeypatch) -> None:
+    monkeypatch.setattr(security.settings, "engram_service_key", "")
     monkeypatch.setattr(security.settings, "provider_key_encryption_key", Fernet.generate_key().decode())
     monkeypatch.setattr(security.settings, "openai_api_key", "server-openai")
     user = {

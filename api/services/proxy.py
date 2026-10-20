@@ -1,14 +1,14 @@
 import copy
 import logging
 from collections.abc import AsyncIterator, Mapping
+from dataclasses import dataclass
 from uuid import UUID, uuid4
 
 import asyncpg
 import httpx
 
 from api.config import settings
-from api.services.extraction import run_extraction_task
-from api.services.providers.base import build_chat_completions_url
+from api.services.providers.base import build_chat_completions_url, stringify_message_content
 from api.services.provider_keys import ProviderConfigError, ResolvedProvider, resolve_user_provider
 from api.services.retrieval import get_retrieval_query, log_retrieval, retrieve_memories, retrieve_memories_graph, retrieve_memories_hybrid
 from api.services.users import get_workspace_provider_context
@@ -17,34 +17,28 @@ from api.services.users import get_workspace_provider_context
 logger = logging.getLogger(__name__)
 
 
+@dataclass
 class ProviderResponse:
-    def __init__(self, content: bytes, status_code: int, media_type: str) -> None:
-        self.content = content
-        self.status_code = status_code
-        self.media_type = media_type
+    content: bytes
+    status_code: int
+    media_type: str
 
 
+@dataclass
 class ProxyResult:
-    def __init__(self, content: bytes, status_code: int, media_type: str, conversation_id: UUID, injected_count: int) -> None:
-        self.content = content
-        self.status_code = status_code
-        self.media_type = media_type
-        self.conversation_id = conversation_id
-        self.injected_count = injected_count
+    content: bytes
+    status_code: int
+    media_type: str
+    conversation_id: UUID
+    injected_count: int
 
 
+@dataclass
 class PreparedProxyRequest:
-    def __init__(
-        self,
-        body: dict[str, object],
-        resolved: ResolvedProvider,
-        conversation_id: UUID,
-        injected_count: int,
-    ) -> None:
-        self.body = body
-        self.resolved = resolved
-        self.conversation_id = conversation_id
-        self.injected_count = injected_count
+    body: dict[str, object]
+    resolved: ResolvedProvider
+    conversation_id: UUID
+    injected_count: int
 
 
 class ProviderStream:
@@ -75,12 +69,13 @@ async def _dispatch_retrieve(
     max_memories_injected: int | None,
     retrieval_threshold: float | None,
     namespace: str = "default",
+    include_personal: bool = False,
 ) -> list[dict[str, object]]:
     if retrieval_mode == "hybrid":
-        return await retrieve_memories_hybrid(user_id, org_id, query, db, max_memories_injected, retrieval_threshold, namespace=namespace)
+        return await retrieve_memories_hybrid(user_id, org_id, query, db, max_memories_injected, retrieval_threshold, namespace=namespace, include_personal=include_personal)
     if retrieval_mode == "graph":
-        return await retrieve_memories_graph(user_id, org_id, query, db, max_memories_injected, retrieval_threshold, namespace=namespace)
-    return await retrieve_memories(user_id, org_id, query, db, max_memories_injected, retrieval_threshold, namespace=namespace)
+        return await retrieve_memories_graph(user_id, org_id, query, db, max_memories_injected, retrieval_threshold, namespace=namespace, include_personal=include_personal)
+    return await retrieve_memories(user_id, org_id, query, db, max_memories_injected, retrieval_threshold, namespace=namespace, include_personal=include_personal)
 
 
 async def prepare_proxy_request(
@@ -103,17 +98,24 @@ async def prepare_proxy_request(
         raise PermissionError("X-Engram-User-ID does not match the authenticated user")
     conversation_id = uuid4()
     body = copy.deepcopy(request_body)
+    include_personal = body.pop("engram_include_personal", False) is True
     injected_count = 0
     query = get_retrieval_query(body)
     if not disable_injection:
         try:
-            memories = await _dispatch_retrieve(user_id, org_id, query, db, retrieval_mode, max_memories_injected, retrieval_threshold, namespace=namespace)
+            async with db.transaction():
+                memories = await _dispatch_retrieve(user_id, org_id, query, db, retrieval_mode, max_memories_injected, retrieval_threshold, namespace=namespace, include_personal=include_personal)
             injected_count = len(memories)
             body = inject_memories(body, memories)
-            await log_retrieval(user_id, org_id, str(conversation_id), query, memories, db)
         except Exception as error:
             injected_count = 0
             logger.warning("Retrieval failed, proceeding without memories: %s", error)
+        else:
+            try:
+                async with db.transaction():
+                    await log_retrieval(user_id, org_id, str(conversation_id), query, memories, db, namespace=namespace, injected_count=injected_count, retrieval_mode=retrieval_mode)
+            except Exception as error:
+                logger.warning("Failed to log retrieval: %s", error)
     user_row = await get_workspace_provider_context(user_id, org_id, db)
     if user_row is None:
         raise PermissionError("Authenticated user no longer exists")
@@ -138,19 +140,19 @@ async def build_proxy_passthrough_result(
     if requested_external_id is not None and external_id != requested_external_id:
         raise PermissionError("X-Engram-User-ID does not match the authenticated user")
     conversation_id = uuid4()
-    from api.services.provider_keys import resolve_user_provider
-    from api.config import settings as _settings
     fallback_row = {
         "id": None,
         "external_id": external_id,
-        "extraction_provider": _settings.extraction_provider,
-        "extraction_model": _settings.extraction_model,
+        "extraction_provider": settings.extraction_provider,
+        "extraction_model": settings.extraction_model,
         "openai_api_key_encrypted": None,
         "gemini_api_key_encrypted": None,
         "anthropic_api_key_encrypted": None,
     }
     resolved = resolve_user_provider(fallback_row, override_provider=provider)
-    provider_response = await forward_to_provider(copy.deepcopy(request_body), resolved, incoming_headers)
+    body = copy.deepcopy(request_body)
+    body.pop("engram_include_personal", None)
+    provider_response = await forward_to_provider(body, resolved, incoming_headers)
     return ProxyResult(
         provider_response.content,
         provider_response.status_code,
@@ -270,14 +272,12 @@ def sanitize_passthrough_headers(incoming_headers: Mapping[str, str]) -> dict[st
         "upgrade",
         "authorization",
         "x-api-key",
-        "x-engram-key",
-        "x-engram-user-id",
-        "x-engram-provider",
-        "x-engram-disable-injection",
-        "x-engram-disable-extraction",
-        "x-engram-provider-key",
     }
-    return {key.lower(): value for key, value in incoming_headers.items() if key.lower() not in blocked}
+    return {
+        key.lower(): value
+        for key, value in incoming_headers.items()
+        if key.lower() not in blocked and not key.lower().startswith("x-engram-")
+    }
 
 
 def convert_openai_body_to_anthropic(body: dict[str, object]) -> dict[str, object]:
@@ -307,19 +307,6 @@ def convert_openai_body_to_anthropic(body: dict[str, object]) -> dict[str, objec
     if isinstance(temperature, int | float):
         payload["temperature"] = temperature
     return payload
-
-
-def stringify_message_content(content: object) -> str:
-    if isinstance(content, str):
-        return content
-    if isinstance(content, list):
-        parts = [
-            part["text"]
-            for part in content
-            if isinstance(part, dict) and isinstance(part.get("text"), str)
-        ]
-        return "\n".join(parts)
-    return ""
 
 
 def get_response_media_type(response: httpx.Response) -> str:

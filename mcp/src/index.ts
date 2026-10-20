@@ -13,6 +13,15 @@ import {
   ReadResourceRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
 
+import {
+  authenticate,
+  enableStdioAuth,
+  HttpError,
+  requestContext,
+  requireScope,
+  type RequestContext,
+} from "./auth.js";
+import { errorResult } from "./tools/result.js";
 import { engramClient } from "./client.js";
 import { config, type McpTransport } from "./config.js";
 import { addMemoryTool } from "./tools/add.js";
@@ -32,18 +41,21 @@ const RESOURCES = [
   {
     uri: "engram://memories/recent",
     name: "Recent memories",
+    _meta: { securitySchemes: [{ type: "oauth2", scopes: ["memory:read"] }] },
     description: "The 20 most recent memories stored for this user",
     mimeType: "application/json",
   },
   {
     uri: "engram://logs/recent",
     name: "Recent retrieval logs",
+    _meta: { securitySchemes: [{ type: "oauth2", scopes: ["memory:read"] }] },
     description: "The 10 most recent memory retrieval events",
     mimeType: "application/json",
   },
 ];
 
 async function readResource(uri: string): Promise<unknown> {
+  requireScope("memory:read");
   if (uri === "engram://memories/recent") {
     return engramClient.listMemories({ limit: 20, offset: 0 });
   }
@@ -58,7 +70,10 @@ function createEngramServer(): Server {
     { name: "engram", version: packageJson.version },
     { capabilities: { tools: {}, resources: {} } },
   );
-  server.setRequestHandler(ListResourcesRequestSchema, async () => ({ resources: RESOURCES }));
+  server.setRequestHandler(ListResourcesRequestSchema, async () => {
+    requireScope("memory:read");
+    return { resources: RESOURCES };
+  });
   server.setRequestHandler(ReadResourceRequestSchema, async (request) => ({
     contents: [
       {
@@ -80,113 +95,223 @@ function createEngramServer(): Server {
     ],
   }));
   server.setRequestHandler(CallToolRequestSchema, async (request) => {
-    switch (request.params.name) {
-      case "search_memories":
-        return searchMemoriesTool.handler(request.params.arguments);
-      case "add_memory":
-        return addMemoryTool.handler(request.params.arguments);
-      case "capture_conversation":
-        return captureConversationTool.handler(request.params.arguments);
-      case "delete_memory":
-        return deleteMemoryTool.handler(request.params.arguments);
-      case "list_memories":
-        return listMemoriesTool.handler(request.params.arguments);
-      case "update_memory":
-        return updateMemoryTool.handler(request.params.arguments);
-      case "get_retrieval_log":
-        return getRetrievalLogTool.handler(request.params.arguments);
-      default:
-        throw new Error(`Unknown tool: ${request.params.name}`);
+    try {
+      requireScope(
+        ["search_memories", "list_memories", "get_retrieval_log"].includes(
+          request.params.name,
+        )
+          ? "memory:read"
+          : "memory:write",
+      );
+      switch (request.params.name) {
+        case "search_memories":
+          return searchMemoriesTool.handler(request.params.arguments);
+        case "add_memory":
+          return addMemoryTool.handler(request.params.arguments);
+        case "capture_conversation":
+          return captureConversationTool.handler(request.params.arguments);
+        case "delete_memory":
+          return deleteMemoryTool.handler(request.params.arguments);
+        case "list_memories":
+          return listMemoriesTool.handler(request.params.arguments);
+        case "update_memory":
+          return updateMemoryTool.handler(request.params.arguments);
+        case "get_retrieval_log":
+          return getRetrievalLogTool.handler(request.params.arguments);
+        default:
+          throw new Error(`Unknown tool: ${request.params.name}`);
+      }
+    } catch (error) {
+      return errorResult(error);
     }
   });
   return server;
 }
 
 async function startStdio(): Promise<void> {
+  enableStdioAuth();
   const server = createEngramServer();
   await server.connect(new StdioServerTransport());
 }
 
 async function readJsonBody(request: IncomingMessage): Promise<unknown> {
   const chunks: Buffer[] = [];
+  let size = 0;
+  if (Number(request.headers["content-length"] ?? 0) > 262144)
+    throw new HttpError(413, "Request body exceeds 256 KiB");
   for await (const chunk of request) {
-    chunks.push(chunk as Buffer);
+    const buffer = Buffer.isBuffer(chunk)
+      ? chunk
+      : Buffer.from(chunk as string);
+    size += buffer.length;
+    if (size > 262144) throw new HttpError(413, "Request body exceeds 256 KiB");
+    chunks.push(buffer);
   }
   const raw = Buffer.concat(chunks).toString("utf8");
-  return raw ? JSON.parse(raw) : undefined;
+  try {
+    return raw ? JSON.parse(raw) : undefined;
+  } catch {
+    throw new HttpError(400, "Invalid JSON");
+  }
 }
 
-async function handleStreamableHttp(request: IncomingMessage, response: ServerResponse): Promise<void> {
-  if (request.method !== "POST") {
-    response.statusCode = 405;
-    response.setHeader("content-type", "application/json");
-    response.end(JSON.stringify({
-      jsonrpc: "2.0",
-      error: { code: -32000, message: "Method not allowed" },
-      id: null,
-    }));
-    return;
-  }
-  const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
-  response.on("close", () => {
-    void transport.close();
+function closeServer(server: Server): void {
+  void server.close().catch((error: unknown) => {
+    process.stderr.write(
+      `MCP cleanup failed: ${error instanceof Error ? error.message : "unknown error"}\n`,
+    );
   });
-  await createEngramServer().connect(transport);
-  await transport.handleRequest(request, response, await readJsonBody(request));
+}
+
+async function handleStreamableHttp(
+  request: IncomingMessage,
+  response: ServerResponse,
+): Promise<void> {
+  if (request.method !== "POST") throw new HttpError(405, "Method not allowed");
+  const body = await readJsonBody(request);
+  const transport = new StreamableHTTPServerTransport({
+    sessionIdGenerator: undefined,
+  });
+  const server = createEngramServer();
+  const timer = setTimeout(() => {
+    closeServer(server);
+    response.end();
+  }, 60000);
+  timer.unref();
+  response.on("close", () => {
+    clearTimeout(timer);
+    closeServer(server);
+  });
+  await server.connect(transport);
+  await transport.handleRequest(request, response, body);
 }
 
 async function startHttp(): Promise<void> {
-  const sseTransports = new Map<string, SSEServerTransport>();
-  const httpServer = http.createServer(async (request: IncomingMessage, response: ServerResponse) => {
-    try {
-      const url = new URL(request.url ?? "/", "http://localhost");
-      if (url.pathname === "/mcp") {
-        await handleStreamableHttp(request, response);
-        return;
-      }
-      if (request.method === "GET" && url.pathname === "/sse") {
-        const transport = new SSEServerTransport("/messages", response);
-        sseTransports.set(transport.sessionId, transport);
-        transport.onclose = () => {
-          sseTransports.delete(transport.sessionId);
-        };
-        await createEngramServer().connect(transport);
-        return;
-      }
-      if (request.method === "POST" && url.pathname === "/messages") {
-        const sessionId = url.searchParams.get("sessionId");
-        const transport = sessionId ? sseTransports.get(sessionId) : undefined;
-        if (!transport) {
-          response.statusCode = 404;
-          response.end("Unknown or expired sessionId");
+  const sessions = new Map<
+    string,
+    { transport: SSEServerTransport; context: RequestContext }
+  >();
+  const publicUrl = new URL(config.mcpPublicUrl);
+  const metadataUrl = `${publicUrl.origin}/.well-known/oauth-protected-resource${publicUrl.pathname}`;
+  const httpServer = http.createServer(
+    async (request: IncomingMessage, response: ServerResponse) => {
+      try {
+        const url = new URL(request.url ?? "/", "http://localhost");
+        if (
+          request.method === "GET" &&
+          [
+            "/.well-known/oauth-protected-resource",
+            `/.well-known/oauth-protected-resource${publicUrl.pathname}`,
+          ].includes(url.pathname)
+        ) {
+          response.setHeader("content-type", "application/json");
+          response.end(
+            JSON.stringify({
+              resource: config.mcpPublicUrl,
+              authorization_servers: [
+                config.engramAuthUrl || config.engramApiUrl,
+              ],
+              scopes_supported: ["memory:read", "memory:write"],
+              bearer_methods_supported: ["header"],
+            }),
+          );
           return;
         }
-        await transport.handlePostMessage(request, response);
-        return;
-      }
-      if (request.method === "GET" && url.pathname === "/health") {
-        response.statusCode = 200;
+        if (request.method === "GET" && url.pathname === "/health") {
+          response.setHeader("content-type", "application/json");
+          response.end(
+            JSON.stringify({ status: "ok", version: packageJson.version }),
+          );
+          return;
+        }
+        if (!["/mcp", "/sse", "/messages"].includes(url.pathname))
+          throw new HttpError(404, "Not found");
+        const context = await authenticate(request);
+        await requestContext.run(context, async () => {
+          if (url.pathname === "/mcp") {
+            await handleStreamableHttp(request, response);
+            return;
+          }
+          if (request.method === "GET" && url.pathname === "/sse") {
+            if (sessions.size >= 256)
+              throw new HttpError(503, "Session capacity reached");
+            const transport = new SSEServerTransport("/messages", response);
+            const server = createEngramServer();
+            sessions.set(transport.sessionId, { transport, context });
+            const timer = setTimeout(() => {
+              closeServer(server);
+              response.end();
+            }, 900000);
+            timer.unref();
+            response.on("close", () => {
+              clearTimeout(timer);
+              sessions.delete(transport.sessionId);
+              closeServer(server);
+            });
+            try {
+              await server.connect(transport);
+            } catch (error) {
+              clearTimeout(timer);
+              sessions.delete(transport.sessionId);
+              closeServer(server);
+              throw error;
+            }
+            return;
+          }
+          if (request.method === "POST" && url.pathname === "/messages") {
+            const session = sessions.get(
+              url.searchParams.get("sessionId") ?? "",
+            );
+            if (!session)
+              throw new HttpError(404, "Unknown or expired session");
+            if (session.context.identity !== context.identity)
+              throw new HttpError(403, "Session credential mismatch");
+            await session.transport.handlePostMessage(
+              request,
+              response,
+              await readJsonBody(request),
+            );
+            return;
+          }
+          throw new HttpError(405, "Method not allowed");
+        });
+      } catch (error) {
+        if (response.headersSent) {
+          response.end();
+          return;
+        }
+        const status = error instanceof HttpError ? error.status : 500;
+        response.statusCode = status;
+        if (status === 401)
+          response.setHeader(
+            "WWW-Authenticate",
+            `Bearer resource_metadata="${metadataUrl}"`,
+          );
         response.setHeader("content-type", "application/json");
-        response.end(JSON.stringify({ status: "ok", version: packageJson.version }));
-        return;
+        response.end(
+          JSON.stringify({
+            error:
+              error instanceof HttpError ? error.message : "MCP request failed",
+          }),
+        );
       }
-      response.statusCode = 404;
-      response.end("Not found");
-    } catch (error) {
-      if (!response.headersSent) {
-        response.statusCode = 500;
-      }
-      response.end(error instanceof Error ? error.message : String(error));
-    }
-  });
-  await new Promise<void>((resolve) => {
-    httpServer.listen(config.mcpPort, "0.0.0.0", resolve);
+    },
+  );
+  httpServer.requestTimeout = 30000;
+  httpServer.headersTimeout = 15000;
+  await new Promise<void>((resolve, reject) => {
+    httpServer.once("error", reject);
+    httpServer.listen(config.mcpPort, "0.0.0.0", () => {
+      httpServer.off("error", reject);
+      resolve();
+    });
   });
 }
 
 function getRequestedTransport(): McpTransport {
   const transportFlagIndex = process.argv.indexOf("--transport");
-  const requested = transportFlagIndex >= 0 ? process.argv[transportFlagIndex + 1] : undefined;
+  const requested =
+    transportFlagIndex >= 0 ? process.argv[transportFlagIndex + 1] : undefined;
   if (requested === "stdio" || requested === "sse" || requested === "http") {
     return requested;
   }
@@ -206,8 +331,11 @@ Options:
   --help, -h          Print this help and exit
 
 Environment:
-  ENGRAM_API_KEY   Engram API key (required)
+  ENGRAM_API_KEY   Engram API key for stdio only
   ENGRAM_API_URL   Engram API base URL
+  ENGRAM_AUTH_URL  OAuth authorization server (default: API URL)
+  MCP_PUBLIC_URL   Public absolute MCP endpoint URL for OAuth discovery
+  ENGRAM_NAMESPACE Default project for API-key connections
   MCP_TRANSPORT    stdio | http | sse
   MCP_PORT         Port for http/sse transports (default: 3000)
 
@@ -227,8 +355,10 @@ async function main(): Promise<void> {
     printHelp();
     return;
   }
-  if (!config.engramApiKey) {
-    process.stderr.write("ENGRAM_API_KEY is not set — API calls will fail with 401\n");
+  if (getRequestedTransport() === "stdio" && !config.engramApiKey) {
+    process.stderr.write(
+      "ENGRAM_API_KEY is not set — API calls will fail with 401\n",
+    );
   }
   const transport = getRequestedTransport();
   if (transport === "stdio") {
@@ -239,6 +369,8 @@ async function main(): Promise<void> {
 }
 
 main().catch((error: unknown) => {
-  process.stderr.write(`${error instanceof Error ? error.stack ?? error.message : String(error)}\n`);
+  process.stderr.write(
+    `${error instanceof Error ? (error.stack ?? error.message) : String(error)}\n`,
+  );
   process.exit(1);
 });

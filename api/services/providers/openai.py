@@ -9,28 +9,34 @@ from api.services.providers.base import (
 from api.services.provider_keys import ResolvedProvider
 
 
-class OpenAIExtractionProvider(ExtractionProvider):
+class ChatCompletionsExtractionProvider(ExtractionProvider):
     def __init__(self, resolved: ResolvedProvider) -> None:
-        self._base_url = resolved.base_url
-        self._api_key = resolved.api_key
-        self._model = resolved.model
+        self._resolved = resolved
 
     async def extract(self, prompt: str) -> list[str]:
-        if not self._api_key:
-            raise RuntimeError("OpenAI API key is required for OpenAI extraction")
-        async with httpx.AsyncClient(timeout=60) as client:
+        resolved = self._resolved
+        local_provider = resolved.name == "ollama"
+        if not local_provider and not resolved.api_key:
+            raise RuntimeError(f"{resolved.name} API key is required for extraction")
+        headers = {"Content-Type": "application/json"}
+        if not local_provider:
+            headers["Authorization"] = f"Bearer {resolved.api_key}"
+        payload: dict[str, object] = {
+            "model": resolved.model,
+            "messages": [{"role": "user", "content": prompt}],
+            "temperature": 0,
+        }
+        if local_provider:
+            payload["stream"] = False
+        async with httpx.AsyncClient(timeout=120 if local_provider else 60) as client:
             response = await client.post(
-                build_chat_completions_url(self._base_url),
-                headers={
-                    "Authorization": f"Bearer {self._api_key}",
-                    "Content-Type": "application/json",
-                },
-                json={
-                    "model": self._model,
-                    "messages": [{"role": "user", "content": prompt}],
-                    "temperature": 0,
-                },
+                build_chat_completions_url(resolved.base_url),
+                headers=headers,
+                json=payload,
             )
         response.raise_for_status()
         content = extract_chat_message_content(response.json())
         return parse_memory_json(content)
+
+
+OpenAIExtractionProvider = ChatCompletionsExtractionProvider

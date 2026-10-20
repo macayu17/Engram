@@ -71,3 +71,7 @@ def extract_text_content_parts(content: object) -> str:
         if isinstance(part, dict) and isinstance(part.get("text"), str)
     ]
     return "\n".join(parts)
+
+
+def stringify_message_content(content: object) -> str:
+    return content if isinstance(content, str) else extract_text_content_parts(content)

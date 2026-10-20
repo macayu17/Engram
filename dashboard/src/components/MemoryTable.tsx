@@ -1,11 +1,21 @@
 "use client";
 
-import { Check, ChevronDown, ChevronUp, Eye, Pencil, Pin, PinOff, ShieldCheck, Trash2, X } from "lucide-react";
+import {
+  Check,
+  ChevronDown,
+  ChevronUp,
+  Eye,
+  Pencil,
+  Pin,
+  PinOff,
+  ShieldCheck,
+  Trash2,
+  X,
+} from "lucide-react";
 import { useState } from "react";
 
 import { type Memory, type MemoryUpdatePayload } from "@/lib/api";
 import { cn } from "@/lib/cn";
-
 
 type MemoryTableProps = {
   memories: Memory[];
@@ -13,9 +23,21 @@ type MemoryTableProps = {
   onDelete: (id: string) => void;
   onSource: (id: string) => void;
   isBusy: boolean;
+  selectedIds?: string[];
+  onToggle?: (id: string) => void;
+  onHistory?: (id: string) => void;
 };
 
-export function MemoryTable({ memories, onUpdate, onDelete, onSource, isBusy }: MemoryTableProps) {
+export function MemoryTable({
+  memories,
+  onUpdate,
+  onDelete,
+  onSource,
+  isBusy,
+  selectedIds = [],
+  onToggle,
+  onHistory,
+}: MemoryTableProps) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
   const [expandedIds, setExpandedIds] = useState<Set<string>>(() => new Set());
@@ -55,7 +77,8 @@ export function MemoryTable({ memories, onUpdate, onDelete, onSource, isBusy }: 
   if (!memories.length) {
     return (
       <div className="border-y border-line py-12 text-center font-sans text-sm text-muted">
-        No memories found. Add one manually or send a conversation through the proxy.
+        No memories found. Add one manually or send a conversation through the
+        proxy.
       </div>
     );
   }
@@ -65,6 +88,11 @@ export function MemoryTable({ memories, onUpdate, onDelete, onSource, isBusy }: 
       <table className="min-w-full divide-y divide-line text-sm">
         <thead className="text-left font-sans text-[11px] uppercase tracking-[0.12em] text-muted">
           <tr>
+            {onToggle && (
+              <th scope="col" className="pr-3">
+                <span className="sr-only">Select</span>
+              </th>
+            )}
             <th className="py-4 pr-4 font-medium">Memory</th>
             <th className="px-4 py-4 font-medium">Confidence</th>
             <th className="px-4 py-4 font-medium">State</th>
@@ -80,9 +108,20 @@ export function MemoryTable({ memories, onUpdate, onDelete, onSource, isBusy }: 
             const canExpand = isLongMemory(memory.content);
             return (
               <tr key={memory.id} className="align-top">
+                {onToggle && (
+                  <td className="pr-3 pt-6">
+                    <input
+                      type="checkbox"
+                      aria-label={`Select memory: ${memory.content.slice(0, 60)}`}
+                      checked={selectedIds.includes(memory.id)}
+                      onChange={() => onToggle(memory.id)}
+                    />
+                  </td>
+                )}
                 <td className="max-w-xl py-5 pr-4">
                   {editingId === memory.id ? (
                     <textarea
+                      aria-label="Edit memory content"
                       value={draft}
                       onChange={(event) => setDraft(event.target.value)}
                       className="min-h-24 w-full rounded-md border border-line bg-panel p-3 font-sans text-sm leading-6 text-ink outline-none focus:border-signal"
@@ -92,7 +131,9 @@ export function MemoryTable({ memories, onUpdate, onDelete, onSource, isBusy }: 
                       <p
                         className={cn(
                           "break-words whitespace-pre-wrap font-sans text-[15px] leading-7 text-ink",
-                          canExpand && !isExpanded && "max-h-32 overflow-hidden",
+                          canExpand &&
+                            !isExpanded &&
+                            "max-h-32 overflow-hidden",
                         )}
                       >
                         {memory.content}
@@ -103,26 +144,59 @@ export function MemoryTable({ memories, onUpdate, onDelete, onSource, isBusy }: 
                           onClick={() => toggleExpanded(memory.id)}
                           className="inline-flex items-center gap-2 font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-muted hover:text-signal"
                         >
-                          {isExpanded ? <ChevronUp size={15} aria-hidden="true" /> : <ChevronDown size={15} aria-hidden="true" />}
+                          {isExpanded ? (
+                            <ChevronUp size={15} aria-hidden="true" />
+                          ) : (
+                            <ChevronDown size={15} aria-hidden="true" />
+                          )}
                           {isExpanded ? "Show less" : "Show full memory"}
                         </button>
                       )}
                     </div>
                   )}
-                  <p className="mt-2 font-sans text-[11px] uppercase tracking-[0.12em] text-muted">{memory.id}</p>
+                  <p className="mt-2 font-sans text-[11px] uppercase tracking-[0.12em] text-muted">
+                    {memory.id}
+                  </p>
                   <div className="mt-3 flex flex-wrap gap-2 font-sans text-[10px] uppercase tracking-[0.12em] text-muted">
-                    <span className="rounded-md border border-line bg-tag/40 px-2 py-1">{memory.category}</span>
-                    <span className="rounded-md border border-line bg-tag/40 px-2 py-1">{memory.source}</span>
-                    {memory.pinned && <span className="rounded-md border border-signal px-2 py-1 text-signal">pinned</span>}
+                    <span className="rounded-md border border-line bg-tag/40 px-2 py-1">
+                      {memory.category}
+                    </span>
+                    <span className="rounded-md border border-line bg-tag/40 px-2 py-1">
+                      {memory.source}
+                    </span>
+                    {memory.pinned && (
+                      <span className="rounded-md border border-signal px-2 py-1 text-signal">
+                        pinned
+                      </span>
+                    )}
                   </div>
                 </td>
-                <td className="px-4 py-5 font-sans text-[11px] uppercase tracking-[0.12em] text-muted">{memory.confidence.toFixed(2)}</td>
-                <td className="px-4 py-5 font-sans text-[11px] uppercase tracking-[0.12em] text-muted">{memory.status}</td>
-                <td className="px-4 py-5 font-sans text-[11px] uppercase tracking-[0.12em] text-muted">{memory.access_count}</td>
-                <td className="px-4 py-5 font-sans text-[11px] uppercase tracking-[0.12em] text-muted">{formatOptionalDate(memory.last_accessed)}</td>
-                <td className="px-4 py-5 font-sans text-[11px] uppercase tracking-[0.12em] text-muted">{formatOptionalDate(memory.created_at)}</td>
+                <td className="px-4 py-5 font-sans text-[11px] uppercase tracking-[0.12em] text-muted">
+                  {memory.confidence.toFixed(2)}
+                </td>
+                <td className="px-4 py-5 font-sans text-[11px] uppercase tracking-[0.12em] text-muted">
+                  {memory.status}
+                </td>
+                <td className="px-4 py-5 font-sans text-[11px] uppercase tracking-[0.12em] text-muted">
+                  {memory.access_count}
+                </td>
+                <td className="px-4 py-5 font-sans text-[11px] uppercase tracking-[0.12em] text-muted">
+                  {formatOptionalDate(memory.last_accessed)}
+                </td>
+                <td className="px-4 py-5 font-sans text-[11px] uppercase tracking-[0.12em] text-muted">
+                  {formatOptionalDate(memory.created_at)}
+                </td>
                 <td className="py-5 pl-4">
-                  <div className="flex justify-end gap-2">
+                  <div className="flex flex-wrap justify-end gap-2">
+                    {onHistory && (
+                      <button
+                        type="button"
+                        onClick={() => onHistory(memory.id)}
+                        className="rounded border border-line p-2 text-xs text-muted hover:text-ink"
+                      >
+                        History / expiry
+                      </button>
+                    )}
                     {editingId === memory.id ? (
                       <>
                         <button
@@ -149,7 +223,9 @@ export function MemoryTable({ memories, onUpdate, onDelete, onSource, isBusy }: 
                           <button
                             type="button"
                             title="Approve memory"
-                            onClick={() => onUpdate(memory.id, { status: "approved" })}
+                            onClick={() =>
+                              onUpdate(memory.id, { status: "approved" })
+                            }
                             disabled={isBusy}
                             className="rounded bg-tag p-2 text-muted hover:text-signal disabled:opacity-50"
                           >
@@ -159,11 +235,17 @@ export function MemoryTable({ memories, onUpdate, onDelete, onSource, isBusy }: 
                         <button
                           type="button"
                           title={memory.pinned ? "Unpin memory" : "Pin memory"}
-                          onClick={() => onUpdate(memory.id, { pinned: !memory.pinned })}
+                          onClick={() =>
+                            onUpdate(memory.id, { pinned: !memory.pinned })
+                          }
                           disabled={isBusy}
                           className="rounded bg-tag p-2 text-muted hover:text-signal disabled:opacity-50"
                         >
-                          {memory.pinned ? <PinOff size={16} aria-hidden="true" /> : <Pin size={16} aria-hidden="true" />}
+                          {memory.pinned ? (
+                            <PinOff size={16} aria-hidden="true" />
+                          ) : (
+                            <Pin size={16} aria-hidden="true" />
+                          )}
                         </button>
                         <button
                           type="button"
@@ -184,7 +266,11 @@ export function MemoryTable({ memories, onUpdate, onDelete, onSource, isBusy }: 
                         </button>
                         <button
                           type="button"
-                          title={memory.status === "pending" ? "Reject memory" : "Delete memory"}
+                          title={
+                            memory.status === "pending"
+                              ? "Reject memory"
+                              : "Delete memory"
+                          }
                           onClick={() => {
                             if (memory.status === "pending") {
                               onUpdate(memory.id, { status: "rejected" });
@@ -210,17 +296,18 @@ export function MemoryTable({ memories, onUpdate, onDelete, onSource, isBusy }: 
   );
 }
 
-
 function isLongMemory(content: string): boolean {
   return content.length > 280 || content.includes("\n");
 }
-
 
 function formatOptionalDate(value: string | null): string {
   if (!value) {
     return "never";
   }
-  return new Intl.DateTimeFormat(undefined, { month: "short", day: "2-digit", hour: "2-digit", minute: "2-digit" }).format(
-    new Date(value),
-  );
+  return new Intl.DateTimeFormat(undefined, {
+    month: "short",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(value));
 }

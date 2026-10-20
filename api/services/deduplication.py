@@ -7,7 +7,7 @@ from api.services.embedding import format_embedding_for_pgvector
 
 
 class StoreMemoryResult(TypedDict):
-    action: Literal["inserted", "updated", "skipped"]
+    action: Literal["inserted", "updated", "skipped", "proposed"]
     memory: dict[str, object] | None
 
 
@@ -30,12 +30,13 @@ async def store_memory_with_deduplication(
     nearest = await db.fetchrow(
         """
         SELECT id, content, confidence, access_count, last_accessed, created_at, source_conversation_id,
-               status, category, pinned, source, last_confirmed,
+               status, category, pinned, source, last_confirmed, namespace, expires_at,
                1 - (embedding <=> $1::vector) AS score
         FROM memories
         WHERE user_id = $2
           AND org_id = $3
           AND namespace = $4
+          AND (expires_at IS NULL OR expires_at > now())
         ORDER BY score DESC
         LIMIT 1
         """,
@@ -47,6 +48,11 @@ async def store_memory_with_deduplication(
     if nearest is not None and nearest["status"] != "rejected" and nearest["score"] > dedup_threshold_value:
         return {"action": "skipped", "memory": dict(nearest)}
     if nearest is not None and nearest["score"] > settings.memory_refinement_threshold:
+        if source == "extraction":
+            from api.services.revisions import propose_revision
+
+            proposal = await propose_revision(user_id, org_id, nearest["id"], content, conversation_id, db, namespace)
+            return {"action": "proposed" if proposal is not None else "skipped", "memory": dict(nearest)}
         updated = await db.fetchrow(
             """
             UPDATE memories
@@ -61,7 +67,7 @@ async def store_memory_with_deduplication(
               AND org_id = $6
               AND id = $7
             RETURNING id, content, confidence, access_count, last_accessed, created_at, source_conversation_id,
-                      status, category, pinned, source, last_confirmed
+                      status, category, pinned, source, last_confirmed, namespace, expires_at
             """,
             content,
             vector_literal,
@@ -80,7 +86,7 @@ async def store_memory_with_deduplication(
         INSERT INTO memories (user_id, org_id, content, embedding, source_conversation_id, confidence, status, category, source, namespace)
         VALUES ($1, $2, $3, $4::vector, $5, $6, $7, $8, $9, $10)
         RETURNING id, content, confidence, access_count, last_accessed, created_at, source_conversation_id,
-                  status, category, pinned, source, last_confirmed
+                  status, category, pinned, source, last_confirmed, namespace, expires_at
         """,
         user_id,
         org_id,

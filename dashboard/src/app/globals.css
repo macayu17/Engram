@@ -118,123 +118,36 @@ body {
   background: rgb(11 10 9);
 }
 
-.memory-hero-frame {
-  background: rgb(var(--color-paper));
+.landing-scope {
+  --lp: 11 10 9;
+  --li: 244 239 229;
+  --ll: 55 51 44;
+  --lm: 166 160 148;
+  --lsignal: 214 255 63;
 }
 
-.landing-grid {
-  isolation: isolate;
+.landing-scene[data-theme-scene="dark"],
+.landing-nav[data-nav-theme="dark"] {
+  --lp: 11 10 9;
+  --li: 244 239 229;
+  --ll: 55 51 44;
+  --lm: 166 160 148;
 }
 
-.landing-grid::before {
-  background-image:
-    linear-gradient(rgb(var(--color-line) / 0.32) 1px, transparent 1px),
-    linear-gradient(90deg, rgb(var(--color-line) / 0.32) 1px, transparent 1px);
-  background-size: 42px 42px;
-  content: "";
-  inset: 0;
-  mask-image: linear-gradient(to bottom, rgb(0 0 0 / 0.72), transparent 96%);
-  pointer-events: none;
-  position: absolute;
-  z-index: 0;
+.landing-scene[data-theme-scene="paper"],
+.landing-nav[data-nav-theme="paper"] {
+  --lp: 224 222 215;
+  --li: 25 27 25;
+  --ll: 194 197 190;
+  --lm: 91 96 90;
 }
 
-.landing-beam {
-  animation: landing-beam 5.4s ease-in-out infinite;
-  background: linear-gradient(to bottom, rgb(var(--color-signal) / 0.15), transparent);
-  transform: translateY(-100%);
-}
-
-.landing-pulse {
-  animation: landing-pulse 3.6s ease-in-out infinite;
-}
-
-.landing-memory-row {
-  animation: landing-memory 6s ease-in-out infinite;
-}
-
-.landing-delay-1 {
-  animation-delay: 900ms;
-}
-
-.landing-delay-2 {
-  animation-delay: 1800ms;
-}
-
-.landing-cursor {
-  animation: landing-cursor 1s steps(1) infinite;
-}
-
-.landing-cta::before {
-  background-image:
-    linear-gradient(rgb(var(--color-line) / 0.24) 1px, transparent 1px),
-    linear-gradient(90deg, rgb(var(--color-line) / 0.24) 1px, transparent 1px);
-  background-size: 36px 36px;
-  content: "";
-  inset: 0;
-  mask-image: linear-gradient(to bottom, transparent, rgb(0 0 0 / 0.8), transparent);
-  pointer-events: none;
-  position: absolute;
-}
-
-@keyframes landing-beam {
-  0%, 18% {
-    opacity: 0;
-    transform: translateY(-100%);
-  }
-
-  42%, 70% {
-    opacity: 1;
-    transform: translateY(145%);
-  }
-
-  100% {
-    opacity: 0;
-    transform: translateY(145%);
-  }
-}
-
-@keyframes landing-pulse {
-  0%, 12% {
-    left: 4%;
-    opacity: 0;
-  }
-
-  24%, 78% {
-    opacity: 1;
-  }
-
-  90%, 100% {
-    left: 94%;
-    opacity: 0;
-  }
-}
-
-@keyframes landing-memory {
-  0%, 12%, 100% {
-    color: rgb(var(--color-ink));
-    transform: translateX(0);
-  }
-
-  18%, 26% {
-    color: rgb(var(--color-signal));
-    transform: translateX(4px);
-  }
-
-  34% {
-    color: rgb(var(--color-ink));
-    transform: translateX(0);
-  }
-}
-
-@keyframes landing-cursor {
-  0%, 49% {
-    opacity: 1;
-  }
-
-  50%, 100% {
-    opacity: 0;
-  }
+.landing-scene[data-theme-scene="signal"],
+.landing-nav[data-nav-theme="signal"] {
+  --lp: 214 255 63;
+  --li: 11 10 9;
+  --ll: 11 10 9;
+  --lm: 56 68 16;
 }
 
 @keyframes theme-fallback-wave {
@@ -263,12 +176,5 @@ body {
   .theme-fallback-wave {
     animation: none;
     transform: scale(1);
-  }
-
-  .landing-beam,
-  .landing-pulse,
-  .landing-memory-row,
-  .landing-cursor {
-    animation: none;
   }
 }

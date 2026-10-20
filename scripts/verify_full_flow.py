@@ -154,7 +154,7 @@ def main() -> None:
                 "EXTRACTION_MODEL": "gpt-4o-mini",
                 "API_PUBLIC_URL": API_URL,
                 "MCP_SERVICE_KEY": "",
-                "ENGRAM_SERVICE_KEY": "mock-service-key",
+                "ENGRAM_SERVICE_KEY": "",
                 "NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY": "",
                 "CLERK_SECRET_KEY": "",
             }

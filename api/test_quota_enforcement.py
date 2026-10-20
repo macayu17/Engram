@@ -105,7 +105,8 @@ async def test_import_reserves_entire_batch_before_work(monkeypatch) -> None:
 
 
 @pytest.mark.asyncio
-async def test_proxy_rejects_before_retrieval_or_provider(monkeypatch) -> None:
+@pytest.mark.parametrize("streaming", [False, True])
+async def test_proxy_rejects_before_retrieval_or_provider(monkeypatch, streaming: bool) -> None:
     work_started = False
     user = {
         "id": uuid4(),
@@ -144,8 +145,9 @@ async def test_proxy_rejects_before_retrieval_or_provider(monkeypatch) -> None:
     monkeypatch.setattr(proxy, "enforce_workspace_limit", reject)
     monkeypatch.setattr(proxy, "prepare_proxy_request", fake_prepare)
 
+    build_response = proxy.build_streaming_proxy_response if streaming else proxy.build_proxy_response_with_available_auth
     with pytest.raises(HTTPException) as raised:
-        await proxy.build_proxy_response_with_available_auth(
+        await build_response(
             "api-key", None, "openai", False, True, None, {"messages": []}, {}
         )
 

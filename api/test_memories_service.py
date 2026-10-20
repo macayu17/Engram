@@ -61,7 +61,7 @@ async def test_apply_confidence_decay_returns_updated_count() -> None:
             assert 'confidence * 0.92' in query
             assert "status = 'approved'" in query
             assert 'pinned = false' in query
-            assert args == ('user-3', 'org-3')
+            assert args == ('user-3', 'org-3', None)
             return 'UPDATE 4'
 
     assert await memories.apply_confidence_decay('user-3', 'org-3', FakeDb()) == 4

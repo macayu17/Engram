@@ -1,0 +1,23 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json",
+  "mcpServers": {
+    "engram": {
+      "type": "streamable-http",
+      "url": "${ENGRAM_MCP_URL}",
+      "extensions": {
+        "com.openai": {
+          "auth": {
+            "type": "oauth",
+            "client": {
+              "mode": "dcr"
+            },
+            "baseScopes": [
+              "memory:read",
+              "memory:write"
+            ]
+          }
+        }
+      }
+    }
+  }
+}

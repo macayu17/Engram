@@ -5,6 +5,7 @@ const config: Config = {
   theme: {
     extend: {
       fontFamily: {
+        display: ["var(--font-archivo)", "system-ui", "sans-serif"],
         serif: ["var(--font-newsreader)", "Georgia", "serif"],
         sans: ["var(--font-geist)", "system-ui", "sans-serif"],
         mono: ["var(--font-geist-mono)", "ui-monospace", "monospace"],
@@ -20,6 +21,11 @@ const config: Config = {
         caution: "rgb(var(--color-caution) / <alpha-value>)",
         fault: "rgb(var(--color-fault) / <alpha-value>)",
         high: "rgb(var(--color-high) / <alpha-value>)",
+        lp: "rgb(var(--lp) / <alpha-value>)",
+        li: "rgb(var(--li) / <alpha-value>)",
+        ll: "rgb(var(--ll) / <alpha-value>)",
+        lm: "rgb(var(--lm) / <alpha-value>)",
+        lsignal: "rgb(var(--lsignal) / <alpha-value>)",
       },
     },
   },

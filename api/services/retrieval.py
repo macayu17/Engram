@@ -1,3 +1,4 @@
+import json
 import re
 from collections.abc import Mapping, Sequence
 
@@ -5,26 +6,6 @@ import asyncpg
 
 from api.config import settings
 from api.services.embedding import embed, format_embedding_for_pgvector, is_reranker_loaded, rerank
-
-
-QUERY_EXPANSIONS = {
-    "building": (
-        "user current project name what building",
-        "user is currently working on a project",
-    ),
-    "project": (
-        "user current project name what building",
-        "user is currently working on a project",
-    ),
-    "tech stack": (
-        "backend development framework preferences FastAPI Flask Python",
-        "frontend work programming language preferences TypeScript JavaScript",
-    ),
-    "working on": (
-        "user current project name what building",
-        "user is currently working on a project",
-    ),
-}
 
 
 def get_retrieval_query(body: Mapping[str, object], max_user_messages: int = 6) -> str:
@@ -59,12 +40,7 @@ def extract_text_from_content_parts(parts: Sequence[object]) -> str:
 
 
 def build_retrieval_texts(query: str) -> list[str]:
-    normalized_query = query.lower()
-    retrieval_texts = [query]
-    for trigger, expansions in QUERY_EXPANSIONS.items():
-        if trigger in normalized_query:
-            retrieval_texts.extend(f"{query}\n{expansion}" for expansion in expansions)
-    return list(dict.fromkeys(retrieval_texts))
+    return [query]
 
 
 def build_log_embedding_text(query: str) -> str:
@@ -79,6 +55,7 @@ async def retrieve_memories(
     limit: int | None = None,
     threshold: float | None = None,
     namespace: str = "default",
+    include_personal: bool = False,
 ) -> list[dict[str, object]]:
     if not query.strip():
         return []
@@ -90,7 +67,7 @@ async def retrieve_memories(
         rows = await db.fetch(
             """
             SELECT id, content, confidence, access_count, last_accessed, created_at, source_conversation_id,
-                   status, category, pinned, source, last_confirmed,
+                   status, category, pinned, source, last_confirmed, namespace, expires_at,
                    1 - (embedding <=> $1::vector)
                      + CASE WHEN pinned THEN 0.08 ELSE 0 END
                      + $7 * exp(-0.6931471805599453 * GREATEST(extract(epoch FROM now() - COALESCE(last_accessed, created_at)), 0) / ($8 * 86400.0))
@@ -99,7 +76,8 @@ async def retrieve_memories(
             WHERE user_id = $2
               AND org_id = $3
               AND status = 'approved'
-              AND namespace = $6
+              AND namespace = ANY($6::text[])
+              AND (expires_at IS NULL OR expires_at > now())
               AND (1 - (embedding <=> $1::vector) > $4 OR pinned = true)
             ORDER BY score DESC
             LIMIT $5
@@ -109,7 +87,7 @@ async def retrieve_memories(
             org_id,
             threshold_value,
             limit_value,
-            namespace,
+            list(dict.fromkeys([namespace, "personal"])) if include_personal else [namespace],
             settings.retrieval_recency_weight,
             settings.retrieval_recency_half_life_days,
             settings.retrieval_access_weight,
@@ -188,6 +166,7 @@ async def retrieve_memories_fulltext(
     db: asyncpg.Connection,
     limit: int,
     namespace: str = "default",
+    include_personal: bool = False,
 ) -> list[dict[str, object]]:
     ts_query = to_tsquery_safe(query)
     if not ts_query:
@@ -195,13 +174,14 @@ async def retrieve_memories_fulltext(
     rows = await db.fetch(
         """
         SELECT id, content, confidence, access_count, last_accessed, created_at, source_conversation_id,
-               status, category, pinned, source, last_confirmed,
+               status, category, pinned, source, last_confirmed, namespace, expires_at,
                ts_rank_cd(content_tsv, to_tsquery('english', $1)) AS score
         FROM memories
         WHERE user_id = $2
           AND org_id = $3
           AND status = 'approved'
-          AND namespace = $5
+          AND namespace = ANY($5::text[])
+          AND (expires_at IS NULL OR expires_at > now())
           AND content_tsv @@ to_tsquery('english', $1)
         ORDER BY score DESC
         LIMIT $4
@@ -210,7 +190,7 @@ async def retrieve_memories_fulltext(
         user_id,
         org_id,
         limit * 2,
-        namespace,
+        list(dict.fromkeys([namespace, "personal"])) if include_personal else [namespace],
     )
     return [dict(row) for row in rows]
 
@@ -223,10 +203,11 @@ async def retrieve_memories_hybrid(
     limit: int | None = None,
     threshold: float | None = None,
     namespace: str = "default",
+    include_personal: bool = False,
 ) -> list[dict[str, object]]:
     limit_value = settings.max_memories_injected if limit is None else limit
-    vector_hits = await retrieve_memories(user_id, org_id, query, db, limit_value * 2, threshold, namespace=namespace)
-    fulltext_hits = await retrieve_memories_fulltext(user_id, org_id, query, db, limit_value, namespace=namespace)
+    vector_hits = await retrieve_memories(user_id, org_id, query, db, limit_value * 2, threshold, namespace=namespace, include_personal=include_personal)
+    fulltext_hits = await retrieve_memories_fulltext(user_id, org_id, query, db, limit_value, namespace=namespace, include_personal=include_personal)
     return rrf_merge(vector_hits, fulltext_hits, limit_value)
 
 
@@ -238,9 +219,10 @@ async def retrieve_memories_graph(
     limit: int | None = None,
     threshold: float | None = None,
     namespace: str = "default",
+    include_personal: bool = False,
 ) -> list[dict[str, object]]:
     limit_value = settings.max_memories_injected if limit is None else limit
-    seeds = await retrieve_memories(user_id, org_id, query, db, limit_value * 2, threshold, namespace=namespace)
+    seeds = await retrieve_memories(user_id, org_id, query, db, limit_value * 2, threshold, namespace=namespace, include_personal=include_personal)
     if not seeds:
         return []
     seed_ids = [memory["id"] for memory in seeds]
@@ -248,7 +230,7 @@ async def retrieve_memories_graph(
         """
         SELECT DISTINCT m.id, m.content, m.confidence, m.access_count, m.last_accessed,
                         m.created_at, m.source_conversation_id, m.status, m.category,
-                        m.pinned, m.source, m.last_confirmed
+                        m.pinned, m.source, m.last_confirmed, m.namespace, m.expires_at
         FROM memories m
         JOIN memory_entity_links mel ON mel.memory_id = m.id
         WHERE mel.entity_id IN (
@@ -258,13 +240,14 @@ async def retrieve_memories_graph(
         AND m.user_id = $2
         AND m.org_id = $3
         AND m.status = 'approved'
-        AND m.namespace = $4
+        AND m.namespace = ANY($4::text[])
+        AND (m.expires_at IS NULL OR m.expires_at > now())
         LIMIT $5
         """,
         seed_ids,
         user_id,
         org_id,
-        namespace,
+        list(dict.fromkeys([namespace, "personal"])) if include_personal else [namespace],
         limit_value * 2,
     )
     merged: list[dict[str, object]] = list(seeds)
@@ -280,25 +263,18 @@ async def retrieve_memories_graph(
 
 
 async def log_retrieval(
-    user_id: object,
-    org_id: object,
-    conversation_id: str,
-    query: str,
-    memories: list[dict[str, object]],
-    db: asyncpg.Connection,
+    user_id: object, org_id: object, conversation_id: str | None, query: str,
+    memories: list[dict[str, object]], db: asyncpg.Connection,
+    namespace: str = "default", injected_count: int | None = None, retrieval_mode: str = "vector",
 ) -> None:
-    query_embedding = format_embedding_for_pgvector(embed(build_log_embedding_text(query))) if query.strip() else None
+    query_embedding = format_embedding_for_pgvector(embed(query)) if query.strip() else None
+    snapshots = [{"memory_id": str(memory["id"]), "content": memory["content"], "score": float(memory["score"]), "namespace": memory.get("namespace", namespace)} for memory in memories]
     await db.execute(
         """
         INSERT INTO retrieval_logs
-          (user_id, org_id, query, query_embedding, retrieved_memory_ids, retrieved_scores, conversation_id)
-        VALUES ($1, $2, $3, $4::vector, $5, $6, $7)
-        """,
-        user_id,
-        org_id,
-        query,
-        query_embedding,
-        [memory["id"] for memory in memories],
-        [float(memory["score"]) for memory in memories],
-        conversation_id,
+          (user_id,org_id,query,query_embedding,retrieved_memory_ids,retrieved_scores,conversation_id,namespace,injected_count,retrieval_mode,memory_snapshots)
+        VALUES ($1,$2,$3,$4::vector,$5,$6,$7,$8,$9,$10,$11::jsonb)
+        """, user_id, org_id, query, query_embedding, [memory["id"] for memory in memories],
+        [float(memory["score"]) for memory in memories], conversation_id, namespace,
+        len(memories) if injected_count is None else injected_count, retrieval_mode, json.dumps(snapshots),
     )

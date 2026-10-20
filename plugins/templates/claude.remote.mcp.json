@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "engram": {
+      "type": "http",
+      "url": "${ENGRAM_MCP_URL}"
+    }
+  }
+}

@@ -42,8 +42,16 @@ class Settings(BaseSettings):
     stripe_webhook_secret: str = ""
     stripe_pro_price_id: str = ""
     dashboard_url: str = "http://localhost:3001"
+    api_public_url: str = "http://localhost:8000"
+    mcp_public_url: str = "http://localhost:3000/mcp"
+    oauth_access_token_seconds: int = Field(default=3600, ge=60, le=86400)
+    oauth_refresh_token_days: int = Field(default=30, ge=1, le=365)
+    extraction_job_poll_seconds: float = Field(default=5, ge=0.1, le=300)
+    extraction_job_max_attempts: int = Field(default=3, ge=1, le=10)
+    extraction_job_lease_seconds: int = Field(default=600, ge=300, le=3600)
     proxy_auth_cache_ttl_seconds: int = 300
     proxy_auth_cache_max_entries: int = 4096
+    engram_test_database_url: str = ""
     engram_test_api_url: str = "http://localhost:8000"
     provider_key_encryption_key: str = Field(
         default="",

@@ -4,6 +4,8 @@ from pydantic import UUID4
 
 from api.dependencies import get_current_user, get_db
 from api.models.log import ClientRegistryResponse, RetrievalLogDetailResponse, RetrievalLogListResponse
+from api.models.memory import Namespace
+from api.services.scopes import resolve_namespace
 from api.services.logs import get_retrieval_log, list_clients, list_retrieval_logs
 
 
@@ -14,8 +16,9 @@ router = APIRouter()
 async def list_clients_route(
     user: asyncpg.Record = Depends(get_current_user),
     db: asyncpg.Connection = Depends(get_db),
+    namespace: Namespace | None = None,
 ) -> dict[str, object]:
-    return {"clients": await list_clients(user["id"], user["org_id"], db)}
+    return {"clients": await list_clients(user["id"], user["org_id"], db, resolve_namespace(user, namespace))}
 
 
 @router.get("", response_model=RetrievalLogListResponse)
@@ -25,8 +28,9 @@ async def list_logs_route(
     conversation_id: UUID4 | None = Query(default=None),
     user: asyncpg.Record = Depends(get_current_user),
     db: asyncpg.Connection = Depends(get_db),
+    namespace: Namespace | None = None,
 ) -> dict[str, object]:
-    logs, total = await list_retrieval_logs(user["id"], user["org_id"], db, limit, offset, conversation_id)
+    logs, total = await list_retrieval_logs(user["id"], user["org_id"], db, limit, offset, conversation_id, resolve_namespace(user, namespace), restrict_memories=user.get("oauth_namespace") is not None)
     return {"logs": logs, "total": total, "limit": limit, "offset": offset}
 
 
@@ -35,8 +39,9 @@ async def get_log_route(
     log_id: UUID4,
     user: asyncpg.Record = Depends(get_current_user),
     db: asyncpg.Connection = Depends(get_db),
+    namespace: Namespace | None = None,
 ) -> dict[str, object]:
-    log = await get_retrieval_log(user["id"], user["org_id"], log_id, db)
+    log = await get_retrieval_log(user["id"], user["org_id"], log_id, db, resolve_namespace(user, namespace), restrict_memories=user.get("oauth_namespace") is not None)
     if log is None:
         raise HTTPException(status_code=404, detail="Retrieval log not found")
     return log

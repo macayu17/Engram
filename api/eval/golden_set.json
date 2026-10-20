@@ -63,5 +63,38 @@
       "user frontend language",
       "user study year"
     ]
+  },
+  {
+    "id": "dietary-constraint",
+    "memory": "User follows a vegetarian diet and avoids eggs",
+    "queries": [
+      "Can the user eat chicken?",
+      "What dietary restrictions should a meal plan follow?"
+    ],
+    "non_queries": [
+      "Which database does the user use?"
+    ]
+  },
+  {
+    "id": "accessibility-preference",
+    "memory": "User needs subtitles when watching instructional videos",
+    "queries": [
+      "How should tutorial videos be presented to the user?",
+      "Does the user need captions?"
+    ],
+    "non_queries": [
+      "Which programming language does the user prefer?"
+    ]
+  },
+  {
+    "id": "travel-context",
+    "memory": "User usually travels by train between Bengaluru and Mysuru",
+    "queries": [
+      "How does the user travel to Mysuru?",
+      "What is the user usual intercity transport?"
+    ],
+    "non_queries": [
+      "Which frontend framework should be used?"
+    ]
   }
 ]

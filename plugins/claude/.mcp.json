@@ -1,0 +1,16 @@
+{
+  "mcpServers": {
+    "engram": {
+      "command": "node",
+      "args": [
+        "${ENGRAM_MCP_ENTRY}"
+      ],
+      "env": {
+        "ENGRAM_API_URL": "${ENGRAM_API_URL}",
+        "ENGRAM_API_KEY": "${ENGRAM_API_KEY}",
+        "ENGRAM_NAMESPACE": "${ENGRAM_NAMESPACE}",
+        "MCP_TRANSPORT": "stdio"
+      }
+    }
+  }
+}

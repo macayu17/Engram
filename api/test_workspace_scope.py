@@ -35,6 +35,7 @@ SCOPED_FUNCTIONS = [
     extraction.load_reconciliation_candidates,
     extraction.apply_memory_update,
     extraction.capture_conversation_memories,
+    extraction.process_conversation_memories,
     extraction.record_conversation,
     extraction.mark_conversation_failed,
     graph.extract_entities_for_memory,

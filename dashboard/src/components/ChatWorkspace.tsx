@@ -7,6 +7,9 @@ import { FormEvent, KeyboardEvent, useMemo, useState } from "react";
 import { api, type ChatMessage } from "@/lib/api";
 import { cn } from "@/lib/cn";
 import { useActiveApiKey } from "@/lib/useActiveApiKey";
+import { useNamespace } from "@/lib/useNamespace";
+import { PlaygroundTrace } from "./PlaygroundTrace";
+
 import { ProductPageHeader } from "./ProductPageHeader";
 
 type VisualMessage = {
@@ -15,9 +18,11 @@ type VisualMessage = {
   content: string;
   injectedCount?: number;
   conversationId?: string;
+  requestContent?: string;
 };
 
 export function ChatWorkspace() {
+  const namespace = useNamespace();
   const [draft, setDraft] = useState("");
   const [provider, setProvider] = useState("openai");
   const [model, setModel] = useState("gpt-4o-mini");
@@ -25,12 +30,16 @@ export function ChatWorkspace() {
   const apiKey = useActiveApiKey();
   const [error, setError] = useState("");
   const userQuery = useQuery({
-    queryKey: ["current-user", apiKey],
+    queryKey: ["current-user", apiKey, namespace],
     queryFn: () => api.users.me(),
     enabled: Boolean(apiKey) && apiKey.startsWith("ek_"),
   });
   const chatHistory = useMemo<ChatMessage[]>(
-    () => messages.map((message) => ({ role: message.role, content: message.content })),
+    () =>
+      messages.map((message) => ({
+        role: message.role,
+        content: message.content,
+      })),
     [messages],
   );
   const chatMutation = useMutation({
@@ -41,11 +50,12 @@ export function ChatWorkspace() {
       return api.chat.send({
         externalId: userQuery.data.external_id,
         provider,
-        model,
+        model: model.trim(),
+        namespace,
         messages: [...chatHistory, { role: "user", content }],
       });
     },
-    onSuccess: (response) => {
+    onSuccess: (response, content) => {
       setMessages((currentMessages) => [
         ...currentMessages,
         {
@@ -54,11 +64,16 @@ export function ChatWorkspace() {
           content: response.content,
           injectedCount: response.injectedCount,
           conversationId: response.conversationId,
+          requestContent: content,
         },
       ]);
     },
     onError: (mutationError) => {
-      setError(mutationError instanceof Error ? mutationError.message : "Chat request failed.");
+      setError(
+        mutationError instanceof Error
+          ? mutationError.message
+          : "Chat request failed.",
+      );
     },
   });
 
@@ -97,45 +112,63 @@ export function ChatWorkspace() {
     setError("");
   }
 
-  const canChat = Boolean(apiKey) && apiKey.startsWith("ek_") && Boolean(userQuery.data);
-  const lastAssistantMessage = [...messages].reverse().find((message) => message.role === "assistant");
+  const canChat =
+    Boolean(apiKey) && apiKey.startsWith("ek_") && Boolean(userQuery.data);
+  const lastAssistantMessage = [...messages]
+    .reverse()
+    .find((message) => message.role === "assistant");
 
   return (
     <section className="space-y-10">
       <ProductPageHeader
-        eyebrow="§ IV — Visual proxy"
-        title="Chat"
-        description="Send messages through Engram and watch memory injection happen without writing request JSON."
-        actions={(
-          <button type="button" onClick={clearChat} className="inline-flex min-h-10 items-center rounded-full border border-line px-4 font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-muted transition hover:border-signal hover:text-signal active:translate-y-px">
+        eyebrow="Memory diagnostics"
+        title="Playground"
+        description="Send a request through the proxy and inspect the actual memory context used for its response."
+        actions={
+          <button
+            type="button"
+            onClick={clearChat}
+            className="inline-flex min-h-10 items-center rounded-full border border-line px-4 font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-muted transition hover:border-signal hover:text-signal active:translate-y-px"
+          >
             Clear view
           </button>
-        )}
+        }
       />
 
       <div className="grid gap-8 lg:grid-cols-[1fr_280px]">
         <div className="space-y-5">
           <div className="min-h-[28rem] overflow-hidden rounded-lg border border-line bg-panel">
             {messages.length ? (
-              messages.map((message) => <ChatRow key={message.id} message={message} />)
+              messages.map((message) => (
+                <ChatRow key={message.id} message={message} />
+              ))
             ) : (
               <div className="flex min-h-[28rem] flex-col items-center justify-center px-6 text-center">
                 <span className="flex h-12 w-12 items-center justify-center rounded bg-tag text-signal">
                   <MessageSquare size={20} aria-hidden="true" />
                 </span>
-                <p className="mt-5 max-w-md font-serif text-xl leading-8 text-ink">Ask something that should use your saved memories.</p>
+                <p className="mt-5 max-w-md font-serif text-xl leading-8 text-ink">
+                  Ask something that should use your saved memories.
+                </p>
                 <p className="mt-2 max-w-md font-sans text-sm leading-6 text-muted">
-                  Try: What am I testing with Supabase Postgres?
+                  Try asking about a preference you have already approved.
                 </p>
               </div>
             )}
             {chatMutation.isPending && (
-              <div className="border-t border-line px-5 py-5 font-sans text-sm text-muted">Waiting for provider response...</div>
+              <div className="border-t border-line px-5 py-5 font-sans text-sm text-muted">
+                Waiting for provider response...
+              </div>
             )}
           </div>
 
-          <form onSubmit={submitMessage} className="flex flex-col gap-3 sm:flex-row">
+          <form
+            onSubmit={submitMessage}
+            className="flex flex-col gap-3 sm:flex-row"
+          >
             <textarea
+              aria-label="Playground message"
+              maxLength={20000}
               value={draft}
               onChange={(event) => setDraft(event.target.value)}
               onKeyDown={handleDraftKeyDown}
@@ -144,31 +177,59 @@ export function ChatWorkspace() {
             />
             <button
               type="submit"
-              disabled={!canChat || chatMutation.isPending || !draft.trim()}
+              disabled={
+                !canChat ||
+                chatMutation.isPending ||
+                !draft.trim() ||
+                !model.trim()
+              }
               className="inline-flex min-h-12 items-center justify-center gap-2 rounded-lg border border-ink px-5 font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-ink transition hover:border-signal hover:bg-signal hover:text-paper disabled:cursor-not-allowed disabled:opacity-50"
             >
               <Send size={16} aria-hidden="true" />
               Send
             </button>
           </form>
-          {error && <p className="font-sans text-sm text-fault">{error}</p>}
+          {error && (
+            <p role="alert" className="font-sans text-sm text-fault">
+              {error}
+            </p>
+          )}
         </div>
 
         <aside className="border-y border-line py-5">
           <h2 className="font-serif text-2xl font-semibold">Run Context</h2>
           <dl className="mt-5 space-y-5">
             <div>
-              <dt className="font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-muted">Current User</dt>
+              <dt className="font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-muted">
+                Current User
+              </dt>
               <dd className="mt-1 break-words font-serif text-base text-ink">
-                {userQuery.data?.external_id ?? (apiKey ? "Checking key..." : "No key saved")}
+                {userQuery.data?.external_id ??
+                  (apiKey ? "Checking key..." : "No key saved")}
               </dd>
             </div>
             <div>
-              <dt className="font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-muted">Provider</dt>
+              <dt className="font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-muted">
+                Provider
+              </dt>
               <dd className="mt-2">
                 <select
+                  aria-label="Model provider"
                   value={provider}
-                  onChange={(event) => setProvider(event.target.value)}
+                  onChange={(event) => {
+                    const nextProvider = event.target.value;
+                    setProvider(nextProvider);
+                    setModel(
+                      (
+                        {
+                          openai: "gpt-4o-mini",
+                          anthropic: "claude-sonnet-4-20250514",
+                          gemini: "gemini-2.5-flash",
+                          ollama: "qwen2.5:3b",
+                        } as Record<string, string>
+                      )[nextProvider],
+                    );
+                  }}
                   className="min-h-10 w-full rounded-md border border-line bg-panel px-3 font-sans text-sm text-ink outline-none focus:border-signal"
                 >
                   <option value="openai">openai</option>
@@ -179,9 +240,13 @@ export function ChatWorkspace() {
               </dd>
             </div>
             <div>
-              <dt className="font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-muted">Model</dt>
+              <dt className="font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-muted">
+                Model
+              </dt>
               <dd className="mt-2">
                 <input
+                  aria-label="Model name"
+                  maxLength={200}
                   value={model}
                   onChange={(event) => setModel(event.target.value)}
                   className="min-h-10 w-full rounded-md border border-line bg-panel px-3 font-mono text-xs text-ink outline-none focus:border-signal"
@@ -189,19 +254,40 @@ export function ChatWorkspace() {
               </dd>
             </div>
             <div>
-              <dt className="font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-muted">Last Exchange</dt>
+              <dt className="font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-muted">
+                Last Exchange
+              </dt>
               <dd className="mt-2 space-y-2 font-serif text-base leading-7 text-ink">
-                <p>{lastAssistantMessage?.injectedCount ?? 0} memories injected</p>
+                <p>
+                  {lastAssistantMessage?.injectedCount ?? 0} memories injected
+                </p>
                 <p className="break-words font-sans text-[10px] uppercase tracking-[0.12em] text-muted">
-                  {lastAssistantMessage?.conversationId ?? "No conversation yet"}
+                  {lastAssistantMessage?.conversationId ??
+                    "No conversation yet"}
                 </p>
               </dd>
             </div>
           </dl>
-          {!apiKey && <p className="mt-5 font-serif text-base leading-7 text-fault">Generate or save an Engram key in Settings first.</p>}
-          {apiKey && userQuery.isError && <p className="mt-5 font-serif text-base leading-7 text-fault">The saved key could not authenticate.</p>}
+          {!apiKey && (
+            <p className="mt-5 font-serif text-base leading-7 text-fault">
+              Generate or save an Engram key in Settings first.
+            </p>
+          )}
+          {apiKey && userQuery.isError && (
+            <p className="mt-5 font-serif text-base leading-7 text-fault">
+              The saved key could not authenticate.
+            </p>
+          )}
         </aside>
       </div>
+      {lastAssistantMessage?.conversationId && (
+        <PlaygroundTrace
+          key={lastAssistantMessage.conversationId}
+          conversationId={lastAssistantMessage.conversationId}
+          originalRequest={lastAssistantMessage.requestContent ?? ""}
+          injectedCount={lastAssistantMessage.injectedCount ?? 0}
+        />
+      )}
     </section>
   );
 }
@@ -211,12 +297,22 @@ function ChatRow({ message }: { message: VisualMessage }) {
   return (
     <article className="border-b border-line py-5 last:border-b-0">
       <div className="grid gap-3 md:grid-cols-[120px_1fr]">
-        <div className="font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-muted">{isAssistant ? "Assistant" : "You"}</div>
+        <div className="font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-muted">
+          {isAssistant ? "Assistant" : "You"}
+        </div>
         <div>
-          <p className={cn("whitespace-pre-wrap font-sans text-[15px] leading-7", isAssistant ? "text-ink" : "text-muted")}>{message.content}</p>
+          <p
+            className={cn(
+              "whitespace-pre-wrap font-sans text-[15px] leading-7",
+              isAssistant ? "text-ink" : "text-muted",
+            )}
+          >
+            {message.content}
+          </p>
           {isAssistant && (
             <p className="mt-3 font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-muted">
-              {message.injectedCount ?? 0} memories injected {message.conversationId ? `· ${message.conversationId}` : ""}
+              {message.injectedCount ?? 0} memories injected{" "}
+              {message.conversationId ? `· ${message.conversationId}` : ""}
             </p>
           )}
         </div>

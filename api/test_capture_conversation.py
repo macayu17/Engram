@@ -8,6 +8,8 @@ from fastapi import HTTPException
 from api.routes import memories
 from api.services import extraction
 
+pytestmark = pytest.mark.usefixtures("inline_capture_jobs")
+
 
 def available_usage() -> dict[str, object]:
     return {

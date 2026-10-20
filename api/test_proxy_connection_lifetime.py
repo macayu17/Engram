@@ -8,6 +8,8 @@ from api.services import extraction
 from api.services.provider_keys import ResolvedProvider
 from api.services.proxy import PreparedProxyRequest, ProviderResponse
 
+pytestmark = pytest.mark.usefixtures("inline_capture_jobs")
+
 
 @pytest.fixture(autouse=True)
 def bypass_quota_checks(monkeypatch):
@@ -67,7 +69,8 @@ def prepared_request() -> PreparedProxyRequest:
 
 
 @pytest.mark.asyncio
-async def test_provider_starts_after_database_connection_is_released(monkeypatch) -> None:
+@pytest.mark.parametrize("streaming", [False, True])
+async def test_provider_starts_after_database_connection_is_released(monkeypatch, streaming: bool) -> None:
     events: list[str] = []
     user = user_row()
 
@@ -82,12 +85,28 @@ async def test_provider_starts_after_database_connection_is_released(monkeypatch
         events.extend(["provider_started", "provider_finished"])
         return ProviderResponse(b"{}", 200, "application/json")
 
+    class FailedStream:
+        status_code = 401
+        media_type = "application/json"
+
+        async def aread(self) -> bytes:
+            return b"{}"
+
+        async def aclose(self) -> None:
+            return None
+
+    async def fake_open(*args: object, **kwargs: object) -> FailedStream:
+        events.extend(["provider_started", "provider_finished"])
+        return FailedStream()
+
     monkeypatch.setattr(proxy_routes, "get_pool", lambda: FakePool(events))
     monkeypatch.setattr(proxy_routes, "get_user_by_api_key", fake_get_user)
     monkeypatch.setattr(proxy_routes, "prepare_proxy_request", fake_prepare)
     monkeypatch.setattr(proxy_routes, "forward_to_provider", fake_forward)
+    monkeypatch.setattr(proxy_routes, "open_provider_stream", fake_open)
 
-    await proxy_routes.build_proxy_response_with_available_auth(
+    build_response = proxy_routes.build_streaming_proxy_response if streaming else proxy_routes.build_proxy_response_with_available_auth
+    await build_response(
         "api-key", "user-1", "openai", False, True, None, {"messages": []}, {}
     )
 
@@ -145,6 +164,10 @@ async def test_extraction_calls_provider_without_acquired_connection(monkeypatch
     provider_connection_counts: list[int] = []
 
     class FakeDb:
+        @asynccontextmanager
+        async def transaction(self):
+            yield
+
         async def fetchrow(self, query: str, *args: object) -> dict[str, object]:
             return {"id": args[0], "external_id": "user-1", "extraction_provider": "openai"}
 
@@ -193,6 +216,10 @@ async def test_reconciliation_calls_provider_without_acquired_connection(monkeyp
     reconciliation_connection_counts: list[int] = []
 
     class FakeDb:
+        @asynccontextmanager
+        async def transaction(self):
+            yield
+
         async def fetchrow(self, query: str, *args: object) -> dict[str, object]:
             return {"id": args[0], "external_id": "user-1", "extraction_provider": "openai"}
 
@@ -250,6 +277,10 @@ async def test_manual_capture_calls_provider_without_acquired_connection(monkeyp
     provider_connection_counts: list[int] = []
 
     class FakeDb:
+        @asynccontextmanager
+        async def transaction(self):
+            yield
+
         async def fetchrow(self, query: str, *args: object) -> dict[str, object]:
             return {"id": args[0], "external_id": "user-1", "extraction_provider": "openai"}
 

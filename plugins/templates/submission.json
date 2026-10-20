@@ -1,0 +1,11 @@
+{
+  "status": "draft-not-submitted",
+  "name": "Engram",
+  "mcp_url": "${ENGRAM_MCP_URL}",
+  "website_url": "${ENGRAM_WEBSITE_URL}",
+  "privacy_policy_url": "${ENGRAM_PRIVACY_URL}",
+  "support_url": "${ENGRAM_SUPPORT_URL}",
+  "description": "Recall project memories and deliberately capture exchanges for pending review.",
+  "authentication": "OAuth 2.1 authorization code with S256 PKCE, read/write scopes and project consent",
+  "review_instructions": "Use a dedicated test account and project. Test recall, deliberate capture, pending review and revocation. Supply review credentials only through the official submission portal."
+}

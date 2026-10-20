@@ -18,6 +18,9 @@ function readTransport(name: string, fallback: McpTransport): McpTransport {
 export const config = {
   engramApiUrl: readString("ENGRAM_API_URL", "https://engram-api.whitedune-6b4bf4e3.centralindia.azurecontainerapps.io"),
   engramApiKey: readString("ENGRAM_API_KEY", ""),
+  engramAuthUrl: readString("ENGRAM_AUTH_URL", ""),
+  mcpPublicUrl: readString("MCP_PUBLIC_URL", "http://localhost:3000/mcp"),
+  namespace: readString("ENGRAM_NAMESPACE", "default"),
   mcpPort: readPort("MCP_PORT", 3000),
   mcpTransport: readTransport("MCP_TRANSPORT", "stdio"),
 };

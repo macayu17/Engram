@@ -30,13 +30,13 @@ POSTGRES_PASSWORD=replace_with_a_strong_password
 EXTRACTION_PROVIDER=openai
 OPENAI_API_KEY=your_key_here
 MCP_SERVICE_KEY=
-ENGRAM_SERVICE_KEY=your_server_to_server_key_here
+ENGRAM_SERVICE_KEY=
 ENGRAM_PROVIDER_KEY_ENCRYPTION_KEY=your_fernet_key_for_per_user_provider_keys
 NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=your_clerk_publishable_key
 CLERK_SECRET_KEY=your_clerk_secret_key
 ```
 
-Stripe is optional for self-hosting. Leave its variables empty unless you want hosted workspace subscriptions.
+For this self-hosted quick start, leave `ENGRAM_SERVICE_KEY` and the Clerk keys empty. A service key enables hosted provisioning and disables public user creation. Configure Clerk and the matching service key using Dashboard Login below when you want hosted accounts. Stripe is optional; leave its variables empty unless you want workspace subscriptions.
 
 3. Start the stack.
 
@@ -70,14 +70,23 @@ curl -X POST http://localhost:8000/v1/chat \
   }'
 ```
 
-6. Wait a few seconds, then inspect memories.
+6. Wait a few seconds, then inspect newly extracted memories in the review queue.
 
 ```bash
-curl http://localhost:8000/memories \
+curl 'http://localhost:8000/memories?status=pending' \
   -H "X-Engram-Key: <api_key>"
 ```
 
-7. Open the dashboard at `http://localhost:3001` and save the same API key in Settings.
+7. Approve a memory before expecting the proxy to retrieve it. Replace `<memory_id>` with an ID from the pending list.
+
+```bash
+curl -X PATCH http://localhost:8000/memories/<memory_id> \
+  -H "Content-Type: application/json" \
+  -H "X-Engram-Key: <api_key>" \
+  -d '{"status": "approved"}'
+```
+
+8. Open the dashboard at `http://localhost:3001` and save the same API key in Settings. A later chat can now retrieve the approved memory. Manually created memories are approved by default. Extraction proposes changes to existing memories as revisions. Accept a revision to replace the fact; earlier versions remain available to restore.
 
 ## Dashboard Login
 
@@ -163,7 +172,7 @@ DATABASE_STATEMENT_CACHE_SIZE=0
 docker compose -f docker-compose.supabase.yml run --rm api python -m api.apply_schema
 ```
 
-You can also paste `api/db/schema.sql` into the Supabase SQL editor.
+The schema command applies `api/db/schema.sql`, `api/db/product.sql`, and `api/db/oauth.sql` in order. If using the SQL editor, apply all three in that order. API startup also applies these idempotent updates.
 
 6. Start the API, MCP server, and dashboard without local Postgres.
 
@@ -185,19 +194,41 @@ Save the returned `ek_...` API key and use it in the dashboard or API calls.
 
 The hot path is designed to stay simple:
 
-1. Embed the latest user message with `BAAI/bge-small-en-v1.5`.
-2. Search `memories` with pgvector cosine similarity.
+1. Build a query from up to six recent user messages and embed it with `BAAI/bge-small-en-v1.5`. Retrieval uses the actual request text, without fixture-specific keyword expansion.
+2. Search approved memories within the authenticated user, workspace, and namespace using pgvector cosine similarity.
 3. Inject the top matches into the system prompt.
 4. Forward the request to OpenAI, Gemini, Ollama, or Anthropic.
 5. Return the provider response immediately.
-6. Start an `asyncio.create_task` extraction job.
-7. Extract durable user facts, deduplicate them, and store embeddings.
+6. Persist the extraction payload in PostgreSQL and schedule an `asyncio.create_task` job.
+7. Extract durable user facts, reconcile and deduplicate them, and store new memories as pending review.
 
-Retrieval logs record the query, returned memory IDs, scores, and conversation ID so developers can inspect why a memory appeared.
+Retrieval logs record the query, memory snapshots, ranking scores, project, actual injected count, and conversation ID. Editing a memory preserves the earlier trace; deleting or moving it redacts its saved text. Project-only OAuth readers cannot read personal memory snapshots.
 
-Retrieval ranking blends cosine similarity with a recency boost (exponential decay, `RETRIEVAL_RECENCY_HALF_LIFE_DAYS`, default 30) and a usage boost from `access_count`. The similarity threshold still applies to the raw cosine score, so the boosts reorder results without admitting weak matches. Weights are tunable via `RETRIEVAL_RECENCY_WEIGHT` and `RETRIEVAL_ACCESS_WEIGHT`.
+Retrieval ranking blends cosine similarity with pinning, a recency boost (exponential decay, `RETRIEVAL_RECENCY_HALF_LIFE_DAYS`, default 30), and a usage boost from `access_count`. The similarity threshold applies before those boosts, except that pinned memories bypass it. Weights are tunable via `RETRIEVAL_RECENCY_WEIGHT` and `RETRIEVAL_ACCESS_WEIGHT`. Optional hybrid retrieval combines vector and full-text search; graph retrieval can add memories linked by entities. The graph and reranker models are disabled by default.
 
-Extraction reconciles new facts against existing memories before storing them. When a new fact lands near an existing memory (cosine between `RECONCILE_THRESHOLD`, default 0.6, and the refinement threshold), one extra LLM call decides per fact: add it, update the existing memory it supersedes or contradicts, or discard it as redundant. Any failure falls back to storing all facts. Disable with `ENABLE_RECONCILIATION=false`.
+Extraction reconciles new facts against existing memories before storing them. When a new fact lands near an existing memory (cosine between `RECONCILE_THRESHOLD`, default 0.6, and the refinement threshold), one extra LLM call decides per fact: add it, propose a revision to the memory it supersedes or contradicts, or discard it as redundant. Proposed revisions require approval and reject stale acceptance if the original fact changed. Any failure falls back to storing all facts. Disable with `ENABLE_RECONCILIATION=false`.
+
+Both proxy extraction and explicit conversation capture use the same processing pipeline. Database connections are released before extraction and reconciliation provider calls. Retrieval and retrieval logging use separate transactions, so a failed SQL statement does not prevent the proxy from resolving its provider. A logging failure keeps successfully retrieved memories and their injected count.
+
+Background extraction uses PostgreSQL jobs with bounded retries, leases and an asyncio recovery worker. Interrupted recoverable jobs resume after restart; Connections shows status and lets you retry failures. Per-request provider override keys are never persisted, so captures requiring those temporary keys cannot recover after interruption and must be sent again. Clearing raw captures removes retry and source inspection data while keeping memories and status. During a database outage, regular proxy requests can attempt forwarding with recently cached authentication; this fallback cannot load workspace provider keys and is limited to self-hosted server-key configurations. Streaming requests require the database. Authentication, quota, configuration, and upstream-provider errors can still reject requests.
+
+## Memory review and projects
+
+The product dashboard separates pending, approved and rejected memories, supports bulk review, and compares proposed revisions against the approved fact. History records manual edits and accepted changes; restoring a version creates another history entry. The Overview shows operational status, and Playground shows the actual retrieval event with per-fact relevance feedback.
+
+Use the project selector to isolate work. API memory creation, capture and search accept `namespace`; proxy calls accept `X-Engram-Namespace` or `namespace` in the JSON body. Names start with a letter or digit and contain up to 80 letters, digits, periods, underscores or hyphens. Existing data stays in `default`. `personal` is a separate scope: retrieval includes it only with explicit `include_personal: true` on an API-key request. Expired memories stay inspectable but are excluded from retrieval and deduplication.
+
+Review endpoints include `POST /memories/review/bulk`, `GET /memories/revisions`, `POST /memories/revisions/{id}/accept` or `/reject`, `GET /memories/{id}/history`, `POST /memories/{id}/restore`, and `POST /memories/{id}/feedback`. Connections provides `GET /connections/status`, `POST /connections/jobs/{id}/retry`, and `DELETE /connections/captures?older_than_days=30&namespace=default`.
+
+## Claude and Codex connections
+
+[Local plugin setup, marketplace catalogs and remote templates](plugins/README.md) live in `plugins/`. These are unpublished checkout-based packages with recall, deliberate capture, review and project-handoff skills. They do not intercept host conversations automatically. Connections generates local MCP configuration with a key placeholder unless you explicitly reveal it.
+
+Remote MCP supports OAuth authorization codes with S256 PKCE, dynamic client registration, hashed opaque tokens, refresh rotation and revocation. Every HTTP request authenticates independently; HTTP never inherits the process's stdio API key. Consent grants `memory:read` and/or `memory:write` for one project. OAuth cannot include personal memories, change project, or manage API keys. Revoke assistants from Connections.
+
+Set `API_PUBLIC_URL` to your externally reachable API origin, `MCP_PUBLIC_URL` to the full public MCP URL ending in `/mcp`, and `DASHBOARD_URL` to your dashboard origin. In the MCP process, `ENGRAM_API_URL` is the internal API address and `ENGRAM_AUTH_URL` is the public authorization-server origin. Use HTTPS for public deployment. Configure `CORS_ORIGINS` for your exact dashboard origin. Local loopback HTTP is supported for development.
+
+Public listing still requires your deployed service, support and privacy URLs, host testing, and submission through the official directory. The included submission worksheet does not deploy or publish Engram.
 
 ## REST API
 
@@ -263,7 +294,8 @@ X-Engram-User-ID: your_external_user_id
 X-Engram-Provider: openai | anthropic | gemini | ollama
 X-Engram-Disable-Injection: false
 X-Engram-Disable-Extraction: false
-X-Engram-Provider-Key: sk-... (optional, ephemeral override for openai/gemini; never persisted)
+X-Engram-Provider-Key: sk-... (optional, ephemeral override for openai/anthropic/gemini; never persisted)
+X-Engram-Namespace: default (optional, scopes proxy retrieval and extraction)
 ```
 
 The API service also accepts a service key on internal routes such as `POST /users/service-key`:
@@ -271,6 +303,8 @@ The API service also accepts a service key on internal routes such as `POST /use
 ```text
 X-Engram-Service-Key: esk_...
 ```
+
+Engram headers and incoming provider credentials are removed before forwarding. Provider authentication is rebuilt from the resolved provider key.
 
 ## MCP
 
@@ -346,7 +380,7 @@ ENGRAM_SERVICE_KEY=generate_a_long_random_value
 
 The API must be reachable from the browser and must allow the dashboard origin through `CORS_ORIGINS`. Set the same `ENGRAM_SERVICE_KEY` on the hosted API so the dashboard can create or recover per-Clerk Engram keys.
 
-For an existing Supabase database, re-apply `api/db/schema.sql` after pulling updates so the `user_api_keys` table exists:
+For an existing Supabase database, apply all current schema updates after pulling changes:
 
 ```bash
 docker compose -f docker-compose.supabase.yml run --rm api python -m api.apply_schema
@@ -356,9 +390,10 @@ Supabase replaces only the Postgres service. It does not replace the FastAPI ser
 
 ## Development Checks
 
-Backend syntax:
+Backend tests and syntax (Python 3.11 with `api/requirements-dev.txt` installed):
 
 ```bash
+python -m pytest api
 python -m compileall api
 ```
 
@@ -424,4 +459,6 @@ python -m api.test_proxy_flow
 
 ## Scope
 
-Engram v1 intentionally avoids API JWT auth, rate limiting, external vector stores, Redis, Celery, LangChain, and LlamaIndex. The focus is the inspectable memory loop: retrieve, inject, forward, extract, deduplicate, store, and expose through REST, MCP, and dashboard surfaces. Dashboard sign-in is handled separately through Clerk.
+The core remains the inspectable memory loop: retrieve, inject, forward, extract, deduplicate, store, and review through REST, MCP, and dashboard surfaces. The repository also implements streaming, workspace membership, optional Stripe billing, graph retrieval, and manual confidence decay. Workspace membership does not make every member's memories available to other members: memory queries remain scoped by both user and workspace.
+
+Engram avoids API JWT auth, rate limiting, external vector stores, Redis, Celery, LangChain, and LlamaIndex. Dashboard sign-in is handled separately through Clerk. The original v1 guide in `AGENTS.md` describes the initial implementation scope; the current runtime includes the extensions above.

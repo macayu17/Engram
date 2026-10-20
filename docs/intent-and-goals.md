@@ -8,7 +8,7 @@ The system has one shared memory backend and three interfaces:
 2. REST API: lets developers create, inspect, search, update, and delete memories directly.
 3. MCP server: exposes the same memory operations as tool calls for agents.
 
-The core product promise is operational simplicity: a developer should be able to run `docker compose up`, create a user, send two conversations through `/v1/chat`, and see the second call use facts learned from the first.
+The core product promise is an inspectable memory loop: a developer can run `docker compose up`, create a user, send a conversation through `/v1/chat`, review newly extracted facts, and see a later call use approved memories. New extracted memories are pending by default; manually added memories are approved by default. Extraction proposes revisions to existing memories. Approval is required to replace an existing fact; history supports restoring earlier versions.
 
 The technical constraints are part of the product:
 
@@ -16,8 +16,13 @@ The technical constraints are part of the product:
 - FastAPI and asyncpg own all backend data access.
 - API keys are hashed before storage.
 - Retrieval and extraction failures must not break proxy responses.
-- Extraction runs after the provider response is returned.
+- Extraction is scheduled in the background without waiting for it to finish; streaming extraction is scheduled when the stream ends.
+- Proxy and MCP conversation capture share extraction, reconciliation, deduplication, and storage logic.
+- Database connections are released before extraction and reconciliation provider calls.
+- Memory retrieval is scoped to the authenticated user, workspace, and namespace and only returns approved memories.
 - The dashboard is a developer console for inspection and control, not a consumer UI.
 - MCP support is a first-class differentiator, not an add-on.
 
-The v1 boundary is intentionally narrow. Engram does not include OAuth, rate limiting, streaming proxy support, memory decay, team memory, external vector databases, LangChain, LlamaIndex, Redis, or Celery. Those are deferred so v1 can prove the main loop cleanly: retrieve, inject, forward, extract, store, inspect.
+The codebase has expanded beyond the original v1 boundary. It includes streaming proxy support, Clerk dashboard sign-in, workspace memberships, optional Stripe subscriptions and quotas, memory review and import/export, duplicate merging, manual confidence decay, and optional hybrid search, reranking, and entity graphs. Workspaces scope credentials and billing; memory access is still scoped by user as well as workspace.
+
+Engram does not use external vector databases, LangChain, LlamaIndex, Redis, or Celery, and it does not implement rate limiting. PostgreSQL jobs and leases recover interrupted extraction; temporary provider override keys are never persisted and those captures require resubmission after interruption. OAuth connections are revocable, scoped to one project, and cannot retrieve personal memories. Optional retrieval or logging failures should not break provider forwarding; authentication, quota, provider configuration, and upstream failures remain request errors. Database-outage forwarding relies on cached authentication and self-hosted server provider keys; streaming requires a working database.

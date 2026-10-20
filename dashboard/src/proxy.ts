@@ -11,6 +11,7 @@ const isProductRoute = createRouteMatcher([
   "/overview(.*)",
   "/memories(.*)",
   "/chat(.*)",
+  "/connections(.*)",
   "/logs(.*)",
   "/graph(.*)",
   "/settings(.*)",

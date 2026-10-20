@@ -1,0 +1,10 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "engram",
+  "version": "0.1.0",
+  "description": "Recall project memories and deliberately capture exchanges for review.",
+  "author": {
+    "name": "Engram contributors"
+  },
+  "license": "MIT"
+}

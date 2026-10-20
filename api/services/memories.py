@@ -1,3 +1,5 @@
+from datetime import datetime
+import json
 from typing import Literal
 
 import asyncpg
@@ -14,7 +16,7 @@ MemoryStatus = Literal["pending", "approved", "rejected"]
 
 MEMORY_COLUMNS = (
     "id, content, confidence, access_count, last_accessed, created_at, source_conversation_id, "
-    "status, category, pinned, source, last_confirmed"
+    "status, category, pinned, source, last_confirmed, namespace, expires_at"
 )
 
 
@@ -28,6 +30,8 @@ async def create_memory(
     pinned: bool = False,
     status: MemoryStatus = "approved",
     source: str = "manual",
+    namespace: str = "default",
+    expires_at: datetime | None = None,
 ) -> dict[str, object]:
     embedding = embed(content)
     result = await store_memory_with_deduplication(
@@ -42,12 +46,13 @@ async def create_memory(
         status,
         normalize_category(category or infer_category(content)),
         source,
+        namespace=namespace,
     )
     if result["memory"] is None:
         raise RuntimeError("Memory creation failed")
     memory = result["memory"]
-    if pinned:
-        updated = await update_memory(user_id, org_id, memory["id"], None, db, pinned=True)
+    if pinned or expires_at is not None:
+        updated = await update_memory(user_id, org_id, memory["id"], None, db, pinned=pinned, expires_at=expires_at, update_expiration=expires_at is not None)
         if updated is not None:
             return updated
     return memory
@@ -67,9 +72,7 @@ async def list_memories(
     namespace: str | None = None,
 ) -> tuple[list[dict[str, object]], int]:
     if search:
-        filtered = await search_memory_rows_for_listing(user_id, org_id, search, db, status, category)
-        if namespace is not None:
-            filtered = [r for r in filtered if r.get("namespace") == namespace]
+        filtered = await search_memory_rows_for_listing(user_id, org_id, search, db, status, category, namespace)
         page = filtered[offset : offset + limit]
         await mark_memories_accessed(user_id, org_id, [row["id"] for row in page], db)
         return [strip_score(row) for row in page], len(filtered)
@@ -103,145 +106,84 @@ async def list_memories(
 
 
 async def get_memory(
-    user_id: object,
-    org_id: object,
-    memory_id: object,
-    db: asyncpg.Connection,
+    user_id: object, org_id: object, memory_id: object, db: asyncpg.Connection,
+    namespace: str | None = None,
 ) -> dict[str, object] | None:
     row = await db.fetchrow(
-        f"""
-        SELECT {MEMORY_COLUMNS}
-        FROM memories
-        WHERE user_id = $1
-          AND org_id = $2
-          AND id = $3
-        """,
-        user_id,
-        org_id,
-        memory_id,
+        f"SELECT {MEMORY_COLUMNS} FROM memories WHERE user_id=$1 AND org_id=$2 AND id=$3 AND ($4::text IS NULL OR namespace=$4)",
+        user_id, org_id, memory_id, namespace,
     )
     return dict(row) if row is not None else None
 
 
 async def update_memory(
-    user_id: object,
-    org_id: object,
-    memory_id: object,
-    content: str | None,
-    db: asyncpg.Connection,
-    category: str | None = None,
-    pinned: bool | None = None,
-    status: MemoryStatus | None = None,
+    user_id: object, org_id: object, memory_id: object, content: str | None, db: asyncpg.Connection,
+    category: str | None = None, pinned: bool | None = None, status: MemoryStatus | None = None,
+    namespace: str | None = None, target_namespace: str | None = None,
+    expires_at: datetime | None = None, update_expiration: bool = False,
 ) -> dict[str, object] | None:
-    current = await get_memory(user_id, org_id, memory_id, db)
-    if current is None:
-        return None
-    next_content = content or str(current["content"])
-    next_category = normalize_category(category) if category is not None else current["category"]
-    next_pinned = pinned if pinned is not None else current["pinned"]
-    next_status = status if status is not None else current["status"]
-    if content is None:
-        row = await db.fetchrow(
-            """
-            UPDATE memories
-            SET category = $1,
-                pinned = $2,
-                status = $3,
-                last_confirmed = CASE WHEN $3 = 'approved' THEN now() ELSE last_confirmed END
-            WHERE user_id = $4
-              AND org_id = $5
-              AND id = $6
-            RETURNING id, content, confidence, access_count, last_accessed, created_at, source_conversation_id,
-                      status, category, pinned, source, last_confirmed
-            """,
-            next_category,
-            next_pinned,
-            next_status,
-            user_id,
-            org_id,
-            memory_id,
+    async with db.transaction():
+        current = await db.fetchrow(
+            f"SELECT {MEMORY_COLUMNS} FROM memories WHERE user_id=$1 AND org_id=$2 AND id=$3 AND ($4::text IS NULL OR namespace=$4) FOR UPDATE",
+            user_id, org_id, memory_id, namespace,
         )
-        return dict(row) if row is not None else None
-    embedding = format_embedding_for_pgvector(embed(next_content))
-    row = await db.fetchrow(
-        """
-        UPDATE memories
-        SET content = $1,
-            embedding = $2::vector,
-            category = $3,
-            pinned = $4,
-            status = $5,
-            last_confirmed = CASE WHEN $5 = 'approved' THEN now() ELSE last_confirmed END
-        WHERE user_id = $6
-          AND org_id = $7
-          AND id = $8
-        RETURNING id, content, confidence, access_count, last_accessed, created_at, source_conversation_id,
-                  status, category, pinned, source, last_confirmed
-        """,
-        next_content,
-        embedding,
-        next_category,
-        next_pinned,
-        next_status,
-        user_id,
-        org_id,
-        memory_id,
-    )
+        if current is None:
+            return None
+        embedding = format_embedding_for_pgvector(embed(content)) if content is not None else None
+        row = await db.fetchrow(
+            f"""
+            UPDATE memories SET content=COALESCE($1,content),embedding=COALESCE($2::vector,embedding),
+                category=COALESCE($3,category),pinned=COALESCE($4,pinned),status=COALESCE($5,status),
+                namespace=COALESCE($6,namespace),expires_at=CASE WHEN $7 THEN $8::timestamptz ELSE expires_at END,
+                last_confirmed=CASE WHEN $5='approved' THEN now() ELSE last_confirmed END
+            WHERE user_id=$9 AND org_id=$10 AND id=$11 RETURNING {MEMORY_COLUMNS}
+            """, content, embedding, normalize_category(category) if category is not None else None,
+            pinned, status, target_namespace, update_expiration, expires_at, user_id, org_id, memory_id,
+        )
     return dict(row) if row is not None else None
 
 
-async def delete_memory(user_id: object, org_id: object, memory_id: object, db: asyncpg.Connection) -> bool:
+async def delete_memory(
+    user_id: object, org_id: object, memory_id: object, db: asyncpg.Connection, namespace: str | None = None,
+) -> bool:
     result = await db.execute(
-        """
-        DELETE FROM memories
-        WHERE user_id = $1
-          AND org_id = $2
-          AND id = $3
-        """,
-        user_id,
-        org_id,
-        memory_id,
+        "DELETE FROM memories WHERE user_id=$1 AND org_id=$2 AND id=$3 AND ($4::text IS NULL OR namespace=$4)",
+        user_id, org_id, memory_id, namespace,
     )
     return result.endswith("1")
 
 
-async def delete_all_memories(user_id: object, org_id: object, db: asyncpg.Connection) -> int:
-    result = await db.execute(
-        """
-        DELETE FROM memories
-        WHERE user_id = $1
-          AND org_id = $2
-        """
-,
-        user_id,
-        org_id,
-    )
+async def delete_all_memories(user_id: object, org_id: object, db: asyncpg.Connection, namespace: str | None = None) -> int:
+    if namespace is None:
+        result = await db.execute("DELETE FROM memories WHERE user_id = $1 AND org_id = $2", user_id, org_id)
+    else:
+        result = await db.execute("DELETE FROM memories WHERE user_id=$1 AND org_id=$2 AND namespace=$3", user_id, org_id, namespace)
     return int(result.split()[1])
 
 
 async def search_memories(
-    user_id: object,
-    org_id: object,
-    query: str,
-    limit: int,
-    threshold: float,
-    db: asyncpg.Connection,
+    user_id: object, org_id: object, query: str, limit: int, threshold: float, db: asyncpg.Connection,
+    namespace: str = "default", include_personal: bool = False,
 ) -> list[dict[str, object]]:
-    results = await retrieve_memories(user_id, org_id, query, db, limit=limit, threshold=threshold)
+    from api.services.retrieval import log_retrieval
+
+    results = await retrieve_memories(user_id, org_id, query, db, limit=limit, threshold=threshold, namespace=namespace, include_personal=include_personal)
+    await log_retrieval(user_id, org_id, None, query, results, db, namespace=namespace, injected_count=0, retrieval_mode="search")
     return [{"memory": strip_score(result), "score": result["score"]} for result in results]
 
 
-async def export_memories(user_id: object, org_id: object, db: asyncpg.Connection) -> list[dict[str, object]]:
+async def export_memories(user_id: object, org_id: object, db: asyncpg.Connection, namespace: str | None = None) -> list[dict[str, object]]:
     rows = await db.fetch(
         f"""
         SELECT {MEMORY_COLUMNS}
         FROM memories
         WHERE user_id = $1
-          AND org_id = $2
+          AND org_id = $2 AND ($3::text IS NULL OR namespace=$3)
         ORDER BY created_at DESC
         """,
         user_id,
         org_id,
+        namespace,
     )
     return [dict(row) for row in rows]
 
@@ -252,13 +194,14 @@ async def import_memories(
     items: list[dict[str, object]],
     db: asyncpg.Connection,
     dedup_threshold: float | None = None,
+    namespace: str = "default",
 ) -> int:
     imported = 0
     for item in items:
         content = str(item["content"]).strip()
         category = normalize_category(item.get("category") if isinstance(item.get("category"), str) else infer_category(content))
         pinned = bool(item.get("pinned", False))
-        result = await create_memory(user_id, org_id, content, db, dedup_threshold, category, pinned, "approved", "import")
+        result = await create_memory(user_id, org_id, content, db, dedup_threshold, category, pinned, "approved", "import", namespace=namespace, expires_at=item.get("expires_at") if isinstance(item.get("expires_at"), datetime) else None)
         if result:
             imported += 1
     return imported
@@ -269,8 +212,10 @@ async def get_memory_source(
     org_id: object,
     memory_id: object,
     db: asyncpg.Connection,
+    namespace: str | None = None,
+    restrict_personal: bool = False,
 ) -> dict[str, object] | None:
-    memory = await get_memory(user_id, org_id, memory_id, db)
+    memory = await get_memory(user_id, org_id, memory_id, db, namespace)
     if memory is None:
         return None
     conversation = None
@@ -281,13 +226,20 @@ async def get_memory_source(
             FROM conversations
             WHERE user_id = $1
               AND org_id = $2
-              AND id = $3
+              AND id = $3 AND ($4::text IS NULL OR namespace=$4)
             """,
             user_id,
             org_id,
             memory["source_conversation_id"],
+            namespace,
         )
         conversation = dict(row) if row is not None else None
+        if restrict_personal and conversation is not None and conversation["raw_exchange"] is not None:
+            exchange = conversation["raw_exchange"]
+            if isinstance(exchange, str):
+                exchange = json.loads(exchange)
+            if exchange.get("request", {}).get("engram_include_personal"):
+                conversation["raw_exchange"] = None
     return {"memory": memory, "conversation": conversation}
 
 
@@ -296,6 +248,7 @@ async def list_merge_suggestions(
     org_id: object,
     db: asyncpg.Connection,
     limit: int = 10,
+    namespace: str | None = None,
 ) -> list[dict[str, object]]:
     rows = await db.fetch(
         f"""
@@ -303,18 +256,19 @@ async def list_merge_suggestions(
         FROM memories
         WHERE user_id = $1
           AND org_id = $2
-          AND status = 'approved'
+          AND status = 'approved' AND ($3::text IS NULL OR namespace=$3)
         ORDER BY category, created_at DESC
         LIMIT 200
         """,
         user_id,
         org_id,
+        namespace,
     )
     memories = [dict(row) for row in rows]
     suggestions: list[dict[str, object]] = []
     for index, primary in enumerate(memories):
         for duplicate in memories[index + 1:]:
-            if primary["category"] != duplicate["category"]:
+            if primary["category"] != duplicate["category"] or primary.get("namespace", "default") != duplicate.get("namespace", "default"):
                 continue
             if memory_similarity_hint(str(primary["content"]), str(duplicate["content"])) < 0.42:
                 continue
@@ -331,6 +285,7 @@ async def merge_memories(
     duplicate_id: object,
     content: str | None,
     db: asyncpg.Connection,
+    namespace: str | None = None,
 ) -> dict[str, object] | None:
     if primary_id == duplicate_id:
         return None
@@ -338,6 +293,10 @@ async def merge_memories(
         primary = await lock_memory(user_id, org_id, primary_id, db)
         duplicate = await lock_memory(user_id, org_id, duplicate_id, db)
         if primary is None or duplicate is None:
+            return None
+        if primary.get("namespace", "default") != duplicate.get("namespace", "default"):
+            return None
+        if namespace is not None and primary.get("namespace") != namespace:
             return None
         merged_content = content or f"{primary['content']}\n{duplicate['content']}"
         embedding = format_embedding_for_pgvector(embed(merged_content))
@@ -387,14 +346,14 @@ async def merge_memories(
     return dict(row) if row is not None else None
 
 
-async def apply_confidence_decay(user_id: object, org_id: object, db: asyncpg.Connection) -> int:
+async def apply_confidence_decay(user_id: object, org_id: object, db: asyncpg.Connection, namespace: str | None = None) -> int:
     result = await db.execute(
         """
         UPDATE memories
         SET confidence = GREATEST(0.1, confidence * 0.92)
         WHERE user_id = $1
           AND org_id = $2
-          AND status = 'approved'
+          AND status = 'approved' AND ($3::text IS NULL OR namespace=$3)
           AND pinned = false
           AND (
             last_accessed IS NULL AND created_at < now() - interval '30 days'
@@ -403,36 +362,39 @@ async def apply_confidence_decay(user_id: object, org_id: object, db: asyncpg.Co
         """,
         user_id,
         org_id,
+        namespace,
     )
     return int(result.split()[1])
 
 
-async def timeline(user_id: object, org_id: object, db: asyncpg.Connection, limit: int = 50) -> list[dict[str, object]]:
+async def timeline(user_id: object, org_id: object, db: asyncpg.Connection, limit: int = 50, namespace: str | None = None) -> list[dict[str, object]]:
     memory_rows = await db.fetch(
         """
         SELECT id::text AS id, 'memory' AS type, content AS title, category, created_at
         FROM memories
         WHERE user_id = $1
-          AND org_id = $2
+          AND org_id = $2 AND ($4::text IS NULL OR namespace=$4)
         ORDER BY created_at DESC
         LIMIT $3
         """,
         user_id,
         org_id,
         limit,
+        namespace,
     )
     conversation_rows = await db.fetch(
         """
         SELECT id::text AS id, 'conversation' AS type, extraction_status AS title, NULL AS category, created_at
         FROM conversations
         WHERE user_id = $1
-          AND org_id = $2
+          AND org_id = $2 AND ($4::text IS NULL OR namespace=$4)
         ORDER BY created_at DESC
         LIMIT $3
         """,
         user_id,
         org_id,
         limit,
+        namespace,
     )
     items = [dict(row) for row in memory_rows] + [dict(row) for row in conversation_rows]
     return sorted(items, key=lambda item: item["created_at"], reverse=True)[:limit]
@@ -449,16 +411,17 @@ async def search_memory_rows_for_listing(
     db: asyncpg.Connection,
     status: MemoryStatus | None,
     category: str | None,
+    namespace: str | None = None,
 ) -> list[dict[str, object]]:
     if not search.strip():
         return []
-    status_clause, category_clause, params = build_memory_filters(user_id, org_id, status, category)
+    status_clause, category_clause, params = build_memory_filters(user_id, org_id, status, category, namespace)
     matched_memories: dict[object, dict[str, object]] = {}
     for retrieval_text in build_retrieval_texts(search):
         query_embedding = format_embedding_for_pgvector(embed(retrieval_text))
         rows = await db.fetch(
             f"""
-            SELECT {MEMORY_COLUMNS}, namespace,
+            SELECT {MEMORY_COLUMNS},
                    1 - (embedding <=> ${len(params) + 1}::vector) + CASE WHEN pinned THEN 0.08 ELSE 0 END AS score
             FROM memories
             WHERE {status_clause}
@@ -582,3 +545,28 @@ def validate_sort_direction(direction: SortDirection) -> str:
     if direction == "asc":
         return "ASC"
     return "DESC"
+
+
+async def list_namespaces(user_id: object, org_id: object, db: asyncpg.Connection, namespace: str | None = None) -> list[dict[str, object]]:
+    rows = await db.fetch(
+        "SELECT namespace AS name,count(*)::int AS count FROM memories WHERE user_id=$1 AND org_id=$2 AND ($3::text IS NULL OR namespace=$3) GROUP BY namespace ORDER BY namespace",
+        user_id, org_id, namespace,
+    )
+    result = [dict(row) for row in rows]
+    if not result:
+        return [{"name": namespace or "default", "count": 0}]
+    return result
+
+
+async def bulk_review(
+    user_id: object, org_id: object, memory_ids: list[object], status: str,
+    db: asyncpg.Connection, namespace: str | None = None,
+) -> int:
+    async with db.transaction():
+        result = await db.execute(
+            """
+            UPDATE memories SET status=$1,last_confirmed=CASE WHEN $1='approved' THEN now() ELSE last_confirmed END
+            WHERE user_id=$2 AND org_id=$3 AND id=ANY($4::uuid[]) AND ($5::text IS NULL OR namespace=$5)
+            """, status, user_id, org_id, memory_ids, namespace,
+        )
+    return int(result.split()[1])

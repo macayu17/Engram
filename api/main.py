@@ -1,15 +1,19 @@
+import asyncio
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 import logging
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from api.config import settings
 from api.db.connection import check_database, close_pool, init_pool
 from api.db.schema import apply_schema
-from api.routes import billing, graph, logs, memories, orgs, proxy, users
+from api.models.oauth import OAuthHTTPException
+from api.routes import billing, connections, graph, logs, memories, oauth, orgs, proxy, users
 from api.services.embedding import is_model_loaded, is_reranker_loaded, load_model, load_reranker
+from api.services.jobs import extraction_worker, shutdown_extraction_tasks
 
 
 logging.basicConfig(level=settings.log_level.upper())
@@ -22,11 +26,22 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     load_model()
     if settings.enable_reranker:
         load_reranker()
-    yield
-    await close_pool()
+    worker = asyncio.create_task(extraction_worker())
+    try:
+        yield
+    finally:
+        worker.cancel()
+        await asyncio.gather(worker, return_exceptions=True)
+        await shutdown_extraction_tasks()
+        await close_pool()
 
 
 app = FastAPI(title="Engram", version="1.0.0", lifespan=lifespan)
+
+
+@app.exception_handler(OAuthHTTPException)
+async def oauth_error(request: Request, error: OAuthHTTPException) -> JSONResponse:
+    return JSONResponse(content=error.detail, status_code=error.status_code, headers=error.headers)
 
 app.add_middleware(
     CORSMiddleware,
@@ -44,6 +59,8 @@ app.include_router(logs.router, prefix="/logs", tags=["logs"])
 app.include_router(orgs.router, prefix="/orgs", tags=["orgs"])
 app.include_router(graph.router, prefix="/graph", tags=["graph"])
 app.include_router(billing.router, prefix="/billing", tags=["billing"])
+app.include_router(connections.router, prefix="/connections", tags=["connections"])
+app.include_router(oauth.router, tags=["oauth"])
 
 
 @app.get("/health")

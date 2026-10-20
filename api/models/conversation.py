@@ -1,4 +1,8 @@
+from typing import Literal
+
 from pydantic import BaseModel, Field, UUID4
+
+from api.models.memory import Namespace
 
 
 class ConversationCaptureRequest(BaseModel):
@@ -6,6 +10,7 @@ class ConversationCaptureRequest(BaseModel):
     assistant_response: str = Field(min_length=1, max_length=20000)
     source: str = Field(default="mcp", min_length=1, max_length=80)
     session_id: str | None = Field(default=None, max_length=255)
+    namespace: Namespace = "default"
 
 
 class ConversationCaptureResponse(BaseModel):
@@ -14,3 +19,4 @@ class ConversationCaptureResponse(BaseModel):
     extracted_memories: list[str]
     source: str
     session_id: str | None
+    extraction_status: Literal["queued", "completed"] = "completed"

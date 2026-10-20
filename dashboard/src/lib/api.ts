@@ -13,14 +13,104 @@ export type Memory = {
   pinned: boolean;
   source: string;
   last_confirmed: string | null;
+  namespace: string;
+  expires_at: string | null;
 };
 
 export type MemoryUpdatePayload = {
+  namespace?: string;
+  expires_at?: string | null;
   content?: string;
   category?: string;
   pinned?: boolean;
   status?: "pending" | "approved" | "rejected";
 };
+
+export type MemoryRevision = {
+  id: string;
+  memory_id: string;
+  original_content: string;
+  proposed_content: string;
+  status: string;
+  source_conversation_id: string | null;
+  namespace: string;
+  created_at: string;
+};
+
+export type MemoryVersion = {
+  id: string;
+  memory_id: string;
+  content: string;
+  category: string;
+  status: string;
+  pinned: boolean;
+  namespace: string;
+  created_at: string;
+  reason: string;
+};
+
+export type ConnectionStatus = {
+  connected: boolean;
+  user: { external_id: string };
+  namespace: string;
+  provider: { name: string; configured: boolean };
+  clients: ClientRegistryItem[];
+  jobs: Array<{
+    id: string;
+    extraction_status: string;
+    memories_extracted: number;
+    created_at: string;
+    attempts: number;
+    last_error: string | null;
+    namespace: string;
+    recoverable: boolean;
+  }>;
+  mcp_url: string;
+};
+
+export type OAuthConnection = {
+  id: string;
+  client_name: string;
+  namespace: string;
+  scope: string;
+  created_at: string;
+  last_used_at: string | null;
+  expires_at: string;
+};
+
+export type OAuthAuthorization = {
+  client_id: string;
+  redirect_uri: string;
+  response_type: "code";
+  code_challenge: string;
+  code_challenge_method: "S256";
+  scope: string;
+  state?: string;
+  resource?: string;
+  namespace: string;
+};
+
+export function readActiveNamespace(): string {
+  if (typeof window === "undefined") return "default";
+  return (
+    localStorage.getItem(`engram_namespace:${readActiveApiKey()}`) || "default"
+  );
+}
+
+export function setActiveNamespace(namespace: string): void {
+  if (typeof window === "undefined") return;
+  localStorage.setItem(`engram_namespace:${readActiveApiKey()}`, namespace);
+  window.dispatchEvent(new Event("engram-namespace-changed"));
+}
+
+export function subscribeNamespace(listener: () => void): () => void {
+  window.addEventListener("engram-namespace-changed", listener);
+  window.addEventListener("storage", listener);
+  return () => {
+    window.removeEventListener("engram-namespace-changed", listener);
+    window.removeEventListener("storage", listener);
+  };
+}
 
 export type MemoryListResponse = {
   memories: Memory[];
@@ -59,6 +149,9 @@ export type RetrievedMemory = {
 };
 
 export type RetrievalLog = {
+  namespace: string;
+  injected_count: number;
+  retrieval_mode: string;
   id: string;
   query: string;
   retrieved_memories: RetrievedMemory[];
@@ -169,7 +262,9 @@ export type ChatResponse = {
   injectedCount: number;
 };
 
-const API_BASE_URL = (process.env.NEXT_PUBLIC_API_URL?.trim() || "http://localhost:8000").replace(/\/+$/, "");
+const API_BASE_URL = (
+  process.env.NEXT_PUBLIC_API_URL?.trim() || "http://localhost:8000"
+).replace(/\/+$/, "");
 const ACTIVE_API_KEY_STORAGE_KEY = "engram_api_key";
 export type GraphEntity = {
   id: string;
@@ -227,7 +322,9 @@ export function readClerkApiKey(clerkUserId: string): string {
   if (!storageAvailable()) {
     return "";
   }
-  return localStorage.getItem(`${CLERK_API_KEY_STORAGE_PREFIX}${clerkUserId}`) ?? "";
+  return (
+    localStorage.getItem(`${CLERK_API_KEY_STORAGE_PREFIX}${clerkUserId}`) ?? ""
+  );
 }
 
 export function setClerkApiKey(clerkUserId: string, apiKey: string): void {
@@ -249,7 +346,10 @@ export function subscribeActiveApiKey(listener: () => void): () => void {
     return () => undefined;
   }
   const storageListener = (event: StorageEvent) => {
-    if (event.key === ACTIVE_API_KEY_STORAGE_KEY || event.key?.startsWith(CLERK_API_KEY_STORAGE_PREFIX)) {
+    if (
+      event.key === ACTIVE_API_KEY_STORAGE_KEY ||
+      event.key?.startsWith(CLERK_API_KEY_STORAGE_PREFIX)
+    ) {
       listener();
     }
   };
@@ -283,21 +383,31 @@ const DEFAULT_TIMEOUT_MS = 30_000;
 const LONG_TIMEOUT_MS = 300_000;
 const LONG_PATHS = ["/graph/extract", "/memories/import"];
 
-async function request<T>(method: string, path: string, body?: unknown, extraHeaders?: Record<string, string>): Promise<T> {
+async function request<T>(
+  method: string,
+  path: string,
+  body?: unknown,
+  extraHeaders?: Record<string, string>,
+): Promise<T> {
   const controller = new AbortController();
-  const timeoutMs = LONG_PATHS.some((p) => path.startsWith(p)) ? LONG_TIMEOUT_MS : DEFAULT_TIMEOUT_MS;
-  const timeoutId = typeof window === "undefined" ? null : window.setTimeout(() => controller.abort(), timeoutMs);
+  const timeoutMs = LONG_PATHS.some((p) => path.startsWith(p))
+    ? LONG_TIMEOUT_MS
+    : DEFAULT_TIMEOUT_MS;
+  const timeoutId =
+    typeof window === "undefined"
+      ? null
+      : window.setTimeout(() => controller.abort(), timeoutMs);
   let response: Response;
   try {
     response = await fetch(`${API_BASE_URL}${path}`, {
-    method,
-    headers: {
-      "Content-Type": "application/json",
-      "X-Engram-Key": getApiKey(),
-      ...extraHeaders,
-    },
-    body: body === undefined ? undefined : JSON.stringify(body),
-    signal: controller.signal,
+      method,
+      headers: {
+        "Content-Type": "application/json",
+        "X-Engram-Key": getApiKey(),
+        ...extraHeaders,
+      },
+      body: body === undefined ? undefined : JSON.stringify(body),
+      signal: controller.signal,
     });
   } catch (error) {
     if (timeoutId !== null) window.clearTimeout(timeoutId);
@@ -316,7 +426,11 @@ async function request<T>(method: string, path: string, body?: unknown, extraHea
   return response.json() as Promise<T>;
 }
 
-async function requestInternal<T>(method: string, path: string, body?: unknown): Promise<T> {
+async function requestInternal<T>(
+  method: string,
+  path: string,
+  body?: unknown,
+): Promise<T> {
   const response = await fetch(path, {
     method,
     headers: {
@@ -339,6 +453,7 @@ async function requestChat(params: {
   model: string;
   messages: ChatMessage[];
   providerKey?: string;
+  namespace?: string;
 }): Promise<ChatResponse> {
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
@@ -355,16 +470,19 @@ async function requestChat(params: {
     body: JSON.stringify({
       model: params.model,
       messages: params.messages,
+      namespace: params.namespace ?? readActiveNamespace(),
     }),
   });
   if (!response.ok) {
     throw new Error(await getResponseError(response, "API error"));
   }
-  const payload = await response.json() as unknown;
+  const payload = (await response.json()) as unknown;
   return {
     content: extractChatResponseContent(payload),
     conversationId: response.headers.get("X-Engram-Conversation-ID") ?? "",
-    injectedCount: Number(response.headers.get("X-Engram-Memories-Injected") ?? 0),
+    injectedCount: Number(
+      response.headers.get("X-Engram-Memories-Injected") ?? 0,
+    ),
   };
 }
 
@@ -372,70 +490,254 @@ async function deleteAllMemories(): Promise<void> {
   await request<void>("DELETE", "/memories");
 }
 
+export function getApiBaseUrl(): string {
+  return API_BASE_URL;
+}
+
 export const api = {
+  health: () => request<{ status: string; version: string }>("GET", "/health"),
   chat: {
     send: requestChat,
   },
   memories: {
-    list: (params?: { limit?: number; offset?: number; search?: string; order?: string; direction?: string; status?: string; category?: string }) =>
-      request<MemoryListResponse>("GET", `/memories${toQuery(params)}`),
-    create: (content: string) => request<Memory>("POST", "/memories", { content }),
-    update: (id: string, payload: MemoryUpdatePayload) => request<Memory>("PATCH", `/memories/${id}`, payload),
-    delete: (id: string) => request<void>("DELETE", `/memories/${id}`),
+    list: (params?: {
+      limit?: number;
+      offset?: number;
+      search?: string;
+      order?: string;
+      direction?: string;
+      status?: string;
+      category?: string;
+      namespace?: string;
+    }) =>
+      request<MemoryListResponse>(
+        "GET",
+        `/memories${toQuery({ namespace: readActiveNamespace(), ...params })}`,
+      ),
+    create: (
+      content: string,
+      namespace = readActiveNamespace(),
+      expiresAt: string | null = null,
+    ) =>
+      request<Memory>("POST", "/memories", {
+        content,
+        namespace,
+        expires_at: expiresAt,
+      }),
+    update: (id: string, payload: MemoryUpdatePayload) =>
+      request<Memory>(
+        "PATCH",
+        `/memories/${id}${toQuery({ namespace: readActiveNamespace() })}`,
+        payload,
+      ),
+    delete: (id: string) =>
+      request<void>(
+        "DELETE",
+        `/memories/${id}${toQuery({ namespace: readActiveNamespace() })}`,
+      ),
     deleteAll: deleteAllMemories,
-    review: (params?: { limit?: number; offset?: number }) => request<MemoryListResponse>("GET", `/memories/review${toQuery(params)}`),
-    exportAll: () => request<{ memories: Memory[] }>("GET", "/memories/export"),
-    importMany: (memories: Array<{ content: string; category?: string; pinned?: boolean }>) =>
-      request<{ imported: number }>("POST", "/memories/import", { memories }),
-    source: (id: string) => request<MemorySourceResponse>("GET", `/memories/${id}/source`),
-    mergeSuggestions: (limit = 5) => request<{ suggestions: MemoryMergeSuggestion[] }>("GET", `/memories/merge-suggestions${toQuery({ limit })}`),
-    merge: (payload: { primary_id: string; duplicate_id: string; content?: string }) => request<Memory>("POST", "/memories/merge", payload),
+    review: (params?: {
+      limit?: number;
+      offset?: number;
+      namespace?: string;
+    }) =>
+      request<MemoryListResponse>(
+        "GET",
+        `/memories/review${toQuery({ namespace: readActiveNamespace(), ...params })}`,
+      ),
+    exportAll: () =>
+      request<{ memories: Memory[] }>(
+        "GET",
+        `/memories/export${toQuery({ namespace: readActiveNamespace() })}`,
+      ),
+    importMany: (
+      memories: Array<{ content: string; category?: string; pinned?: boolean }>,
+    ) =>
+      request<{ imported: number }>("POST", "/memories/import", {
+        memories: memories.map((memory) => ({
+          ...memory,
+          namespace: readActiveNamespace(),
+        })),
+      }),
+    source: (id: string) =>
+      request<MemorySourceResponse>(
+        "GET",
+        `/memories/${id}/source${toQuery({ namespace: readActiveNamespace() })}`,
+      ),
+    mergeSuggestions: (limit = 5) =>
+      request<{ suggestions: MemoryMergeSuggestion[] }>(
+        "GET",
+        `/memories/merge-suggestions${toQuery({ limit, namespace: readActiveNamespace() })}`,
+      ),
+    merge: (payload: {
+      primary_id: string;
+      duplicate_id: string;
+      content?: string;
+    }) => request<Memory>("POST", "/memories/merge", payload),
     decay: () => request<{ updated: number }>("POST", "/memories/decay"),
-    timeline: (limit = 12) => request<{ items: MemoryTimelineItem[] }>("GET", `/memories/timeline${toQuery({ limit })}`),
-    search: (query: string, limit = 5, threshold = 0.5) =>
-      request<SearchResponse>("POST", "/memories/search", { query, limit, threshold }),
+    timeline: (limit = 12) =>
+      request<{ items: MemoryTimelineItem[] }>(
+        "GET",
+        `/memories/timeline${toQuery({ limit, namespace: readActiveNamespace() })}`,
+      ),
+    namespaces: () =>
+      request<{ namespaces: Array<{ name: string; count: number }> }>(
+        "GET",
+        "/memories/namespaces",
+      ),
+    bulkReview: (memoryIds: string[], status: "approved" | "rejected") =>
+      request<{ updated: number }>("POST", "/memories/review/bulk", {
+        memory_ids: memoryIds,
+        status,
+        namespace: readActiveNamespace(),
+      }),
+    revisions: () =>
+      request<{ revisions: MemoryRevision[] }>(
+        "GET",
+        `/memories/revisions${toQuery({ namespace: readActiveNamespace(), status: "pending" })}`,
+      ),
+    resolveRevision: (id: string, action: "accept" | "reject") =>
+      request<MemoryRevision>("POST", `/memories/revisions/${id}/${action}`),
+    history: (id: string) =>
+      request<{ versions: MemoryVersion[] }>(
+        "GET",
+        `/memories/${id}/history${toQuery({ namespace: readActiveNamespace() })}`,
+      ),
+    restore: (id: string, versionId: string) =>
+      request<Memory>(
+        "POST",
+        `/memories/${id}/restore${toQuery({ namespace: readActiveNamespace() })}`,
+        { version_id: versionId },
+      ),
+    feedback: (id: string, relevant: boolean, query?: string) =>
+      request<{ saved: boolean }>(
+        "POST",
+        `/memories/${id}/feedback${toQuery({ namespace: readActiveNamespace() })}`,
+        { relevant, query },
+      ),
+    search: (
+      query: string,
+      limit = 5,
+      threshold = 0.5,
+      namespace = readActiveNamespace(),
+      includePersonal = false,
+    ) =>
+      request<SearchResponse>("POST", "/memories/search", {
+        query,
+        limit,
+        threshold,
+        namespace,
+        include_personal: includePersonal,
+      }),
   },
   logs: {
-    list: (params?: { limit?: number; offset?: number; conversation_id?: string }) =>
-      request<LogListResponse>("GET", `/logs${toQuery(params)}`),
-    clients: () => request<{ clients: ClientRegistryItem[] }>("GET", "/logs/clients"),
+    list: (params?: {
+      limit?: number;
+      offset?: number;
+      conversation_id?: string;
+      namespace?: string;
+    }) =>
+      request<LogListResponse>(
+        "GET",
+        `/logs${toQuery({ namespace: readActiveNamespace(), ...params })}`,
+      ),
+    clients: () =>
+      request<{ clients: ClientRegistryItem[] }>(
+        "GET",
+        `/logs/clients${toQuery({ namespace: readActiveNamespace() })}`,
+      ),
+  },
+  connections: {
+    status: () =>
+      request<ConnectionStatus>(
+        "GET",
+        `/connections/status${toQuery({ namespace: readActiveNamespace() })}`,
+      ),
+    retry: (id: string) =>
+      request<{ queued: boolean }>("POST", `/connections/jobs/${id}/retry`),
+    clearCaptures: (days: number) =>
+      request<{ deleted: number }>(
+        "DELETE",
+        `/connections/captures${toQuery({ older_than_days: days })}`,
+      ),
+  },
+  oauth: {
+    consent: (clientId: string, redirectUri: string) =>
+      request<{
+        client_name: string;
+        redirect_uri: string;
+        scopes_supported: string[];
+      }>(
+        "GET",
+        `/oauth/consent${toQuery({ client_id: clientId, redirect_uri: redirectUri })}`,
+      ),
+    authorize: (payload: OAuthAuthorization) =>
+      request<{ redirect_url: string }>("POST", "/oauth/authorize", payload),
+    list: () =>
+      request<{ connections: OAuthConnection[] }>("GET", "/oauth/connections"),
+    revoke: (id: string) => request<void>("DELETE", `/oauth/connections/${id}`),
   },
   graph: {
-    listEntities: () => request<{ entities: GraphEntity[] }>("GET", "/graph/entities"),
+    listEntities: () =>
+      request<{ entities: GraphEntity[] }>("GET", "/graph/entities"),
     listEdges: () => request<{ edges: GraphEdge[] }>("GET", "/graph/edges"),
     entityMemories: (entityType: string, entityName: string) =>
-      request<{ entity_name: string; entity_type: string; memories: GraphMemoryItem[] }>(
+      request<{
+        entity_name: string;
+        entity_type: string;
+        memories: GraphMemoryItem[];
+      }>(
         "GET",
         `/graph/entities/${encodeURIComponent(entityType)}/${encodeURIComponent(entityName)}/memories`,
       ),
     neighbors: (memoryId: string) =>
-      request<{ memory_id: string; neighbors: GraphMemoryItem[]; entities: GraphEntity[] }>(
-        "GET",
-        `/graph/memories/${memoryId}/neighbors`,
+      request<{
+        memory_id: string;
+        neighbors: GraphMemoryItem[];
+        entities: GraphEntity[];
+      }>("GET", `/graph/memories/${memoryId}/neighbors`),
+    extract: () =>
+      request<{ processed: number; entities_created: number }>(
+        "POST",
+        "/graph/extract",
       ),
-    extract: () => request<{ processed: number; entities_created: number }>("POST", "/graph/extract"),
   },
   users: {
-    create: (externalId: string) => requestInternal<UserCreateResponse>("POST", "/api/engram/users", { external_id: externalId }),
-    ensureClerkKey: () => requestInternal<ClerkEngramKeyResponse>("POST", "/api/engram/user-key"),
+    create: (externalId: string) =>
+      requestInternal<UserCreateResponse>("POST", "/api/engram/users", {
+        external_id: externalId,
+      }),
+    ensureClerkKey: () =>
+      requestInternal<ClerkEngramKeyResponse>("POST", "/api/engram/user-key"),
     me: () => request<User>("GET", "/users/me"),
-    update: (externalId: string) => request<User>("PATCH", "/users/me", { external_id: externalId }),
+    update: (externalId: string) =>
+      request<User>("PATCH", "/users/me", { external_id: externalId }),
     config: () => request<UserConfig>("GET", "/users/me/config"),
-    updateConfig: (payload: UserConfigUpdate) => request<UserConfig>("PATCH", "/users/me/config", payload),
+    updateConfig: (payload: UserConfigUpdate) =>
+      request<UserConfig>("PATCH", "/users/me/config", payload),
     provider: () => request<UserProviderConfig>("GET", "/users/me/provider"),
-    updateProvider: (payload: UserProviderConfigUpdate) => request<UserProviderConfig>("PATCH", "/users/me/provider", payload),
-    regenerateKey: () => request<UserCreateResponse>("POST", "/users/me/api-key"),
+    updateProvider: (payload: UserProviderConfigUpdate) =>
+      request<UserProviderConfig>("PATCH", "/users/me/provider", payload),
+    regenerateKey: () =>
+      request<UserCreateResponse>("POST", "/users/me/api-key"),
     deleteMe: () => request<void>("DELETE", "/users/me"),
   },
   keys: {
     list: () => request<ApiKeyRecord[]>("GET", "/users/me/api-keys"),
-    create: (name: string) => request<ApiKeyCreateResponse>("POST", "/users/me/api-keys", { name }),
+    create: (name: string) =>
+      request<ApiKeyCreateResponse>("POST", "/users/me/api-keys", { name }),
     revoke: (id: string) => request<void>("DELETE", `/users/me/api-keys/${id}`),
   },
   billing: {
     usage: () => request<WorkspaceUsage>("GET", "/billing/usage"),
-    checkout: (orgId: string) => requestInternal<{ url: string }>("POST", "/api/billing/checkout", { orgId }),
-    portal: (orgId: string) => requestInternal<{ url: string }>("POST", "/api/billing/portal", { orgId }),
+    checkout: (orgId: string) =>
+      requestInternal<{ url: string }>("POST", "/api/billing/checkout", {
+        orgId,
+      }),
+    portal: (orgId: string) =>
+      requestInternal<{ url: string }>("POST", "/api/billing/portal", {
+        orgId,
+      }),
   },
   orgs: {
     list: () => request<Workspace[]>("GET", "/orgs"),
@@ -446,7 +748,10 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
 
-async function getResponseError(response: Response, prefix: string): Promise<string> {
+async function getResponseError(
+  response: Response,
+  prefix: string,
+): Promise<string> {
   const body = await response.text();
   if (!body) {
     return `${prefix}: ${response.status}`;

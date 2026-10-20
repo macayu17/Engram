@@ -1,7 +1,7 @@
 {
   "name": "engramd",
   "version": "1.1.0",
-  "description": "MCP server for Engram — self-hostable AI memory layer. Search, add, update, and capture memories from any MCP client.",
+  "description": "MCP server for Engram \u00e2\u20ac\u201d self-hostable AI memory layer. Search, add, update, and capture memories from any MCP client.",
   "type": "module",
   "main": "dist/index.js",
   "bin": {
@@ -33,7 +33,9 @@
     "prepublishOnly": "npm run build",
     "start": "node dist/index.js",
     "dev": "tsx src/index.ts",
-    "verify:defaults": "npm run build && node ../scripts/verify_mcp_tool_defaults.mjs"
+    "verify:defaults": "npm run build && node ../scripts/verify_mcp_tool_defaults.mjs",
+    "verify:auth": "npm run build && node ../scripts/verify_mcp_http_auth.mjs",
+    "verify:plugins": "node ../scripts/verify_plugin_packages.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.0",

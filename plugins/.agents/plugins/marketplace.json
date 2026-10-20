@@ -1,0 +1,20 @@
+{
+  "name": "engram-local",
+  "interface": {
+    "displayName": "Engram local plugins"
+  },
+  "plugins": [
+    {
+      "name": "engram",
+      "source": {
+        "source": "local",
+        "path": "./codex"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    }
+  ]
+}

@@ -1,0 +1,14 @@
+{
+  "name": "engram-local",
+  "owner": {
+    "name": "Engram contributors"
+  },
+  "plugins": [
+    {
+      "name": "engram",
+      "source": "./claude",
+      "description": "Recall project memories and deliberately capture exchanges for review."
+    }
+  ],
+  "description": "Local Engram recall and deliberate capture workflows"
+}

@@ -1,3 +1,4 @@
+from contextlib import asynccontextmanager
 from uuid import uuid4
 
 import pytest
@@ -13,7 +14,7 @@ from api.services.users import get_user_provider_config, regenerate_user_key, up
 async def test_proxy_uses_user_retrieval_config(monkeypatch) -> None:
     captured: dict[str, object] = {}
 
-    async def fake_retrieve_memories(user_id, org_id, query, db, limit=None, threshold=None, namespace="default"):
+    async def fake_retrieve_memories(user_id, org_id, query, db, limit=None, threshold=None, namespace="default", include_personal=False):
         captured["user_id"] = user_id
         captured["org_id"] = org_id
         captured["query"] = query
@@ -22,7 +23,7 @@ async def test_proxy_uses_user_retrieval_config(monkeypatch) -> None:
         captured["namespace"] = namespace
         return []
 
-    async def fake_log_retrieval(user_id, org_id, conversation_id, query, memories, db):
+    async def fake_log_retrieval(user_id, org_id, conversation_id, query, memories, db, **kwargs):
         captured["logged"] = True
 
     def fake_resolve_user_provider(user, override_provider=None, override_key=None):
@@ -38,6 +39,10 @@ async def test_proxy_uses_user_retrieval_config(monkeypatch) -> None:
     class FakeDb:
         def __init__(self) -> None:
             self.query = ""
+
+        @asynccontextmanager
+        async def transaction(self):
+            yield
 
         async def fetchrow(self, query, *args):
             self.query = query

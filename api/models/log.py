@@ -15,6 +15,9 @@ class RetrievalLogResponse(BaseModel):
     retrieved_memories: list[RetrievedMemoryLog]
     conversation_id: UUID4 | None
     created_at: datetime
+    namespace: str = "default"
+    injected_count: int = 0
+    retrieval_mode: str = "vector"
 
 
 class RetrievalLogListResponse(BaseModel):

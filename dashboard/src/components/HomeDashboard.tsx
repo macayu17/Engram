@@ -38,6 +38,11 @@ export function HomeDashboard() {
     queryFn: () => api.memories.timeline(8),
     enabled: connected,
   });
+  const conflicts = useQuery({
+    queryKey: ["memories", "conflicts", "count", apiKey, namespace],
+    queryFn: () => api.memories.conflicts({ limit: 1 }),
+    enabled: connected,
+  });
   const failedJobs =
     status.data?.jobs.filter((job) => job.extraction_status === "failed")
       .length ?? 0;
@@ -71,7 +76,14 @@ export function HomeDashboard() {
           </Link>
         </div>
       )}
-      {[approved.error, pending.error, logs.error, status.error, timeline.error]
+      {[
+        approved.error,
+        pending.error,
+        logs.error,
+        status.error,
+        timeline.error,
+        conflicts.error,
+      ]
         .filter(Boolean)
         .map((error, index) => (
           <p key={index} role="alert" className="text-sm text-fault">
@@ -80,6 +92,12 @@ export function HomeDashboard() {
         ))}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {[
+          {
+            label: "Open conflicts",
+            value: conflicts.data?.total,
+            loading: conflicts.isLoading,
+            href: "/memories",
+          },
           {
             label: "Approved memories",
             value: approved.data?.total,

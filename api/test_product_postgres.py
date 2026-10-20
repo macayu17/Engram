@@ -117,6 +117,10 @@ async def test_postgres_oauth_cannot_read_or_write_other_projects(product_databa
     namespace = authenticated["oauth_namespace"]
     own_memory = await seed_memory(db, user["id"], user["org_id"], namespace, "Own project")
     other_memory = await seed_memory(db, user["id"], user["org_id"], "other-project", "Other project")
+    conflict_id = await db.fetchval(
+        "INSERT INTO memory_conflicts(user_id,org_id,existing_memory_id,proposed_memory_id) VALUES($1,$2,$3,$4) RETURNING id",
+        user["id"], user["org_id"], own_memory, other_memory,
+    )
     personal_memory = await seed_memory(db, user["id"], user["org_id"], "personal", "Private personal fact")
     await retrieval.log_retrieval(user["id"], user["org_id"], str(uuid4()), "fact", [
         {"id": own_memory, "content": "Own project", "score": 0.9, "namespace": namespace},
@@ -136,6 +140,10 @@ async def test_postgres_oauth_cannot_read_or_write_other_projects(product_databa
         assert (await client.get("/memories?namespace=other-project")).status_code == 403
         assert (await client.patch(f"/memories/{own_memory}", json={"namespace": "other-project"})).status_code == 403
         assert (await client.get("/users/me/api-keys")).status_code == 403
+        conflicts = await client.get("/memories/conflicts")
+        assert conflicts.status_code == 200
+        assert conflicts.json()["total"] == 0
+        assert (await client.post(f"/memories/conflicts/{conflict_id}/resolve", json={"resolution": "accept_new"})).status_code == 404
         assert (await client.post("/memories/search", json={"query": "fact", "include_personal": True})).status_code == 403
         response = await client.get("/logs")
         assert response.status_code == 200

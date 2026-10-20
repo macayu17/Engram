@@ -15,6 +15,7 @@ import { ChangeEvent, FormEvent, ReactNode, useState } from "react";
 
 import {
   api,
+  type MemoryConflictResolution,
   type MemorySourceResponse,
   type MemoryUpdatePayload,
   type SearchResponse,
@@ -26,6 +27,7 @@ import { RevisionInbox } from "./RevisionInbox";
 import { ProductDialog } from "./ProductDialog";
 
 import { MemoryCard } from "./MemoryCard";
+import { MemoryConflictReview } from "./MemoryConflictReview";
 import { MemoryTable } from "./MemoryTable";
 import { ProductPageHeader } from "./ProductPageHeader";
 import { SearchBar } from "./SearchBar";
@@ -60,6 +62,17 @@ export function MemoryWorkspace() {
     queryKey: ["memories", "review", apiKey, namespace],
     enabled: Boolean(apiKey),
     queryFn: () => api.memories.review({ limit: 8, offset: 0 }),
+  });
+  const conflictQuery = useQuery({
+    queryKey: ["memories", "conflicts", apiKey, namespace],
+    enabled: Boolean(apiKey),
+    queryFn: () => api.memories.conflicts({ limit: 8, offset: 0 }),
+  });
+  const conflictHistoryQuery = useQuery({
+    queryKey: ["memories", "conflicts", "resolved", apiKey, namespace],
+    enabled: Boolean(apiKey),
+    queryFn: () =>
+      api.memories.conflicts({ limit: 5, offset: 0, status: "resolved" }),
   });
   const clientsQuery = useQuery({
     queryKey: ["logs", "clients", apiKey, namespace],
@@ -131,9 +144,20 @@ export function MemoryWorkspace() {
     ) => api.memories.importMany(items),
     onSuccess: () => void invalidateMemoryViews(),
   });
+  const resolveConflictMutation = useMutation({
+    mutationFn: ({
+      id,
+      resolution,
+    }: {
+      id: string;
+      resolution: MemoryConflictResolution;
+    }) => api.memories.resolveConflict(id, resolution),
+    onSuccess: () => void invalidateMemoryViews(),
+  });
 
   function invalidateMemoryViews() {
     void queryClient.invalidateQueries({ queryKey: ["memories"] });
+    void queryClient.invalidateQueries({ queryKey: ["memories", "conflicts"] });
     void queryClient.invalidateQueries({ queryKey: ["dashboard"] });
     void queryClient.invalidateQueries({ queryKey: ["connections"] });
     void queryClient.invalidateQueries({
@@ -213,6 +237,15 @@ export function MemoryWorkspace() {
   }
 
   const memories = memoriesQuery.data?.memories ?? [];
+  const conflicts = conflictQuery.data?.conflicts ?? [];
+  const resolvedConflicts = conflictHistoryQuery.data?.conflicts ?? [];
+  const conflictProposalIds = new Set(
+    conflicts.map((conflict) => conflict.proposed_memory.id),
+  );
+  const pendingMemories = (reviewQuery.data?.memories ?? []).filter(
+    (memory) => !conflictProposalIds.has(memory.id),
+  );
+  const pendingReviewTotal = reviewQuery.data?.total ?? 0;
   const total = memoriesQuery.data?.total ?? 0;
   const hasNextPage = (page + 1) * PAGE_SIZE < total;
   const isBusy =
@@ -306,13 +339,81 @@ export function MemoryWorkspace() {
         <SearchBar onResults={setSearchResults} />
       </div>
 
+      {(conflictQuery.isLoading ||
+        conflicts.length > 0 ||
+        conflictQuery.isError ||
+        resolveConflictMutation.isError) && (
+        <section className="border-y border-line">
+          <div className="flex flex-col gap-2 border-b border-line py-5 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <p className="font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-muted">
+                Review queue
+              </p>
+              <h2 className="mt-2 font-serif text-3xl font-semibold text-ink">
+                Resolve conflicting memories
+              </h2>
+            </div>
+            <span className="font-sans text-[11px] uppercase tracking-[0.12em] text-muted">
+              {conflictQuery.data?.total ?? 0} open
+            </span>
+          </div>
+          {conflictQuery.isLoading && (
+            <p className="py-6 font-serif text-base text-muted">
+              Loading conflicts...
+            </p>
+          )}
+          {conflictQuery.isError && (
+            <p className="py-6 font-serif text-base text-fault">
+              Could not load memory conflicts.
+            </p>
+          )}
+          {resolveConflictMutation.isError && (
+            <p className="py-4 font-serif text-base text-fault">
+              The conflict could not be resolved. Refresh and try again.
+            </p>
+          )}
+          {conflicts.map((conflict) => (
+            <MemoryConflictReview
+              key={conflict.id}
+              conflict={conflict}
+              disabled={resolveConflictMutation.isPending}
+              onResolve={(id, resolution) =>
+                resolveConflictMutation.mutate({ id, resolution })
+              }
+            />
+          ))}
+          {resolvedConflicts.length > 0 && (
+            <div className="border-t border-line py-5">
+              <p className="font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-muted">
+                Recently resolved
+              </p>
+              <div className="mt-3 space-y-3">
+                {resolvedConflicts.map((conflict) => (
+                  <div
+                    key={conflict.id}
+                    className="flex flex-col gap-1 border-l-2 border-signal/50 pl-3 sm:flex-row sm:items-baseline sm:justify-between sm:gap-4"
+                  >
+                    <p className="line-clamp-2 font-serif text-base leading-6 text-ink">
+                      {conflict.proposed_memory.content}
+                    </p>
+                    <p className="shrink-0 font-sans text-[10px] uppercase tracking-[0.12em] text-muted">
+                      {conflict.resolution?.replace("_", " ")}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </section>
+      )}
+
       <div className="grid gap-5 lg:grid-cols-4">
         <LedgerPanel
           icon={<ShieldCheck size={16} aria-hidden="true" />}
           title="Review Queue"
-          value={`${reviewQuery.data?.total ?? 0} pending`}
+          value={`${pendingReviewTotal} pending`}
         >
-          {(reviewQuery.data?.memories ?? []).slice(0, 3).map((memory) => (
+          {pendingMemories.slice(0, 3).map((memory) => (
             <PanelRow
               key={memory.id}
               text={memory.content}

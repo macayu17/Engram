@@ -78,3 +78,8 @@ Dashboard worker owns dashboard product components/pages/lib and scripts only; a
 ## External checks still required
 
 No production deployment, public HTTPS OAuth callback, real Claude/Codex host installation, marketplace acceptance, Clerk account flow or Stripe payment flow was exercised. No commit, push, package publication or directory submission was performed. The marketing website changes already present in the workspace remain outside this product pass.
+
+
+## GitHub integration
+
+Before the authorized push, origin/main had 13 newer commits for memory conflicts and overview refinement. The merge preserves conflict detection/resolution/history and the project-scoped product interface. Revision proposals now use memory_revision_proposals so the existing memory_revisions history table remains intact. Conflict API reads and resolutions enforce OAuth project scope. The merged head passed 226 backend tests against isolated pgvector, Python compilation, dashboard typecheck/production build/logic/conflict/Clerk/billing checks, and MCP auth/default/plugin checks. The browser workflow was verified before this merge; it was not repeated after integration.

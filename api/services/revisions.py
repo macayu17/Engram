@@ -23,9 +23,9 @@ async def propose_revision(
         return None
     row = await db.fetchrow(
         """
-        INSERT INTO memory_revisions(memory_id,user_id,org_id,namespace,original_content,proposed_content,source_conversation_id)
+        INSERT INTO memory_revision_proposals(memory_id,user_id,org_id,namespace,original_content,proposed_content,source_conversation_id)
         SELECT $1,$2,$3,$4,$5,$6,$7
-        WHERE NOT EXISTS (SELECT 1 FROM memory_revisions WHERE memory_id=$1 AND user_id=$2 AND org_id=$3 AND proposed_content=$6 AND status='pending')
+        WHERE NOT EXISTS (SELECT 1 FROM memory_revision_proposals WHERE memory_id=$1 AND user_id=$2 AND org_id=$3 AND proposed_content=$6 AND status='pending')
         RETURNING *
         """,
         memory_id, user_id, org_id, namespace, current["content"], content, conversation_id,
@@ -39,7 +39,7 @@ async def list_revisions(
 ) -> list[dict[str, object]]:
     rows = await db.fetch(
         """
-        SELECT revision.* FROM memory_revisions revision JOIN memories memory ON memory.id=revision.memory_id
+        SELECT revision.* FROM memory_revision_proposals revision JOIN memories memory ON memory.id=revision.memory_id
         WHERE revision.user_id=$1 AND revision.org_id=$2 AND revision.status=$3
           AND ($4::text IS NULL OR (revision.namespace=$4 AND memory.namespace=$4))
         ORDER BY revision.created_at DESC LIMIT 100
@@ -54,7 +54,7 @@ async def decide_revision(
 ) -> dict[str, object]:
     async with db.transaction():
         revision = await db.fetchrow(
-            "SELECT * FROM memory_revisions WHERE user_id=$1 AND org_id=$2 AND id=$3 AND ($4::text IS NULL OR namespace=$4) FOR UPDATE",
+            "SELECT * FROM memory_revision_proposals WHERE user_id=$1 AND org_id=$2 AND id=$3 AND ($4::text IS NULL OR namespace=$4) FOR UPDATE",
             user_id, org_id, revision_id, namespace,
         )
         if revision is None:
@@ -78,7 +78,7 @@ async def decide_revision(
                 revision["source_conversation_id"], user_id, org_id, revision["memory_id"],
             )
         row = await db.fetchrow(
-            "UPDATE memory_revisions SET status=$1 WHERE user_id=$2 AND org_id=$3 AND id=$4 RETURNING *",
+            "UPDATE memory_revision_proposals SET status=$1 WHERE user_id=$2 AND org_id=$3 AND id=$4 RETURNING *",
             "accepted" if accept else "rejected", user_id, org_id, revision_id,
         )
         return dict(row)

@@ -12,12 +12,166 @@ from api.services.retrieval import build_retrieval_texts, retrieve_memories
 MemoryOrder = Literal["created_at", "last_accessed", "access_count"]
 SortDirection = Literal["asc", "desc"]
 MemoryStatus = Literal["pending", "approved", "rejected"]
+MemoryConflictResolution = Literal["accept_new", "keep_old", "keep_both"]
 
 
 MEMORY_COLUMNS = (
     "id, content, confidence, access_count, last_accessed, created_at, source_conversation_id, "
     "status, category, pinned, source, last_confirmed, namespace, expires_at"
 )
+
+
+async def list_memory_conflicts(
+    user_id: object,
+    org_id: object,
+    db: asyncpg.Connection,
+    limit: int,
+    offset: int,
+    status: Literal["open", "resolved", "all"] = "open",
+    namespace: str | None = None,
+) -> tuple[list[dict[str, object]], int]:
+    status_clause = "" if status == "all" else "AND status = $3"
+    query_args: tuple[object, ...] = (user_id, org_id) if status == "all" else (user_id, org_id, status)
+    if namespace is not None:
+        query_args += (namespace,)
+        status_clause += f" AND EXISTS (SELECT 1 FROM memories current JOIN memories proposed ON proposed.id=memory_conflicts.proposed_memory_id WHERE current.id=memory_conflicts.existing_memory_id AND current.namespace=${len(query_args)} AND proposed.namespace=${len(query_args)})"
+
+    rows = await db.fetch(
+        f"""
+        SELECT id, existing_memory_id, proposed_memory_id, status, resolution, created_at, resolved_at
+        FROM memory_conflicts
+        WHERE user_id = $1
+          AND org_id = $2
+          {status_clause}
+        ORDER BY created_at DESC
+        LIMIT ${len(query_args) + 1}
+        OFFSET ${len(query_args) + 2}
+        """,
+        *query_args,
+        limit,
+        offset,
+    )
+    conflicts: list[dict[str, object]] = []
+    for row in rows:
+        conflict = dict(row)
+        existing_memory = await get_memory(user_id, org_id, conflict["existing_memory_id"], db, namespace=namespace)
+        proposed_memory = await get_memory(user_id, org_id, conflict["proposed_memory_id"], db, namespace=namespace)
+        if existing_memory is None or proposed_memory is None:
+            continue
+        conflicts.append(
+            {
+                "id": conflict["id"],
+                "status": conflict["status"],
+                "resolution": conflict["resolution"],
+                "created_at": conflict["created_at"],
+                "resolved_at": conflict["resolved_at"],
+                "existing_memory": existing_memory,
+                "proposed_memory": proposed_memory,
+            }
+        )
+    total = await db.fetchval(
+        f"""
+        SELECT COUNT(*)
+        FROM memory_conflicts
+        WHERE user_id = $1
+          AND org_id = $2
+          {status_clause}
+        """,
+        *query_args,
+    )
+    return conflicts, int(total)
+
+
+async def resolve_memory_conflict(
+    user_id: object,
+    org_id: object,
+    conflict_id: object,
+    resolution: MemoryConflictResolution,
+    db: asyncpg.Connection,
+    namespace: str | None = None,
+) -> dict[str, object] | None:
+    conflict_row = await db.fetchrow(
+        """
+        SELECT id, existing_memory_id, proposed_memory_id, status, resolution, created_at, resolved_at
+        FROM memory_conflicts
+        WHERE user_id = $1
+          AND org_id = $2
+          AND id = $3
+          AND status = 'open'
+        FOR UPDATE
+        """,
+        user_id,
+        org_id,
+        conflict_id,
+    )
+    if conflict_row is None:
+        return None
+    conflict = dict(conflict_row)
+    if namespace is not None:
+        for memory_id in (conflict["existing_memory_id"], conflict["proposed_memory_id"]):
+            memory = await lock_memory(user_id, org_id, memory_id, db)
+            if memory is None or memory["namespace"] != namespace:
+                return None
+
+    status_by_resolution: dict[MemoryConflictResolution, tuple[MemoryStatus, MemoryStatus]] = {
+        "accept_new": ("rejected", "approved"),
+        "keep_old": ("approved", "rejected"),
+        "keep_both": ("approved", "approved"),
+    }
+    existing_status, proposed_status = status_by_resolution[resolution]
+    existing_memory_id = conflict["existing_memory_id"]
+    proposed_memory_id = conflict["proposed_memory_id"]
+    updated = await db.execute(
+        """
+        UPDATE memories
+        SET status = CASE WHEN id = $1 THEN $2 ELSE $3 END,
+            last_confirmed = CASE WHEN (CASE WHEN id = $1 THEN $2 ELSE $3 END) = 'approved' THEN now() ELSE last_confirmed END
+        WHERE user_id = $4
+          AND org_id = $5
+          AND id = ANY($6::uuid[])
+        """,
+        existing_memory_id,
+        existing_status,
+        proposed_status,
+        user_id,
+        org_id,
+        [existing_memory_id, proposed_memory_id],
+    )
+    if updated != "UPDATE 2":
+        raise RuntimeError("Conflict memories are unavailable")
+    resolved_row = await db.fetchrow(
+        """
+        UPDATE memory_conflicts
+        SET status = 'resolved',
+            resolution = $4,
+            resolved_at = now()
+        WHERE user_id = $1
+          AND org_id = $2
+          AND id = $3
+          AND status = 'open'
+        RETURNING id, existing_memory_id, proposed_memory_id, status, resolution, created_at, resolved_at
+        """,
+        user_id,
+        org_id,
+        conflict_id,
+        resolution,
+    )
+    if resolved_row is None:
+        return None
+    existing_memory = await get_memory(user_id, org_id, existing_memory_id, db)
+    proposed_memory = await get_memory(user_id, org_id, proposed_memory_id, db)
+    if existing_memory is None or proposed_memory is None:
+        raise RuntimeError("Conflict memories are unavailable")
+    resolved = dict(resolved_row)
+    return {
+        "id": resolved["id"],
+        "status": resolved["status"],
+        "resolution": resolved["resolution"],
+        "created_at": resolved["created_at"],
+        "resolved_at": resolved["resolved_at"],
+        "existing_memory": existing_memory,
+        "proposed_memory": proposed_memory,
+    }
 
 
 async def create_memory(

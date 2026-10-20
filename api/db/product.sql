@@ -15,7 +15,7 @@ CREATE INDEX IF NOT EXISTS conversations_pending_jobs_idx ON conversations(next_
     WHERE recoverable AND extraction_status IN ('pending', 'running', 'failed');
 CREATE INDEX IF NOT EXISTS memories_scope_expiry_idx ON memories(org_id, user_id, namespace, expires_at);
 
-CREATE TABLE IF NOT EXISTS memory_revisions (
+CREATE TABLE IF NOT EXISTS memory_revision_proposals (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     memory_id UUID NOT NULL REFERENCES memories(id) ON DELETE CASCADE,
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -27,7 +27,7 @@ CREATE TABLE IF NOT EXISTS memory_revisions (
     status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'accepted', 'rejected')),
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
-CREATE INDEX IF NOT EXISTS memory_revisions_scope_status_idx ON memory_revisions(org_id, user_id, namespace, status, created_at DESC);
+CREATE INDEX IF NOT EXISTS memory_revision_proposals_scope_status_idx ON memory_revision_proposals(org_id, user_id, namespace, status, created_at DESC);
 
 CREATE TABLE IF NOT EXISTS memory_versions (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -100,7 +100,7 @@ DECLARE
     target_table TEXT;
     target_role TEXT;
 BEGIN
-    FOREACH target_table IN ARRAY ARRAY['memory_revisions', 'memory_versions', 'memory_feedback'] LOOP
+    FOREACH target_table IN ARRAY ARRAY['memory_revision_proposals', 'memory_versions', 'memory_feedback'] LOOP
         EXECUTE format('ALTER TABLE public.%I ENABLE ROW LEVEL SECURITY', target_table);
         EXECUTE format('DROP POLICY IF EXISTS engram_server_access ON public.%I', target_table);
         EXECUTE format('CREATE POLICY engram_server_access ON public.%I FOR ALL TO %I USING (true) WITH CHECK (true)', target_table, current_user);

@@ -119,6 +119,26 @@ export type MemoryListResponse = {
   offset: number;
 };
 
+export type MemoryConflictResolution = "accept_new" | "keep_old" | "keep_both";
+export type MemoryConflictStatus = "open" | "resolved" | "all";
+
+export type MemoryConflict = {
+  id: string;
+  status: "open" | "resolved";
+  resolution: MemoryConflictResolution | null;
+  created_at: string;
+  resolved_at: string | null;
+  existing_memory: Memory;
+  proposed_memory: Memory;
+};
+
+export type MemoryConflictListResponse = {
+  conflicts: MemoryConflict[];
+  total: number;
+  limit: number;
+  offset: number;
+};
+
 export type SearchResponse = {
   results: Array<{ memory: Memory; score: number }>;
 };
@@ -544,6 +564,21 @@ export const api = {
       request<MemoryListResponse>(
         "GET",
         `/memories/review${toQuery({ namespace: readActiveNamespace(), ...params })}`,
+      ),
+    conflicts: (params?: {
+      limit?: number;
+      offset?: number;
+      status?: MemoryConflictStatus;
+    }) =>
+      request<MemoryConflictListResponse>(
+        "GET",
+        `/memories/conflicts${toQuery({ namespace: readActiveNamespace(), ...params })}`,
+      ),
+    resolveConflict: (id: string, resolution: MemoryConflictResolution) =>
+      request<MemoryConflict>(
+        "POST",
+        `/memories/conflicts/${id}/resolve${toQuery({ namespace: readActiveNamespace() })}`,
+        { resolution },
       ),
     exportAll: () =>
       request<{ memories: Memory[] }>(

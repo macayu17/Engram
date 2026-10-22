@@ -103,6 +103,37 @@ async def test_postgres_trace_snapshots_survive_edits_and_redact_forget(product_
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(("resolution", "existing_status", "proposed_status"), [
+    ("accept_new", "rejected", "approved"),
+    ("keep_old", "approved", "rejected"),
+    ("keep_both", "approved", "approved"),
+])
+async def test_postgres_conflict_resolution_preserves_revisions_and_project_scope(
+    product_database: tuple[asyncpg.Connection, object, object], resolution: str, existing_status: str, proposed_status: str,
+) -> None:
+    from api.services.extraction import store_memory_conflict
+
+    db, user_id, org_id = product_database
+    memory_id = await seed_memory(db, user_id, org_id, "project", "User prefers Flask")
+    conversation_id = uuid4()
+    proposed = await store_memory_conflict(user_id, org_id, memory_id, "User prefers FastAPI", [1.0] + [0.0] * 383, conversation_id, "project", db)
+    repeated = await store_memory_conflict(user_id, org_id, memory_id, "User prefers FastAPI", [1.0] + [0.0] * 383, conversation_id, "project", db)
+    assert proposed["id"] == repeated["id"]
+    conflicts, total = await memories.list_memory_conflicts(user_id, org_id, db, 10, 0, namespace="project")
+    assert total == 1
+    assert await memories.list_memory_conflicts(user_id, org_id, db, 10, 0, namespace="other") == ([], 0)
+    assert await memories.resolve_memory_conflict(user_id, org_id, conflicts[0]["id"], resolution, db, namespace="other") is None
+    resolved = await memories.resolve_memory_conflict(user_id, org_id, conflicts[0]["id"], resolution, db, namespace="project")
+    assert resolved["existing_memory"]["status"] == existing_status
+    assert resolved["proposed_memory"]["status"] == proposed_status
+    assert resolved["existing_memory"]["content"] == "User prefers Flask"
+    assert await memories.resolve_memory_conflict(user_id, org_id, conflicts[0]["id"], resolution, db, namespace="project") is None
+    history, total = await memories.list_memory_conflicts(user_id, org_id, db, 10, 0, "resolved", "project")
+    assert total == 1
+    assert history[0]["resolution"] == resolution
+
+
+@pytest.mark.asyncio
 async def test_postgres_oauth_cannot_read_or_write_other_projects(product_database, monkeypatch: pytest.MonkeyPatch) -> None:
     from contextlib import asynccontextmanager
 

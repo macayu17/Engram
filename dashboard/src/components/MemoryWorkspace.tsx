@@ -314,7 +314,7 @@ export function MemoryWorkspace() {
               onClick={() => {
                 if (
                   window.confirm(
-                    "Recalculate confidence for all memories across this workspace?",
+                    `Recalculate confidence for memories in project ${namespace}?`,
                   )
                 )
                   decayMutation.mutate();
@@ -341,7 +341,9 @@ export function MemoryWorkspace() {
 
       {(conflictQuery.isLoading ||
         conflicts.length > 0 ||
+        resolvedConflicts.length > 0 ||
         conflictQuery.isError ||
+        conflictHistoryQuery.isError ||
         resolveConflictMutation.isError) && (
         <section className="border-y border-line">
           <div className="flex flex-col gap-2 border-b border-line py-5 sm:flex-row sm:items-end sm:justify-between">
@@ -365,6 +367,11 @@ export function MemoryWorkspace() {
           {conflictQuery.isError && (
             <p className="py-6 font-serif text-base text-fault">
               Could not load memory conflicts.
+            </p>
+          )}
+          {conflictHistoryQuery.isError && (
+            <p role="alert" className="py-6 font-serif text-base text-fault">
+              Could not load resolved memory conflicts.
             </p>
           )}
           {resolveConflictMutation.isError && (

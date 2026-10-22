@@ -397,12 +397,17 @@ python -m pytest api
 python -m compileall api
 ```
 
+Database integration tests run when `ENGRAM_TEST_DATABASE_URL` points to a disposable PostgreSQL database with pgvector. Set `DATABASE_URL` to the same database and run `python -m api.apply_schema` first. Tests create temporary fixtures; use a test database rather than production. GitHub CI starts pgvector and applies the schema before running the suite, so these tests do not silently skip there.
+
 MCP build:
 
 ```bash
 cd mcp
 npm ci
 npm run build
+npm run verify:auth
+npm run verify:defaults
+npm run verify:plugins
 ```
 
 Dashboard build:
@@ -412,6 +417,8 @@ cd dashboard
 npm ci
 npm run verify:clerk
 npm run verify:logic
+npm run verify:conflicts
+npm run verify:billing
 npm run build
 ```
 

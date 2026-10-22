@@ -11,6 +11,7 @@ import pytest
 
 from api.config import settings
 from api.services import jobs
+from api.services.extraction import validate_capture_lease
 
 
 class JobPool:
@@ -174,9 +175,17 @@ async def test_postgres_claim_is_exclusive_and_retention_preserves_running_jobs(
         claimed_again = await jobs.claim_job(db, conversation_id)
         assert claimed_again is not None
         assert claimed_again["lease_token"] != claimed["lease_token"]
+        await db.execute("UPDATE conversations SET lease_until=now()-interval '1 second' WHERE id=$1", conversation_id)
+        recovered = await jobs.claim_job(db, conversation_id)
+        assert recovered is not None
+        assert recovered["attempts"] == 2
+        assert recovered["lease_token"] != claimed_again["lease_token"]
+        with pytest.raises(RuntimeError, match="lease is no longer active"):
+            await validate_capture_lease(user_id, org_id, conversation_id, claimed_again["lease_token"], db)
+        await validate_capture_lease(user_id, org_id, conversation_id, recovered["lease_token"], db)
         await jobs.finish_failed_job(claimed)
         assert await db.fetchval("SELECT extraction_status FROM conversations WHERE id=$1", conversation_id) == "running"
-        await jobs.finish_failed_job(claimed_again)
+        await jobs.finish_failed_job(recovered)
         assert await jobs.clear_captures(user_id, org_id, 30, "other", db) == 0
         assert await jobs.clear_captures(user_id, org_id, 30, "project", db) == 1
         assert await db.fetchval("SELECT raw_exchange FROM conversations WHERE id=$1", conversation_id) is None

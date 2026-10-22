@@ -589,10 +589,8 @@ export const api = {
       memories: Array<{ content: string; category?: string; pinned?: boolean }>,
     ) =>
       request<{ imported: number }>("POST", "/memories/import", {
-        memories: memories.map((memory) => ({
-          ...memory,
-          namespace: readActiveNamespace(),
-        })),
+        namespace: readActiveNamespace(),
+        memories,
       }),
     source: (id: string) =>
       request<MemorySourceResponse>(
@@ -608,8 +606,17 @@ export const api = {
       primary_id: string;
       duplicate_id: string;
       content?: string;
-    }) => request<Memory>("POST", "/memories/merge", payload),
-    decay: () => request<{ updated: number }>("POST", "/memories/decay"),
+    }) =>
+      request<Memory>(
+        "POST",
+        `/memories/merge${toQuery({ namespace: readActiveNamespace() })}`,
+        payload,
+      ),
+    decay: () =>
+      request<{ updated: number }>(
+        "POST",
+        `/memories/decay${toQuery({ namespace: readActiveNamespace() })}`,
+      ),
     timeline: (limit = 12) =>
       request<{ items: MemoryTimelineItem[] }>(
         "GET",

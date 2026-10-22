@@ -30,6 +30,7 @@ For local marketplace installation, run these commands yourself:
 claude plugin marketplace add ./plugins
 claude plugin install engram@engram-local
 codex plugin marketplace add ./plugins
+codex plugin add engram@engram-local
 ```
 
 Codex's catalog is in `plugins/.agents/plugins/marketplace.json`; the portable package is `plugins/codex/plugin.json`, with `mcp.json` beside it. Select the Engram local source in the supported host's plugin directory, install, and test in a new conversation. Availability of local sources varies by host surface. The Claude catalog uses `.claude-plugin/marketplace.json` and a separate Claude manifest.
@@ -59,3 +60,5 @@ Run `node scripts/verify_plugin_packages.mjs` from the Engram root to validate p
 `templates/submission.json` is a draft worksheet. Supply real deployed endpoints, privacy policy and support URLs before submitting through the official portal. Do not insert API keys or reviewer credentials into a distributable package. Test a dedicated account, recall, deliberate capture, pending review and revocation before requesting review. Remote public submission requires a reachable HTTPS service; copying a template does not deploy it.
 
 Packaging follows the [OpenAI plugin packaging guide](https://developers.openai.com/plugins/build/plugins), [Claude plugin manifest reference](https://code.claude.com/docs/en/plugins-reference), and [Claude marketplace guide](https://code.claude.com/docs/en/plugin-marketplaces), consulted October 20, 2026. OpenAI's current preferred format is portable root `plugin.json` and typed `mcp.json`; the older `.codex-plugin` format remains a compatibility option.
+
+Local verification on October 21, 2026: Claude CLI validated both manifests, and Codex CLI registered the local marketplace, installed Engram, and listed it as enabled. The temporary Codex installation and marketplace were removed after the check. This verifies package loading, not assistant chat behavior or public directory approval.

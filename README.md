@@ -436,6 +436,8 @@ Full deterministic flow with the local mock provider:
 python scripts/verify_full_flow.py
 ```
 
+The flow tests all seven tools through an MCP stdio connection. The standalone `scripts/verify_mcp_tools.mjs` requires an explicit `ENGRAM_API_URL` and a fresh test account's `ENGRAM_API_KEY`; it uses `ENGRAM_NAMESPACE` when set. Run it against a local API configured with `scripts/mock_openai_provider.py`. It checks that capture reaches pending review and that search returns the memory created by the test. The full-flow runner deletes its temporary user; standalone runs leave extracted test facts in that account.
+
 Workspace isolation with local Compose services and a configured service key:
 
 ```bash

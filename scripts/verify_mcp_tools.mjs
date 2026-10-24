@@ -1,14 +1,17 @@
+import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
+import { fileURLToPath } from "node:url";
 
-const { addMemoryTool } = await import("../mcp/dist/tools/add.js");
-const { captureConversationTool } = await import("../mcp/dist/tools/capture.js");
-const { listMemoriesTool } = await import("../mcp/dist/tools/list.js");
-const { searchMemoriesTool } = await import("../mcp/dist/tools/search.js");
-const { updateMemoryTool } = await import("../mcp/dist/tools/update.js");
-const { getRetrievalLogTool } = await import("../mcp/dist/tools/logs.js");
-const { deleteMemoryTool } = await import("../mcp/dist/tools/delete.js");
+import { Client } from "../mcp/node_modules/@modelcontextprotocol/sdk/dist/esm/client/index.js";
+import { StdioClientTransport } from "../mcp/node_modules/@modelcontextprotocol/sdk/dist/esm/client/stdio.js";
 
-function parseToolResult(result) {
+assert.ok(process.env.ENGRAM_API_URL, "ENGRAM_API_URL must point to the test API");
+assert.ok(process.env.ENGRAM_API_KEY, "ENGRAM_API_KEY must belong to a dedicated test account");
+
+const client = new Client({ name: "engram-tool-verification", version: "1.0.0" });
+
+async function callTool(name, args) {
+  const result = await client.callTool({ name, arguments: args });
   if (result.isError) {
     throw new Error(result.content[0]?.text ?? "Tool returned an error");
   }
@@ -18,35 +21,58 @@ function parseToolResult(result) {
 let createdMemoryId = "";
 
 try {
+  await client.connect(new StdioClientTransport({
+    command: process.execPath,
+    args: [fileURLToPath(new URL("../mcp/dist/index.js", import.meta.url)), "--transport", "stdio"],
+    env: Object.fromEntries(Object.entries(process.env).filter(([, value]) => value !== undefined)),
+  }));
   const marker = `MCP verification memory ${randomUUID()}`;
-  const added = parseToolResult(await addMemoryTool.handler({ content: marker }));
+  const added = await callTool("add_memory", { content: marker });
   createdMemoryId = added.id;
-  const captured = parseToolResult(await captureConversationTool.handler({
+  assert.ok(createdMemoryId);
+  const captured = await callTool("capture_conversation", {
     user_message: "I connected Engram to VS Code Agent mode.",
     assistant_response: "I will capture durable memory from this exchange.",
     source: "verification",
     session_id: `verify-${randomUUID()}`,
-  }));
-  const listed = parseToolResult(await listMemoriesTool.handler({ limit: 100, offset: 0 }));
-  const searched = parseToolResult(await searchMemoriesTool.handler({ query: marker, limit: 5, threshold: 0 }));
-  const updated = parseToolResult(await updateMemoryTool.handler({
+  });
+  assert.ok(captured.capture.conversation_id);
+  assert.match(captured.review, /pending/);
+  const deadline = Date.now() + 60000;
+  let captureStored = false;
+  while (Date.now() < deadline) {
+    const pending = await callTool("list_memories", { status: "pending", limit: 100, offset: 0 });
+    captureStored = pending.memories.some((memory) =>
+      memory.source_conversation_id === captured.capture.conversation_id && memory.content.includes("VS Code Agent mode"));
+    if (captureStored) break;
+    await new Promise((resolve) => setTimeout(resolve, 500));
+  }
+  const listed = await callTool("list_memories", { limit: 100, offset: 0 });
+  const searched = await callTool("search_memories", { query: marker, limit: 5, threshold: 0 });
+  const updated = await callTool("update_memory", {
     memory_id: createdMemoryId,
     content: `${marker} updated`,
-  }));
-  const logs = parseToolResult(await getRetrievalLogTool.handler({ limit: 20 }));
-  const deleted = parseToolResult(await deleteMemoryTool.handler({ memory_id: createdMemoryId }));
+  });
+  const logs = await callTool("get_retrieval_log", { limit: 20 });
+  const deleted = await callTool("delete_memory", { memory_id: createdMemoryId });
   createdMemoryId = "";
-  process.stdout.write(`${JSON.stringify({
+  const checks = {
     addMemory: Boolean(added.id),
-    captureConversation: captured.memories_extracted >= 1 && captured.extracted_memories.some((memory) => memory.includes("VS Code Agent mode")),
+    captureConversation: captureStored,
     listContainsMemory: listed.memories.some((memory) => memory.id === added.id),
-    searchReturnedResults: searched.results.length > 0,
+    searchReturnedResults: searched.results.some((result) => result.memory.id === added.id),
     updateRoundtrip: updated.content === `${marker} updated`,
     logsReadable: Array.isArray(logs.logs),
     deleteSuccess: deleted.success === true,
-  })}\n`);
+  };
+  assert.ok(Object.values(checks).every(Boolean), JSON.stringify(checks));
+  process.stdout.write(`${JSON.stringify(checks)}\n`);
 } finally {
-  if (createdMemoryId) {
-    await deleteMemoryTool.handler({ memory_id: createdMemoryId });
+  try {
+    if (createdMemoryId) {
+      await callTool("delete_memory", { memory_id: createdMemoryId });
+    }
+  } finally {
+    await client.close();
   }
 }

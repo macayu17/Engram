@@ -88,8 +88,8 @@ export function LandingPage() {
 
       <main id="main-content" tabIndex={-1} className="outline-none">
         <section className="border-b border-line">
-          <div className="mx-auto grid max-w-6xl items-stretch border-x border-line lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
-            <div className="px-5 py-20 sm:px-10 lg:py-28">
+          <div className="mx-auto grid max-w-6xl items-center lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+            <div className="relative z-10 px-5 pb-8 pt-20 sm:px-10 lg:py-32">
               <h1 className="settle font-mono text-[clamp(2.4rem,5.2vw,4rem)] leading-[1.05] tracking-[-0.045em]">
                 Memory for
                 <br />
@@ -110,12 +110,8 @@ export function LandingPage() {
                 <CopyCommand command="npx engramd" />
               </div>
             </div>
-            <div className="relative h-[22rem] border-t border-line lg:h-auto lg:min-h-[34rem] lg:border-l lg:border-t-0">
-              <MemoryField className="settle absolute inset-0 h-full w-full [animation-delay:120ms] [animation-duration:1600ms]" />
-              <p className="absolute bottom-4 left-5 flex items-center gap-2 font-mono text-xs text-muted">
-                <span className="h-1.5 w-1.5 bg-signal" aria-hidden="true" />
-                recalled for this message
-              </p>
+            <div className="relative h-[21rem] sm:h-[30rem] lg:h-[40rem]">
+              <MemoryField className="settle absolute inset-0 [animation-delay:120ms] [animation-duration:1800ms] [mask-image:radial-gradient(closest-side,black_70%,transparent)] lg:-inset-x-16" />
             </div>
           </div>
         </section>

@@ -18,3 +18,9 @@ pgdata/
 
 Improvements.txt
 taste-skill/
+
+.agents/
+.claude/
+.superpowers/
+.playwright-mcp/
+skills-lock.json

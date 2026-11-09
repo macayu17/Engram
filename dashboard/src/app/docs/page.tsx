@@ -43,19 +43,18 @@ export default function DocsPage() {
   return (
     <section className="min-w-0 space-y-16">
       <div className="border-b border-line pb-10">
-        <p className="font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-muted">§ IV — Operator manual</p>
         <div className="mt-5 grid gap-8 lg:grid-cols-[minmax(0,1fr)_19rem] lg:items-end">
           <div>
-            <h1 className="max-w-4xl font-serif text-4xl font-semibold leading-tight text-ink sm:text-5xl md:text-7xl">
+            <h1 className="max-w-4xl font-mono text-4xl leading-tight tracking-[-0.045em] text-ink sm:text-5xl">
               Documentation
             </h1>
-            <p className="mt-6 max-w-3xl font-serif text-lg leading-8 text-muted">
+            <p className="mt-6 max-w-3xl text-lg leading-8 text-muted">
               Set up Engram, connect LLM clients, inspect memory behavior, and choose between proxy-based automatic memory and MCP-based tool memory.
             </p>
           </div>
           <div className="border-y border-line py-5">
-            <p className="font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-muted">Read path</p>
-            <div className="mt-4 grid grid-cols-2 gap-x-5 gap-y-3 font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-muted">
+            <p className="font-sans text-xs font-medium text-muted">Read path</p>
+            <div className="mt-4 grid grid-cols-2 gap-x-5 gap-y-3 font-sans text-xs font-medium text-muted">
               {quickLinks.map((link) => (
                 <a key={link.href} href={link.href} className="border-b border-line pb-1 hover:border-signal hover:text-signal">
                   {link.label}
@@ -68,7 +67,7 @@ export default function DocsPage() {
 
       <DocsSection id="quick-start" eyebrow="01" title="Quick start">
         <div className="grid gap-8 lg:grid-cols-[0.9fr_1.1fr]">
-          <div className="space-y-4 font-serif text-base leading-7 text-muted">
+          <div className="space-y-4 text-base leading-7 text-muted">
             <p>
               Engram runs as a FastAPI service backed by PostgreSQL and pgvector. The dashboard stores one Engram API key in the browser, while workspace provider keys are encrypted by the API.
             </p>
@@ -109,7 +108,7 @@ curl -X POST http://localhost:8000/users \\
 
       <DocsSection id="mcp" eyebrow="03" title="Connect MCP clients">
         <div className="grid gap-8 lg:grid-cols-[1fr_1.15fr]">
-          <div className="space-y-4 font-serif text-base leading-7 text-muted">
+          <div className="space-y-4 text-base leading-7 text-muted">
             <p>
               MCP clients use Engram over stdio. Claude Desktop, VS Code Agent Mode, Cursor, Windsurf, and similar clients can load the same tool server and write to the same memory account.
             </p>
@@ -140,12 +139,12 @@ curl -X POST http://localhost:8000/users \\
       <DocsSection id="auto-capture" eyebrow="04" title="Automatic memory capture">
         <div className="grid gap-8 lg:grid-cols-[1fr_1fr]">
           <div>
-            <p className="font-serif text-base leading-7 text-muted">
+            <p className="text-base leading-7 text-muted">
               The MCP tool <InlineCode>capture_conversation</InlineCode> lets clients store memories without the user typing "store this". The assistant sends the latest user message and assistant response, then Engram extracts only durable facts.
             </p>
             <div className="mt-6 border-y border-line py-5">
-              <p className="font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-muted">Memory rules</p>
-              <ul className="mt-4 grid gap-3 font-serif text-base text-muted">
+              <p className="font-sans text-xs font-medium text-muted">Memory rules</p>
+              <ul className="mt-4 grid gap-3 text-base text-muted">
                 {memoryRules.map((rule) => (
                   <li key={rule} className="border-l border-line pl-4">{rule}</li>
                 ))}
@@ -158,7 +157,7 @@ curl -X POST http://localhost:8000/users \\
 
       <DocsSection id="proxy" eyebrow="05" title="Proxy mode">
         <div className="grid gap-8 lg:grid-cols-[0.9fr_1.1fr]">
-          <div className="space-y-4 font-serif text-base leading-7 text-muted">
+          <div className="space-y-4 text-base leading-7 text-muted">
             <p>
               Proxy mode is the fully automatic path. Your app sends OpenAI-style chat requests to Engram, Engram injects relevant memory, forwards the request, returns the provider response, and extracts new facts in the background.
             </p>
@@ -181,7 +180,7 @@ curl -X POST http://localhost:8000/users \\
       </DocsSection>
 
       <DocsSection id="retrieval" eyebrow="06" title="Retrieval modes">
-        <div className="space-y-4 font-serif text-base leading-7 text-muted">
+        <div className="space-y-4 text-base leading-7 text-muted">
           <p>
             Each user can pick the retrieval strategy used when memories get injected into the system prompt. Set it via <InlineCode>PATCH /users/me/config</InlineCode> with a <InlineCode>retrieval_mode</InlineCode> field, or from the Settings page.
           </p>
@@ -198,8 +197,8 @@ curl -X POST http://localhost:8000/users \\
           </DocCard>
         </div>
         <div className="border-y border-line py-5">
-          <p className="font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-muted">Reranker (optional)</p>
-          <p className="mt-3 font-serif text-base leading-7 text-muted">
+          <p className="font-sans text-xs font-medium text-muted">Reranker (optional)</p>
+          <p className="mt-3 text-base leading-7 text-muted">
             Set <InlineCode>ENABLE_RERANKER=true</InlineCode> on the API to load a cross-encoder (<InlineCode>cross-encoder/ms-marco-MiniLM-L-6-v2</InlineCode>) at startup. When loaded, all retrieval modes re-rank their candidate set before returning. Adds ~400 MB to API memory and a small per-query CPU cost.
           </p>
         </div>
@@ -207,7 +206,7 @@ curl -X POST http://localhost:8000/users \\
 
       <DocsSection id="graph" eyebrow="07" title="Graph memory">
         <div className="grid gap-8 lg:grid-cols-[0.9fr_1.1fr]">
-          <div className="space-y-4 font-serif text-base leading-7 text-muted">
+          <div className="space-y-4 text-base leading-7 text-muted">
             <p>
               Engram extracts named entities (people, projects, skills, technologies, preferences, topics, organizations) from each memory and stores them as a graph in Postgres — no Neo4j required.
             </p>
@@ -243,7 +242,7 @@ curl -X PATCH http://localhost:8000/users/me/config \\
 
       <DocsSection id="namespaces" eyebrow="08" title="Namespaces & organizations">
         <div className="grid gap-8 lg:grid-cols-[1fr_1fr]">
-          <div className="space-y-4 font-serif text-base leading-7 text-muted">
+          <div className="space-y-4 text-base leading-7 text-muted">
             <p>
               <strong className="text-ink">Namespaces</strong> partition a single user's memories. Pass <InlineCode>X-Engram-Namespace: &lt;name&gt;</InlineCode> on proxy requests; pass <InlineCode>?namespace=&lt;name&gt;</InlineCode> when listing memories. Default is <InlineCode>default</InlineCode>. Useful for separating work/personal contexts under one Engram key.
             </p>
@@ -273,7 +272,7 @@ curl http://localhost:8000/orgs \\
         <div className="overflow-hidden border-y border-line">
           {endpoints.map(([name, routes]) => (
             <div key={name} className="grid gap-3 border-b border-line py-4 last:border-b-0 md:grid-cols-[12rem_1fr]">
-              <p className="font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-muted">{name}</p>
+              <p className="font-sans text-xs font-medium text-muted">{name}</p>
               <p className="font-mono text-sm leading-6 text-ink">{routes}</p>
             </div>
           ))}
@@ -333,7 +332,7 @@ curl http://localhost:8000/orgs \\
       </DocsSection>
 
       <div className="border-y border-line py-8">
-        <p className="font-serif text-xl leading-8 text-ink">
+        <p className="text-xl leading-8 text-ink">
           Start with <Link href="/settings" className="text-signal hover:text-ink">Settings</Link> to save a key. Land on the <Link href="/" className="text-signal hover:text-ink">home dashboard</Link> for system state, dive into the <Link href="/memories" className="text-signal hover:text-ink">memory ledger</Link> to browse entries, or open the <Link href="/graph" className="text-signal hover:text-ink">entity graph</Link> to see how they connect.
         </p>
       </div>
@@ -341,12 +340,11 @@ curl http://localhost:8000/orgs \\
   );
 }
 
-function DocsSection({ id, eyebrow, title, children }: { id: string; eyebrow: string; title: string; children: React.ReactNode }) {
+function DocsSection({ id, title, children }: { id: string; eyebrow?: string; title: string; children: React.ReactNode }) {
   return (
     <section id={id} className="scroll-mt-28 space-y-6">
       <div className="border-b border-line pb-4">
-        <p className="font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-muted">§ {eyebrow}</p>
-        <h2 className="mt-2 font-serif text-4xl font-semibold leading-tight text-ink">{title}</h2>
+        <h2 className="mt-2 font-mono text-3xl leading-tight tracking-[-0.04em] text-ink">{title}</h2>
       </div>
       {children}
     </section>
@@ -356,8 +354,8 @@ function DocsSection({ id, eyebrow, title, children }: { id: string; eyebrow: st
 function DocCard({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div className="border-y border-line py-5">
-      <h3 className="font-serif text-2xl font-semibold text-ink">{title}</h3>
-      <p className="mt-3 font-serif text-base leading-7 text-muted">{children}</p>
+      <h3 className="text-2xl font-normal text-ink">{title}</h3>
+      <p className="mt-3 text-base leading-7 text-muted">{children}</p>
     </div>
   );
 }
@@ -365,12 +363,12 @@ function DocCard({ title, children }: { title: string; children: React.ReactNode
 function Trouble({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div className="border-l border-line pl-5">
-      <h3 className="font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-signal">{title}</h3>
-      <p className="mt-3 font-serif text-base leading-7 text-muted">{children}</p>
+      <h3 className="font-sans text-xs font-medium text-signal">{title}</h3>
+      <p className="mt-3 text-base leading-7 text-muted">{children}</p>
     </div>
   );
 }
 
 function InlineCode({ children }: { children: React.ReactNode }) {
-  return <code className="rounded bg-tag px-1.5 py-0.5 font-mono text-[0.8em] text-ink">{children}</code>;
+  return <code className="rounded-lg bg-tag px-1.5 py-0.5 font-mono text-[0.8em] text-ink">{children}</code>;
 }

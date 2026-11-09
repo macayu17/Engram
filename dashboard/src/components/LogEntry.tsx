@@ -16,17 +16,17 @@ export function LogEntry({ log }: { log: RetrievalLog }) {
         onClick={() => setIsOpen((value) => !value)}
         className="grid w-full min-w-0 gap-3 px-3 py-5 text-left text-sm transition hover:bg-tag lg:grid-cols-[110px_minmax(0,1fr)_150px_120px]"
       >
-        <span className="font-sans text-[11px] uppercase tracking-[0.12em] text-muted">
+        <span className="font-sans text-xs text-muted">
           {formatDate(log.created_at)}
         </span>
         <span className="min-w-0 break-words font-sans text-[15px] leading-6 text-ink md:line-clamp-2">
           {log.query || "Empty retrieval query"}
         </span>
-        <span className="font-sans text-[11px] uppercase tracking-[0.12em] text-muted">
+        <span className="font-sans text-xs text-muted">
           {log.retrieved_memories.length} retrieved · {log.injected_count ?? 0}{" "}
           injected
         </span>
-        <span className="flex items-center justify-between gap-2 font-sans text-[11px] uppercase tracking-[0.12em] text-muted">
+        <span className="flex items-center justify-between gap-2 font-sans text-xs text-muted">
           <span className="truncate">
             {log.conversation_id ?? "no conversation"}
           </span>
@@ -54,7 +54,7 @@ export function LogEntry({ log }: { log: RetrievalLog }) {
                     <p className="font-sans text-[15px] leading-7 text-ink">
                       {memory.content ?? "Deleted memory"}
                     </p>
-                    <p className="mt-2 break-all font-mono text-[10px] text-muted">
+                    <p className="mt-2 break-all font-mono text-xs text-muted">
                       {memory.memory_id}
                     </p>
                   </div>

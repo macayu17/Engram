@@ -12,7 +12,7 @@ type MemoryConflictReviewProps = {
 export function MemoryConflictReview({ conflict, disabled, onResolve }: MemoryConflictReviewProps) {
   return (
     <article className="border-b border-line py-6 last:border-b-0">
-      <div className="flex items-center gap-2 font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-fault">
+      <div className="flex items-center gap-2 font-sans text-xs font-medium text-fault">
         <AlertTriangle size={15} aria-hidden="true" />
         Contradiction detected
       </div>
@@ -45,8 +45,8 @@ export function MemoryConflictReview({ conflict, disabled, onResolve }: MemoryCo
 function MemoryClaim({ label, content, accent = false }: { label: string; content: string; accent?: boolean }) {
   return (
     <div className="bg-panel p-4">
-      <p className={`font-sans text-[10px] font-medium uppercase tracking-[0.12em] ${accent ? "text-signal" : "text-muted"}`}>{label}</p>
-      <p className="mt-2 font-serif text-base leading-6 text-ink">{content}</p>
+      <p className={`font-sans text-xs font-medium ${accent ? "text-signal" : "text-muted"}`}>{label}</p>
+      <p className="mt-2 text-base leading-6 text-ink">{content}</p>
     </div>
   );
 }
@@ -67,7 +67,7 @@ function ResolutionButton({
       type="button"
       disabled={disabled}
       onClick={onClick}
-      className={`min-h-9 rounded-full border px-4 font-sans text-[10px] font-semibold uppercase tracking-[0.12em] transition active:translate-y-px disabled:cursor-wait disabled:opacity-50 ${
+      className={`min-h-9 rounded-sm border px-4 font-sans text-xs font-semibold transition active:translate-y-px disabled:cursor-wait disabled:opacity-50 ${
         primary
           ? "border-signal bg-signal text-paper hover:border-ink hover:bg-ink"
           : "border-line text-muted hover:border-signal hover:text-signal"

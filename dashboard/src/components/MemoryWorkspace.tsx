@@ -262,7 +262,6 @@ export function MemoryWorkspace() {
         </p>
       )}
       <ProductPageHeader
-        eyebrow="§ I — Memory ledger"
         title="Memories"
         description={
           <>
@@ -273,20 +272,13 @@ export function MemoryWorkspace() {
       />
 
       <div className="space-y-8">
-        <div className="flex flex-col gap-4 border-b border-line pb-5 md:flex-row md:items-end md:justify-between">
-          <div>
-            <p className="font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-muted">
-              § I — The ledger
-            </p>
-            <h2 className="mt-2 font-serif text-4xl font-semibold text-ink">
-              Browse the memory store
-            </h2>
-          </div>
+        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-end">
+          <h2 className="sr-only">Memory store</h2>
           <div className="flex flex-wrap gap-3">
             <button
               type="button"
               onClick={() => memoriesQuery.refetch()}
-              className="inline-flex min-h-10 items-center gap-2 rounded-full border border-line px-4 font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-muted transition hover:border-signal hover:text-signal active:translate-y-px"
+              className="inline-flex min-h-10 items-center gap-2 rounded-sm border border-line px-4 font-sans text-xs font-medium text-muted transition hover:border-signal hover:text-signal active:translate-y-px"
             >
               <RefreshCw size={16} aria-hidden="true" />
               Refresh
@@ -294,12 +286,12 @@ export function MemoryWorkspace() {
             <button
               type="button"
               onClick={() => void exportMemorySnapshot()}
-              className="inline-flex min-h-10 items-center gap-2 rounded-full border border-line px-4 font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-muted transition hover:border-signal hover:text-signal active:translate-y-px"
+              className="inline-flex min-h-10 items-center gap-2 rounded-sm border border-line px-4 font-sans text-xs font-medium text-muted transition hover:border-signal hover:text-signal active:translate-y-px"
             >
               <Download size={16} aria-hidden="true" />
               Export
             </button>
-            <label className="inline-flex min-h-10 cursor-pointer items-center gap-2 rounded-full border border-line px-4 font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-muted transition hover:border-signal hover:text-signal active:translate-y-px">
+            <label className="inline-flex min-h-10 cursor-pointer items-center gap-2 rounded-sm border border-line px-4 font-sans text-xs font-medium text-muted transition hover:border-signal hover:text-signal active:translate-y-px">
               <Upload size={16} aria-hidden="true" />
               Import
               <input
@@ -320,7 +312,7 @@ export function MemoryWorkspace() {
                   decayMutation.mutate();
               }}
               disabled={decayMutation.isPending}
-              className="inline-flex min-h-10 items-center gap-2 rounded-full border border-line px-4 font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-muted transition hover:border-signal hover:text-signal active:translate-y-px disabled:opacity-50"
+              className="inline-flex min-h-10 items-center gap-2 rounded-sm border border-line px-4 font-sans text-xs font-medium text-muted transition hover:border-signal hover:text-signal active:translate-y-px disabled:opacity-50"
             >
               <Clock size={16} aria-hidden="true" />
               Decay
@@ -328,7 +320,7 @@ export function MemoryWorkspace() {
             <button
               type="button"
               onClick={() => setIsAddOpen(true)}
-              className="inline-flex min-h-10 items-center gap-2 rounded-full bg-signal px-4 font-sans text-[11px] font-semibold uppercase tracking-[0.12em] text-paper transition hover:bg-ink active:translate-y-px"
+              className="inline-flex min-h-10 items-center gap-2 rounded-sm bg-signal px-4 font-sans text-xs font-semibold text-paper transition hover:bg-ink active:translate-y-px"
             >
               <Plus size={16} aria-hidden="true" />
               Add Memory
@@ -348,34 +340,34 @@ export function MemoryWorkspace() {
         <section className="border-y border-line">
           <div className="flex flex-col gap-2 border-b border-line py-5 sm:flex-row sm:items-end sm:justify-between">
             <div>
-              <p className="font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-muted">
+              <p className="font-sans text-xs font-medium text-muted">
                 Review queue
               </p>
-              <h2 className="mt-2 font-serif text-3xl font-semibold text-ink">
+              <h2 className="mt-2 text-3xl font-normal text-ink">
                 Resolve conflicting memories
               </h2>
             </div>
-            <span className="font-sans text-[11px] uppercase tracking-[0.12em] text-muted">
+            <span className="font-sans text-xs text-muted">
               {conflictQuery.data?.total ?? 0} open
             </span>
           </div>
           {conflictQuery.isLoading && (
-            <p className="py-6 font-serif text-base text-muted">
+            <p className="py-6 text-base text-muted">
               Loading conflicts...
             </p>
           )}
           {conflictQuery.isError && (
-            <p className="py-6 font-serif text-base text-fault">
+            <p className="py-6 text-base text-fault">
               Could not load memory conflicts.
             </p>
           )}
           {conflictHistoryQuery.isError && (
-            <p role="alert" className="py-6 font-serif text-base text-fault">
+            <p role="alert" className="py-6 text-base text-fault">
               Could not load resolved memory conflicts.
             </p>
           )}
           {resolveConflictMutation.isError && (
-            <p className="py-4 font-serif text-base text-fault">
+            <p className="py-4 text-base text-fault">
               The conflict could not be resolved. Refresh and try again.
             </p>
           )}
@@ -391,7 +383,7 @@ export function MemoryWorkspace() {
           ))}
           {resolvedConflicts.length > 0 && (
             <div className="border-t border-line py-5">
-              <p className="font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-muted">
+              <p className="font-sans text-xs font-medium text-muted">
                 Recently resolved
               </p>
               <div className="mt-3 space-y-3">
@@ -400,10 +392,10 @@ export function MemoryWorkspace() {
                     key={conflict.id}
                     className="flex flex-col gap-1 border-l-2 border-signal/50 pl-3 sm:flex-row sm:items-baseline sm:justify-between sm:gap-4"
                   >
-                    <p className="line-clamp-2 font-serif text-base leading-6 text-ink">
+                    <p className="line-clamp-2 text-base leading-6 text-ink">
                       {conflict.proposed_memory.content}
                     </p>
-                    <p className="shrink-0 font-sans text-[10px] uppercase tracking-[0.12em] text-muted">
+                    <p className="shrink-0 font-sans text-xs text-muted">
                       {conflict.resolution?.replace("_", " ")}
                     </p>
                   </div>
@@ -485,13 +477,13 @@ export function MemoryWorkspace() {
       {searchResults && (
         <div className="space-y-3">
           <div className="flex items-center justify-between border-b border-line pb-3">
-            <h2 className="font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-muted">
+            <h2 className="font-sans text-xs font-medium text-muted">
               Search Results
             </h2>
             <button
               type="button"
               onClick={() => setSearchResults(null)}
-              className="font-sans text-[11px] uppercase tracking-[0.12em] text-muted hover:text-signal"
+              className="font-sans text-xs text-muted hover:text-signal"
             >
               Clear
             </button>
@@ -568,7 +560,7 @@ export function MemoryWorkspace() {
             type="button"
             disabled={!selectedIds.length || bulkMutation.isPending}
             onClick={() => bulkMutation.mutate("approved")}
-            className="min-h-10 rounded border border-line px-4 disabled:opacity-40"
+            className="min-h-10 rounded-lg border border-line px-4 disabled:opacity-40"
           >
             Approve selected
           </button>
@@ -576,7 +568,7 @@ export function MemoryWorkspace() {
             type="button"
             disabled={!selectedIds.length || bulkMutation.isPending}
             onClick={() => bulkMutation.mutate("rejected")}
-            className="min-h-10 rounded border border-line px-4 disabled:opacity-40"
+            className="min-h-10 rounded-lg border border-line px-4 disabled:opacity-40"
           >
             Reject selected
           </button>
@@ -607,13 +599,13 @@ export function MemoryWorkspace() {
         />
       )}
       {memoriesQuery.isError && (
-        <div className="border-y border-fault/30 bg-fault/5 py-5 font-serif text-base text-fault">
+        <div className="border-y border-fault/30 bg-fault/5 py-5 text-base text-fault">
           Set a valid Engram API key in Settings, then refresh this page.
         </div>
       )}
 
       {memoriesQuery.isLoading ? (
-        <div className="border-y border-line py-12 font-serif text-lg text-muted">
+        <div className="border-y border-line py-12 text-lg text-muted">
           Loading memories...
         </div>
       ) : (
@@ -635,7 +627,7 @@ export function MemoryWorkspace() {
         />
       )}
 
-      <div className="flex items-center justify-between font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-muted">
+      <div className="flex items-center justify-between font-sans text-xs font-medium text-muted">
         <span>
           Showing {memories.length} of {total}
         </span>
@@ -673,22 +665,22 @@ export function MemoryWorkspace() {
           <div className="p-6">
             <div className="flex items-start justify-between gap-4">
               <div>
-                <p className="font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-muted">
+                <p className="font-sans text-xs font-medium text-muted">
                   Source Traceback
                 </p>
-                <h2 className="mt-2 font-serif text-3xl font-semibold">
+                <h2 className="mt-2 text-3xl font-normal">
                   {sourceDetails.memory.source}
                 </h2>
               </div>
               <button
                 type="button"
                 onClick={() => setSourceDetails(null)}
-                className="font-sans text-[11px] uppercase tracking-[0.12em] text-muted hover:text-ink"
+                className="font-sans text-xs text-muted hover:text-ink"
               >
                 Close
               </button>
             </div>
-            <dl className="mt-5 grid gap-4 border-y border-line py-4 font-sans text-[11px] uppercase tracking-[0.12em] text-muted sm:grid-cols-2">
+            <dl className="mt-5 grid gap-4 border-y border-line py-4 font-sans text-xs text-muted sm:grid-cols-2">
               <div>
                 <dt>Conversation</dt>
                 <dd className="mt-1 break-words text-ink">
@@ -721,17 +713,17 @@ export function MemoryWorkspace() {
           >
             <div className="flex items-start justify-between gap-4">
               <div>
-                <p className="font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-muted">
+                <p className="font-sans text-xs font-medium text-muted">
                   Manual entry
                 </p>
-                <h2 className="mt-2 font-serif text-3xl font-semibold">
+                <h2 className="mt-2 text-3xl font-normal">
                   Add Memory
                 </h2>
               </div>
               <button
                 type="button"
                 onClick={() => setIsAddOpen(false)}
-                className="font-sans text-[11px] uppercase tracking-[0.12em] text-muted hover:text-ink"
+                className="font-sans text-xs text-muted hover:text-ink"
               >
                 Close
               </button>
@@ -742,21 +734,21 @@ export function MemoryWorkspace() {
               maxLength={10000}
               value={newMemory}
               onChange={(event) => setNewMemory(event.target.value)}
-              className="mt-5 min-h-32 w-full border border-line bg-paper p-3 font-serif text-base leading-7 text-ink outline-none focus:border-signal"
+              className="mt-5 min-h-32 w-full border border-line bg-paper p-3 text-base leading-7 text-ink outline-none focus:border-signal"
               placeholder="User prefers FastAPI for backend services"
             />
             <div className="mt-4 flex justify-end gap-2">
               <button
                 type="button"
                 onClick={() => setIsAddOpen(false)}
-                className="border border-line px-4 py-2 font-sans text-[11px] uppercase tracking-[0.12em] text-muted"
+                className="border border-line px-4 py-2 font-sans text-xs text-muted"
               >
                 Cancel
               </button>
               <button
                 type="submit"
                 disabled={createMutation.isPending || !newMemory.trim()}
-                className="border border-ink px-4 py-2 font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-ink hover:border-signal hover:text-signal disabled:opacity-50"
+                className="border border-ink px-4 py-2 font-sans text-xs font-medium text-ink hover:border-signal hover:text-signal disabled:opacity-50"
               >
                 Save Memory
               </button>
@@ -782,11 +774,11 @@ function LedgerPanel({
   return (
     <section className="border-y border-line py-5">
       <div className="flex items-center justify-between gap-4">
-        <div className="flex items-center gap-2 font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-muted">
+        <div className="flex items-center gap-2 font-sans text-xs font-medium text-muted">
           <span className="text-signal">{icon}</span>
           {title}
         </div>
-        <span className="font-sans text-[11px] uppercase tracking-[0.12em] text-ink">
+        <span className="font-sans text-xs text-ink">
           {value}
         </span>
       </div>
@@ -798,10 +790,10 @@ function LedgerPanel({
 function PanelRow({ text, meta }: { text: string; meta: string }) {
   return (
     <div className="space-y-1">
-      <p className="line-clamp-2 font-serif text-base leading-6 text-ink">
+      <p className="line-clamp-2 text-base leading-6 text-ink">
         {text}
       </p>
-      <p className="font-sans text-[10px] uppercase tracking-[0.12em] text-muted">
+      <p className="font-sans text-xs text-muted">
         {meta}
       </p>
     </div>

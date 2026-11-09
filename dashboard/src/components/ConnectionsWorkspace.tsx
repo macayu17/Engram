@@ -90,7 +90,7 @@ export function ConnectionsWorkspace() {
               void health.refetch();
               void grants.refetch();
             }}
-            className="min-h-10 rounded border border-line px-4 text-sm"
+            className="min-h-10 rounded-lg border border-line px-4 text-sm"
           >
             Test connection
           </button>
@@ -122,7 +122,7 @@ export function ConnectionsWorkspace() {
       {status.isLoading && <p role="status">Checking connection...</p>}
       <dl className="grid gap-5 border-y border-line py-5 sm:grid-cols-3">
         <div>
-          <dt className="text-xs uppercase text-muted">API</dt>
+          <dt className="text-xs text-muted">API</dt>
           <dd className="mt-2">
             {health.isLoading
               ? "Checking..."
@@ -130,13 +130,13 @@ export function ConnectionsWorkspace() {
           </dd>
         </div>
         <div>
-          <dt className="text-xs uppercase text-muted">Workspace identity</dt>
+          <dt className="text-xs text-muted">Workspace identity</dt>
           <dd className="mt-2 break-words">
             {status.data?.user.external_id ?? "Not connected"}
           </dd>
         </div>
         <div>
-          <dt className="text-xs uppercase text-muted">Extraction provider</dt>
+          <dt className="text-xs text-muted">Extraction provider</dt>
           <dd className="mt-2">
             {status.data
               ? `${status.data.provider.name} · ${status.data.provider.configured ? "Configured" : "Needs configuration"}`
@@ -145,7 +145,7 @@ export function ConnectionsWorkspace() {
         </div>
       </dl>
       <section className="space-y-5">
-        <h2 className="font-serif text-2xl">Install a local connection</h2>
+        <h2 className="text-2xl">Install a local connection</h2>
         <p className="max-w-3xl text-sm leading-7 text-muted">
           Build the MCP server with npm ci and npm run build inside mcp/. This
           connection supports deliberate recall and capture through tools; it
@@ -160,7 +160,7 @@ export function ConnectionsWorkspace() {
                 setClient(event.target.value as "claude" | "codex");
                 setRevealKey(false);
               }}
-              className="min-h-10 rounded border border-line bg-panel px-3"
+              className="min-h-10 rounded-lg border border-line bg-panel px-3"
             >
               <option value="claude">Claude Desktop</option>
               <option value="codex">Codex</option>
@@ -173,7 +173,7 @@ export function ConnectionsWorkspace() {
             <input
               value={scriptPath}
               onChange={(event) => setScriptPath(event.target.value)}
-              className="min-h-10 w-full rounded border border-line bg-panel px-3 font-mono text-xs"
+              className="min-h-10 w-full rounded-lg border border-line bg-panel px-3 font-mono text-xs"
             />
           </label>
         </div>
@@ -199,7 +199,7 @@ export function ConnectionsWorkspace() {
         <pre
           tabIndex={0}
           aria-label="MCP connection configuration"
-          className="max-h-96 overflow-auto rounded border border-line bg-panel p-4 font-mono text-xs leading-6"
+          className="max-h-96 overflow-auto rounded-lg border border-line bg-panel p-4 font-mono text-xs leading-6"
         >
           {config}
         </pre>
@@ -207,7 +207,7 @@ export function ConnectionsWorkspace() {
           type="button"
           disabled={!scriptPath.trim()}
           onClick={() => void copyConfig()}
-          className="min-h-10 rounded border border-line px-4 text-sm disabled:opacity-40"
+          className="min-h-10 rounded-lg border border-line px-4 text-sm disabled:opacity-40"
         >
           {revealKey ? "Copy configuration with secret" : "Copy configuration"}
         </button>
@@ -224,7 +224,7 @@ export function ConnectionsWorkspace() {
         </p>
       )}
       <section className="space-y-4">
-        <h2 className="font-serif text-2xl">Recent clients</h2>
+        <h2 className="text-2xl">Recent clients</h2>
         {status.data?.clients.length === 0 && (
           <p className="text-sm text-muted">
             No captures yet. Ask your connected assistant to save a useful fact.
@@ -245,7 +245,7 @@ export function ConnectionsWorkspace() {
         ))}
       </section>
       <section className="space-y-4">
-        <h2 className="font-serif text-2xl">Extraction jobs</h2>
+        <h2 className="text-2xl">Extraction jobs</h2>
         {status.data?.jobs.length === 0 && (
           <p className="text-sm text-muted">
             No extraction jobs in this project.
@@ -274,7 +274,7 @@ export function ConnectionsWorkspace() {
                     type="button"
                     disabled={retry.isPending}
                     onClick={() => retry.mutate(job.id)}
-                    className="min-h-10 rounded border border-line px-4 disabled:opacity-40"
+                    className="min-h-10 rounded-lg border border-line px-4 disabled:opacity-40"
                   >
                     Retry extraction
                   </button>
@@ -290,7 +290,7 @@ export function ConnectionsWorkspace() {
         ))}
       </section>
       <section className="space-y-4">
-        <h2 className="font-serif text-2xl">Authorized assistants</h2>
+        <h2 className="text-2xl">Authorized assistants</h2>
         {grants.isLoading && <p role="status">Loading access grants...</p>}
         {grants.data?.connections.length === 0 && (
           <p className="text-sm text-muted">
@@ -322,7 +322,7 @@ export function ConnectionsWorkspace() {
                 )
                   revoke.mutate(grant.id);
               }}
-              className="min-h-10 rounded border border-line px-4 text-sm disabled:opacity-40"
+              className="min-h-10 rounded-lg border border-line px-4 text-sm disabled:opacity-40"
             >
               Revoke access
             </button>
@@ -330,7 +330,7 @@ export function ConnectionsWorkspace() {
         ))}
       </section>
       <section className="space-y-4 border-t border-line pt-6">
-        <h2 className="font-serif text-2xl">Raw capture retention</h2>
+        <h2 className="text-2xl">Raw capture retention</h2>
         <p className="max-w-3xl text-sm leading-7 text-muted">
           Clear old raw conversation payloads in this project. Memories and
           extraction status remain. This cannot be undone, and source inspection
@@ -346,7 +346,7 @@ export function ConnectionsWorkspace() {
               max={3650}
               value={days}
               onChange={(event) => setDays(Number(event.target.value))}
-              className="mx-2 min-h-10 w-24 rounded border border-line bg-panel px-3"
+              className="mx-2 min-h-10 w-24 rounded-lg border border-line bg-panel px-3"
             />{" "}
             days
           </label>
@@ -367,7 +367,7 @@ export function ConnectionsWorkspace() {
               )
                 purge.mutate();
             }}
-            className="min-h-10 rounded border border-fault/30 px-4 text-sm text-fault disabled:opacity-40"
+            className="min-h-10 rounded-lg border border-fault/30 px-4 text-sm text-fault disabled:opacity-40"
           >
             Clear raw captures
           </button>

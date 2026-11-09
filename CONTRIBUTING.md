@@ -1,6 +1,6 @@
 # Contributing
 
-Engram is built around a narrow v1 scope. Keep changes aligned with the memory loop: retrieve, inject, forward, extract, deduplicate, store, and inspect.
+Keep changes aligned with the memory loop: retrieve, inject, forward, extract, review, store, and inspect. `AGENTS.md` holds the full coding rules and verification commands.
 
 ## Local Setup
 
@@ -20,7 +20,7 @@ Create a user through `POST /users`, save the returned API key, and use that key
 - Store API key hashes, never plaintext API keys.
 - Keep dashboard API calls inside `dashboard/src/lib/api.ts`.
 - Keep the dashboard on Tailwind utilities.
-- Do not add external vector databases, Redis, Celery, LangChain, or LlamaIndex for v1.
+- Do not add external vector databases, Redis, Celery, LangChain, or LlamaIndex.
 
 ## Verification
 

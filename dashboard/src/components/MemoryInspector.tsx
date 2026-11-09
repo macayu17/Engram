@@ -57,10 +57,10 @@ export function MemoryInspector({
   return (
     <section
       aria-label="Memory history and expiration"
-      className="space-y-5 rounded border border-line bg-panel p-5"
+      className="space-y-5 rounded-lg border border-line bg-panel p-5"
     >
       <div className="flex justify-between gap-4">
-        <h2 className="font-serif text-2xl">Memory history and expiration</h2>
+        <h2 className="text-2xl">Memory history and expiration</h2>
         <button
           type="button"
           onClick={onClose}
@@ -92,7 +92,7 @@ export function MemoryInspector({
             maxLength={80}
             value={destination}
             onChange={(event) => setDestination(event.target.value)}
-            className="min-h-10 rounded border border-line bg-paper px-3"
+            className="min-h-10 rounded-lg border border-line bg-paper px-3"
           />
         </label>
         <label className="space-y-2 text-sm">
@@ -104,12 +104,12 @@ export function MemoryInspector({
             min={toLocalInput(new Date().toISOString())}
             value={expiration ?? toLocalInput(source.data?.memory.expires_at)}
             onChange={(event) => setExpiration(event.target.value)}
-            className="min-h-10 rounded border border-line bg-paper px-3"
+            className="min-h-10 rounded-lg border border-line bg-paper px-3"
           />
         </label>
         <button
           disabled={update.isPending}
-          className="min-h-10 rounded border border-line px-4 text-sm disabled:opacity-40"
+          className="min-h-10 rounded-lg border border-line px-4 text-sm disabled:opacity-40"
         >
           Save project and expiration
         </button>
@@ -139,7 +139,7 @@ export function MemoryInspector({
             type="button"
             disabled={restore.isPending}
             onClick={() => restore.mutate(version.id)}
-            className="min-h-10 rounded border border-line px-4 text-sm disabled:opacity-40"
+            className="min-h-10 rounded-lg border border-line px-4 text-sm disabled:opacity-40"
           >
             Restore this version
           </button>

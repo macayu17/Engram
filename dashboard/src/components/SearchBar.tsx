@@ -57,7 +57,7 @@ export function SearchBar({
       </label>
       <button
         type="submit"
-        className="inline-flex min-h-12 items-center justify-center rounded-lg border border-ink px-5 font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-ink transition hover:border-signal hover:bg-signal hover:text-paper disabled:cursor-not-allowed disabled:opacity-50"
+        className="inline-flex min-h-12 items-center justify-center rounded-lg border border-ink px-5 font-sans text-xs font-medium text-ink transition hover:border-signal hover:bg-signal hover:text-paper disabled:cursor-not-allowed disabled:opacity-50"
         disabled={isSearching}
       >
         {isSearching ? "Searching" : "Search"}

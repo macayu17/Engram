@@ -82,7 +82,7 @@ export function ClerkEngramBridge() {
 
   if (bridgeQuery.isError) {
     return (
-      <div className="fixed bottom-16 left-4 z-50 max-w-sm border border-fault/40 bg-paper px-4 py-3 font-serif text-sm leading-6 text-fault shadow-none">
+      <div className="fixed bottom-16 left-4 z-50 max-w-sm border border-fault/40 bg-paper px-4 py-3 text-sm leading-6 text-fault shadow-none">
         Unable to link this Clerk user to Engram. Configure the hosted API URL and Engram service key.
       </div>
     );

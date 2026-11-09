@@ -4,52 +4,43 @@
 
 :root {
   color-scheme: dark;
-  --color-paper: 11 10 9;
-  --color-ink: 244 239 229;
-  --color-panel: 18 17 15;
-  --color-muted: 166 160 148;
-  --color-line: 55 51 44;
-  --color-tag: 35 32 27;
-  --color-signal: 90 168 158;
-  --color-caution: 210 175 88;
-  --color-fault: 255 107 94;
-  --color-high: 110 176 118;
-  --clerk-font-family: var(--font-geist), system-ui, sans-serif;
-  --clerk-font-family-buttons: var(--font-geist), system-ui, sans-serif;
-  --clerk-font-family-mono: var(--font-geist-mono), ui-monospace, monospace;
-  --clerk-color-primary: rgb(var(--color-signal));
-  --clerk-color-primary-foreground: rgb(var(--color-paper));
-  --clerk-color-foreground: rgb(var(--color-ink));
-  --clerk-color-background: rgb(var(--color-panel));
-  --clerk-color-muted: rgb(var(--color-tag));
-  --clerk-color-muted-foreground: rgb(var(--color-muted));
-  --clerk-color-neutral: rgb(var(--color-muted));
-  --clerk-color-danger: rgb(var(--color-fault));
-  --clerk-border-radius: 0.5rem;
-  --theme-wave-x: 100vw;
-  --theme-wave-y: 0px;
-  --theme-wave-radius: 150vmax;
-  --theme-fallback-left: 0px;
-  --theme-fallback-top: 0px;
-  --theme-fallback-size: 0px;
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --color-paper: 0.155 0.004 75;
+  --color-panel: 0.185 0.005 75;
+  --color-ink: 0.95 0.006 85;
+  --color-muted: 0.7 0.01 80;
+  --color-line: 0.29 0.006 75;
+  --color-tag: 0.22 0.006 75;
+  --color-signal: 0.8 0.125 68;
+  --color-caution: 0.84 0.11 90;
+  --color-fault: 0.72 0.14 28;
+  --color-high: 0.78 0.1 150;
+  --clerk-font-family: var(--font-sans), system-ui, sans-serif;
+  --clerk-font-family-buttons: var(--font-sans), system-ui, sans-serif;
+  --clerk-font-family-mono: var(--font-mono), ui-monospace, monospace;
+  --clerk-color-primary: oklch(var(--color-signal));
+  --clerk-color-primary-foreground: oklch(var(--color-paper));
+  --clerk-color-foreground: oklch(var(--color-ink));
+  --clerk-color-background: oklch(var(--color-panel));
+  --clerk-color-muted: oklch(var(--color-tag));
+  --clerk-color-muted-foreground: oklch(var(--color-muted));
+  --clerk-color-neutral: oklch(var(--color-muted));
+  --clerk-color-danger: oklch(var(--color-fault));
+  --clerk-border-radius: 0.25rem;
 }
 
-[data-theme="light"] {
+:root[data-theme="light"] {
   color-scheme: light;
-  --color-paper: 224 222 215;
-  --color-ink: 25 27 25;
-  --color-panel: 233 231 224;
-  --color-muted: 91 96 90;
-  --color-line: 194 197 190;
-  --color-tag: 208 211 204;
-  --color-signal: 37 116 107;
-  --color-caution: 139 111 45;
-  --color-fault: 180 35 24;
-  --color-high: 52 120 74;
-}
-
-[data-theme="dark"] {
-  color-scheme: dark;
+  --color-paper: 0.975 0.004 85;
+  --color-panel: 0.99 0.002 85;
+  --color-ink: 0.2 0.008 75;
+  --color-muted: 0.48 0.012 75;
+  --color-line: 0.89 0.006 80;
+  --color-tag: 0.945 0.006 80;
+  --color-signal: 0.58 0.15 55;
+  --color-caution: 0.58 0.11 80;
+  --color-fault: 0.53 0.17 28;
+  --color-high: 0.52 0.1 150;
 }
 
 html {
@@ -58,106 +49,54 @@ html {
 }
 
 body {
-  background: rgb(var(--color-paper));
+  background: oklch(var(--color-paper));
   overflow-x: clip;
+  transition: background-color 300ms ease, color 300ms ease;
 }
 
-.theme-transition-active *,
-.theme-transition-active *::before,
-.theme-transition-active *::after {
-  transition: none !important;
+h1,
+h2,
+h3 {
+  text-wrap: balance;
 }
 
-.theme-view-transition-active *,
-.theme-view-transition-active *::before,
-.theme-view-transition-active *::after {
-  animation-play-state: paused !important;
+p {
+  text-wrap: pretty;
 }
 
 ::selection {
-  background: rgb(var(--color-tag));
-  color: rgb(var(--color-ink));
+  background: oklch(var(--color-signal) / 0.2);
+  color: oklch(var(--color-ink));
 }
 
-::view-transition-old(root),
-::view-transition-new(root) {
-  animation: none;
-  mix-blend-mode: normal;
-}
-
-::view-transition-new(root) {
-  animation: theme-wave 720ms cubic-bezier(0.2, 0.8, 0.2, 1);
-  clip-path: circle(0 at var(--theme-wave-x) var(--theme-wave-y));
-}
-
-@keyframes theme-wave {
+@keyframes settle {
   from {
-    clip-path: circle(0 at var(--theme-wave-x) var(--theme-wave-y));
-  }
-
-  to {
-    clip-path: circle(var(--theme-wave-radius) at var(--theme-wave-x) var(--theme-wave-y));
+    opacity: 0;
+    transform: translateY(10px);
+    filter: blur(4px);
   }
 }
 
-.theme-fallback-wave {
-  animation: theme-fallback-wave 820ms cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
-  height: var(--theme-fallback-size);
-  left: var(--theme-fallback-left);
-  top: var(--theme-fallback-top);
-  transform: scale(0);
-  transform-origin: center;
-  width: var(--theme-fallback-size);
-}
-
-.theme-fallback-wave-light {
-  background: rgb(224 222 215);
-}
-
-.theme-fallback-wave-dark {
-  background: rgb(11 10 9);
-}
-
-.landing-scope {
-  --lp: 11 10 9;
-  --li: 244 239 229;
-  --ll: 55 51 44;
-  --lm: 166 160 148;
-  --lsignal: 214 255 63;
-}
-
-.landing-scene[data-theme-scene="dark"],
-.landing-nav[data-nav-theme="dark"] {
-  --lp: 11 10 9;
-  --li: 244 239 229;
-  --ll: 55 51 44;
-  --lm: 166 160 148;
-}
-
-.landing-scene[data-theme-scene="paper"],
-.landing-nav[data-nav-theme="paper"] {
-  --lp: 224 222 215;
-  --li: 25 27 25;
-  --ll: 194 197 190;
-  --lm: 91 96 90;
-}
-
-.landing-scene[data-theme-scene="signal"],
-.landing-nav[data-nav-theme="signal"] {
-  --lp: 214 255 63;
-  --li: 11 10 9;
-  --ll: 11 10 9;
-  --lm: 56 68 16;
-}
-
-@keyframes theme-fallback-wave {
+@keyframes fade {
   from {
-    transform: scale(0);
+    opacity: 0;
   }
+}
 
-  to {
-    transform: scale(1);
-  }
+.settle {
+  animation: settle 800ms var(--ease-out) both;
+}
+
+button:not(:disabled),
+.press {
+  transition-property: transform, color, background-color, border-color, opacity;
+  transition-duration: 160ms;
+  transition-timing-function: var(--ease-out);
+}
+
+button:not(:disabled):active,
+.press:active {
+  transform: scale(0.97);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -169,12 +108,12 @@ body {
     transition: none;
   }
 
-  ::view-transition-new(root) {
-    animation: none;
+  .settle {
+    animation: fade 300ms ease both;
   }
 
-  .theme-fallback-wave {
-    animation: none;
-    transform: scale(1);
+  button:not(:disabled):active,
+  .press:active {
+    transform: none;
   }
 }

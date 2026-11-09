@@ -103,13 +103,13 @@ const ENTITY_TYPES = [
 ] as const;
 
 const TYPE_COLORS: Record<string, string> = {
-  person: "#fb7185",
-  project: "#a78bfa",
-  skill: "#34d399",
-  technology: "#60a5fa",
-  preference: "#fbbf24",
-  topic: "#f472b6",
-  organization: "#22d3ee",
+  person: "#d29190",
+  project: "#ac9ad0",
+  skill: "#7cb48f",
+  technology: "#75acd2",
+  preference: "#bf9f6a",
+  topic: "#cc90ac",
+  organization: "#63b4b8",
 };
 
 const LABEL_FULL_ZOOM = 1.1;
@@ -131,13 +131,13 @@ type ThemePalette = {
 };
 
 const DARK_PALETTE: ThemePalette = {
-  canvasBg: "#0b0a09",
-  sidebarBg: "rgba(18,17,15,0.96)",
-  dotGrid: "rgba(166,160,148,0.10)",
-  labelColor: "#f4efe5",
-  labelDimColor: "#6f6a61",
-  selectedRingColor: "#5aa89e",
-  pinnedDotColor: "#12110f",
+  canvasBg: "#0d0c0a",
+  sidebarBg: "rgba(20,18,16,0.96)",
+  dotGrid: "rgba(162,158,152,0.09)",
+  labelColor: "#f0eeea",
+  labelDimColor: "#a29e98",
+  selectedRingColor: "#f3ae5f",
+  pinnedDotColor: "#141210",
   edgeBaseAlpha: 0.45,
   edgeHighlightAlpha: 0.8,
   edgeFadeAlpha: 0.15,
@@ -146,13 +146,13 @@ const DARK_PALETTE: ThemePalette = {
 };
 
 const LIGHT_PALETTE: ThemePalette = {
-  canvasBg: "#e0ded7",
-  sidebarBg: "rgba(233,231,224,0.96)",
-  dotGrid: "rgba(25,27,25,0.08)",
-  labelColor: "#191b19",
-  labelDimColor: "#5b605a",
-  selectedRingColor: "#25746b",
-  pinnedDotColor: "#e9e7e0",
+  canvasBg: "#f8f7f4",
+  sidebarBg: "rgba(252,252,250,0.96)",
+  dotGrid: "rgba(24,22,18,0.07)",
+  labelColor: "#181612",
+  labelDimColor: "#625d56",
+  selectedRingColor: "#bb5d00",
+  pinnedDotColor: "#fcfcfa",
   edgeBaseAlpha: 0.45,
   edgeHighlightAlpha: 0.85,
   edgeFadeAlpha: 0.18,
@@ -225,8 +225,8 @@ function getNodeY(end: string | ForceNode): number | undefined {
   return typeof end === "string" ? undefined : end.y;
 }
 function getNodeColor(end: string | ForceNode): string {
-  if (typeof end === "string") return "#6f6a61";
-  return TYPE_COLORS[end.entityType] ?? "#6f6a61";
+  if (typeof end === "string") return "#9a958e";
+  return TYPE_COLORS[end.entityType] ?? "#9a958e";
 }
 function getNodeId(end: string | ForceNode): string {
   return typeof end === "string" ? end : end.id;
@@ -434,7 +434,7 @@ export function MemoryGraph() {
           if (d > maxDist) maxDist = d;
         }
         const radius = maxDist + 14;
-        const color = TYPE_COLORS[type] ?? "#6f6a61";
+        const color = TYPE_COLORS[type] ?? "#9a958e";
         const gradient = ctx.createRadialGradient(cx, cy, 0, cx, cy, radius);
         gradient.addColorStop(0, withAlpha(color, 0.08));
         gradient.addColorStop(0.7, withAlpha(color, 0.03));
@@ -495,7 +495,7 @@ export function MemoryGraph() {
   const drawNode = useCallback(
     (node: ForceNode, ctx: CanvasRenderingContext2D, globalScale: number) => {
       if (node.x === undefined || node.y === undefined) return;
-      const baseColor = TYPE_COLORS[node.entityType] ?? "#6f6a61";
+      const baseColor = TYPE_COLORS[node.entityType] ?? "#9a958e";
       const dimmed = isDimmed(node.id);
       const isSearchMatch = searchMatches !== null && searchMatches.has(node.id);
       const isPinned = pinnedIds.has(node.id);
@@ -753,9 +753,8 @@ export function MemoryGraph() {
         style={{ background: palette.sidebarBg }}
       >
         <div>
-          <p className="font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-muted">§ III — Entity weave</p>
-          <h1 className="mt-2 font-serif text-3xl font-semibold leading-tight text-ink">Memory Graph</h1>
-          <p className="mt-2 font-serif text-sm leading-6 text-muted">
+          <h1 className="font-mono text-3xl leading-tight tracking-[-0.04em] text-ink">Memory Graph</h1>
+          <p className="mt-2 text-sm leading-6 text-muted">
             Entities extracted from your memories. Hover to highlight a neighborhood. Shift-click to pin. Right-click for actions.
           </p>
         </div>
@@ -769,11 +768,11 @@ export function MemoryGraph() {
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search entities  ( / )"
-              className="w-full rounded-md border border-line/60 bg-paper/40 px-3 py-2 font-sans text-[11px] text-ink placeholder:text-muted focus:border-signal focus:outline-none"
+              className="w-full rounded-lg border border-line/60 bg-paper/40 px-3 py-2 font-sans text-xs text-ink placeholder:text-muted focus:border-signal focus:outline-none"
             />
           </label>
           {searchMatches !== null && (
-            <p className="mt-1 font-sans text-[10px] uppercase tracking-[0.12em] text-muted">
+            <p className="mt-1 font-sans text-xs text-muted">
               {searchMatches.size} match{searchMatches.size === 1 ? "" : "es"}
             </p>
           )}
@@ -787,8 +786,8 @@ export function MemoryGraph() {
 
         <div>
           <div className="mb-2 flex items-center justify-between">
-            <span className="font-sans text-[10px] font-medium uppercase tracking-[0.12em] text-muted">Filter</span>
-            <div className="flex gap-2 font-sans text-[10px] uppercase tracking-[0.12em] text-muted">
+            <span className="font-sans text-xs font-medium text-muted">Filter</span>
+            <div className="flex gap-2 font-sans text-xs text-muted">
               <button type="button" onClick={handleSelectAll} className="hover:text-signal">All</button>
               <span aria-hidden>·</span>
               <button type="button" onClick={handleSelectNone} className="hover:text-signal">None</button>
@@ -805,18 +804,18 @@ export function MemoryGraph() {
                     onClick={() => handleToggleType(type)}
                     aria-pressed={active}
                     className={cn(
-                      "flex w-full items-center justify-between gap-3 rounded-md border border-transparent px-2 py-1.5 font-sans text-[11px] font-medium uppercase tracking-[0.1em] transition hover:border-line/60",
+                      "flex w-full items-center justify-between gap-3 rounded-lg border border-transparent px-2 py-1.5 font-sans text-xs font-medium transition hover:border-line/60",
                       active ? "text-ink" : "text-muted opacity-60",
                     )}
                   >
                     <span className="flex items-center gap-2">
                       <span
-                        className="inline-block h-2.5 w-2.5 rounded-full"
+                        className="inline-block h-2.5 w-2.5 rounded-sm"
                         style={{ background: TYPE_COLORS[type], opacity: active ? 1 : 0.5 }}
                       />
                       {type}
                     </span>
-                    <span className={cn("font-sans text-[10px] tabular-nums", active ? "text-ink/80" : "text-muted")}>{count}</span>
+                    <span className={cn("font-sans text-xs tabular-nums", active ? "text-ink/80" : "text-muted")}>{count}</span>
                   </button>
                 </li>
               );
@@ -825,16 +824,16 @@ export function MemoryGraph() {
         </div>
 
         <div className="border-t border-line/40 pt-3">
-          <p className="mb-2 font-sans text-[10px] font-medium uppercase tracking-[0.12em] text-muted">Shortcuts</p>
-          <ul className="space-y-1 font-sans text-[10px] text-muted">
-            <li><kbd className="rounded bg-line/30 px-1.5 py-0.5 text-ink/70">/</kbd>  search</li>
-            <li><kbd className="rounded bg-line/30 px-1.5 py-0.5 text-ink/70">F</kbd>  fit to view</li>
-            <li><kbd className="rounded bg-line/30 px-1.5 py-0.5 text-ink/70">R</kbd>  reset (unpin + zoom)</li>
-            <li><kbd className="rounded bg-line/30 px-1.5 py-0.5 text-ink/70">Esc</kbd>  close panel</li>
-            <li><kbd className="rounded bg-line/30 px-1.5 py-0.5 text-ink/70">Shift</kbd> + click  pin</li>
+          <p className="mb-2 font-sans text-xs font-medium text-muted">Shortcuts</p>
+          <ul className="space-y-1 font-sans text-xs text-muted">
+            <li><kbd className="rounded-lg bg-line/30 px-1.5 py-0.5 text-ink/70">/</kbd>  search</li>
+            <li><kbd className="rounded-lg bg-line/30 px-1.5 py-0.5 text-ink/70">F</kbd>  fit to view</li>
+            <li><kbd className="rounded-lg bg-line/30 px-1.5 py-0.5 text-ink/70">R</kbd>  reset (unpin + zoom)</li>
+            <li><kbd className="rounded-lg bg-line/30 px-1.5 py-0.5 text-ink/70">Esc</kbd>  close panel</li>
+            <li><kbd className="rounded-lg bg-line/30 px-1.5 py-0.5 text-ink/70">Shift</kbd> + click  pin</li>
           </ul>
           {pinnedIds.size > 0 && (
-            <p className="mt-2 font-sans text-[10px] uppercase tracking-[0.12em] text-muted">
+            <p className="mt-2 font-sans text-xs text-muted">
               {pinnedIds.size} pinned
             </p>
           )}
@@ -845,12 +844,12 @@ export function MemoryGraph() {
             type="button"
             onClick={handleExtract}
             disabled={extracting}
-            className="w-full rounded-md border border-line bg-paper/10 px-3 py-2 font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-ink hover:bg-paper/20 disabled:opacity-50"
+            className="w-full rounded-lg border border-line bg-paper/10 px-3 py-2 font-sans text-xs font-medium text-ink hover:bg-paper/20 disabled:opacity-50"
           >
             {extracting ? "Extracting…" : "Backfill entities"}
           </button>
           {extractStatus && (
-            <p className="font-sans text-[11px] leading-5 text-muted">{extractStatus}</p>
+            <p className="font-sans text-xs leading-5 text-muted">{extractStatus}</p>
           )}
         </div>
       </aside>
@@ -865,15 +864,15 @@ export function MemoryGraph() {
         }}
       >
         {loading ? (
-          <div className="flex h-full items-center justify-center font-serif text-base text-muted">Loading graph…</div>
+          <div className="flex h-full items-center justify-center text-base text-muted">Loading graph…</div>
         ) : error ? (
-          <div className="flex h-full items-center justify-center font-serif text-base text-fault">{error}</div>
+          <div className="flex h-full items-center justify-center text-base text-fault">{error}</div>
         ) : entities.length === 0 ? (
-          <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center font-serif text-base text-muted">
+          <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center text-base text-muted">
             <p>No entities yet. Click <em>Backfill entities</em> in the sidebar to extract them from your existing memories.</p>
           </div>
         ) : filteredEntities.length === 0 ? (
-          <div className="flex h-full items-center justify-center font-serif text-base text-muted">
+          <div className="flex h-full items-center justify-center text-base text-muted">
             No entities match the active filters.
           </div>
         ) : (
@@ -925,7 +924,7 @@ export function MemoryGraph() {
               {ENTITY_TYPES.filter((t) => activeTypes.has(t) && (typeCounts[t] ?? 0) > 0).map((type) => (
                 <span
                   key={type}
-                  className="rounded-full px-2.5 py-1 font-sans text-[10px] font-medium uppercase tracking-[0.12em]"
+                  className="rounded-sm px-2.5 py-1 font-sans text-xs font-medium"
                   style={{
                     background: withAlpha(TYPE_COLORS[type], 0.18),
                     color: TYPE_COLORS[type],
@@ -938,7 +937,7 @@ export function MemoryGraph() {
             </div>
 
             {/* Zoom indicator */}
-            <div className="pointer-events-none absolute bottom-4 left-4 font-sans text-[10px] uppercase tracking-[0.12em] text-muted">
+            <div className="pointer-events-none absolute bottom-4 left-4 font-sans text-xs text-muted">
               zoom · {zoom.toFixed(2)}×
             </div>
 
@@ -948,7 +947,7 @@ export function MemoryGraph() {
             {/* Right-click context menu */}
             {contextMenu && (
               <div
-                className="absolute z-30 min-w-[12rem] overflow-hidden rounded-md border border-line/60 bg-paper shadow-2xl"
+                className="absolute z-30 min-w-[12rem] overflow-hidden rounded-lg border border-line/60 bg-paper shadow-2xl"
                 style={{ left: contextMenu.x, top: contextMenu.y }}
                 onClick={(e) => e.stopPropagation()}
               >
@@ -1006,22 +1005,22 @@ export function MemoryGraph() {
               type="button"
               onClick={() => { setSelected(null); setSelectedNodeId(null); }}
               aria-label="Close details"
-              className="absolute right-3 top-3 rounded-md p-1 font-sans text-xs text-muted hover:bg-line/30 hover:text-ink"
+              className="absolute right-3 top-3 rounded-lg p-1 font-sans text-xs text-muted hover:bg-line/30 hover:text-ink"
             >
               ✕
             </button>
             {selected.kind === "entity" ? (
               <>
-                <p className="font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-muted">
+                <p className="font-sans text-xs font-medium text-muted">
                   Entity · {selected.entity.entity_type}
                 </p>
-                <h2 className="mt-1 pr-6 font-serif text-2xl font-semibold leading-tight text-ink">
+                <h2 className="mt-1 pr-6 text-2xl font-normal leading-tight text-ink">
                   {selected.entity.name}
                 </h2>
-                <p className="mt-2 font-sans text-[11px] uppercase tracking-[0.12em] text-muted">
+                <p className="mt-2 font-sans text-xs text-muted">
                   {selected.memories.length} linked memories
                 </p>
-                <ul className="mt-3 space-y-3 font-serif text-base leading-7 text-ink/80">
+                <ul className="mt-3 space-y-3 text-base leading-7 text-ink/80">
                   {selected.memories.map((memory) => (
                     <li key={memory.id}>
                       <button
@@ -1037,23 +1036,23 @@ export function MemoryGraph() {
               </>
             ) : (
               <>
-                <p className="font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-muted">
+                <p className="font-sans text-xs font-medium text-muted">
                   Memory · {selected.memory.category}
                 </p>
-                <p className="mt-2 pr-6 font-serif text-base leading-7 text-ink">
+                <p className="mt-2 pr-6 text-base leading-7 text-ink">
                   {selected.memory.content}
                 </p>
                 {selected.entities.length > 0 && (
                   <>
-                    <p className="mt-4 font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-muted">
+                    <p className="mt-4 font-sans text-xs font-medium text-muted">
                       Linked entities
                     </p>
                     <div className="mt-2 flex flex-wrap gap-1.5">
                       {selected.entities.map((e) => (
                         <span
                           key={e.id}
-                          className="rounded-full px-2 py-0.5 font-sans text-[10px] font-medium"
-                          style={{ background: TYPE_COLORS[e.entity_type] ?? "#6f6a61", color: "#0b0a09" }}
+                          className="rounded-sm px-2 py-0.5 font-sans text-xs font-medium"
+                          style={{ background: TYPE_COLORS[e.entity_type] ?? "#9a958e", color: "#0d0c0a" }}
                         >
                           {e.name}
                         </span>
@@ -1063,10 +1062,10 @@ export function MemoryGraph() {
                 )}
                 {selected.neighbors.length > 0 && (
                   <>
-                    <p className="mt-4 font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-muted">
+                    <p className="mt-4 font-sans text-xs font-medium text-muted">
                       Neighbor memories ({selected.neighbors.length})
                     </p>
-                    <ul className="mt-2 space-y-2 font-serif text-sm leading-6 text-ink/70">
+                    <ul className="mt-2 space-y-2 text-sm leading-6 text-ink/70">
                       {selected.neighbors.map((memory) => (
                         <li key={memory.id} className="border-l-2 border-line pl-3">
                           {memory.content}
@@ -1087,10 +1086,10 @@ export function MemoryGraph() {
 function Stat({ label, value, sub }: { label: string; value: number; sub?: string }) {
   return (
     <div>
-      <p className="font-sans text-[10px] font-medium uppercase tracking-[0.12em] text-muted">{label}</p>
-      <p className="mt-1 font-serif text-xl font-semibold text-ink tabular-nums">
+      <p className="font-sans text-xs font-medium text-muted">{label}</p>
+      <p className="mt-1 text-xl font-semibold text-ink tabular-nums">
         {value.toLocaleString()}
-        {sub && <span className="ml-1 font-sans text-[10px] font-normal text-muted">{sub}</span>}
+        {sub && <span className="ml-1 font-sans text-xs font-normal text-muted">{sub}</span>}
       </p>
     </div>
   );
@@ -1101,7 +1100,7 @@ function ContextMenuItem({ label, onClick }: { label: string; onClick: () => voi
     <button
       type="button"
       onClick={onClick}
-      className="block w-full px-3 py-2 text-left font-sans text-[11px] font-medium uppercase tracking-[0.1em] text-ink/80 hover:bg-line/30 hover:text-ink"
+      className="block w-full px-3 py-2 text-left font-sans text-xs font-medium text-ink/80 hover:bg-line/30 hover:text-ink"
     >
       {label}
     </button>
@@ -1131,7 +1130,7 @@ function Minimap({ nodes, size, palette }: { nodes: ForceNode[]; size: { width: 
   void size;
   return (
     <div
-      className="pointer-events-none absolute bottom-4 right-4 rounded-md border border-line/40 p-2"
+      className="pointer-events-none absolute bottom-4 right-4 rounded-lg border border-line/40 p-2"
       style={{ background: palette.sidebarBg }}
     >
       <svg width={miniW} height={miniH}>
@@ -1141,12 +1140,12 @@ function Minimap({ nodes, size, palette }: { nodes: ForceNode[]; size: { width: 
             cx={((n.x ?? 0) - minX + padding) * scaleX}
             cy={((n.y ?? 0) - minY + padding) * scaleY}
             r={Math.max(1, Math.min(3, n.radius * 0.35))}
-            fill={TYPE_COLORS[n.entityType] ?? "#6f6a61"}
+            fill={TYPE_COLORS[n.entityType] ?? "#9a958e"}
             opacity={0.85}
           />
         ))}
       </svg>
-      <p className="mt-1 text-center font-sans text-[9px] uppercase tracking-[0.12em] text-muted">overview</p>
+      <p className="mt-1 text-center font-sans text-[9px] text-muted">overview</p>
     </div>
   );
 }

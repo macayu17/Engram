@@ -55,15 +55,15 @@ export function HomeDashboard() {
         actions={
           <Link
             href="/connections"
-            className="inline-flex min-h-10 items-center rounded border border-line px-4 text-sm"
+            className="inline-flex min-h-10 items-center rounded-lg border border-line px-4 text-sm"
           >
             Manage connections
           </Link>
         }
       />
       {!connected && (
-        <div className="space-y-3 rounded border border-line bg-panel p-6">
-          <h2 className="font-serif text-2xl">Connect your workspace</h2>
+        <div className="space-y-3 rounded-lg border border-line bg-panel p-6">
+          <h2 className="text-2xl">Connect your workspace</h2>
           <p className="text-sm leading-7 text-muted">
             Save an API key in Settings, then connect Claude or Codex to begin
             deliberate memory capture.
@@ -90,7 +90,7 @@ export function HomeDashboard() {
             {error?.message}
           </p>
         ))}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-px border border-line bg-line lg:grid-cols-5">
         {[
           {
             label: "Open conflicts",
@@ -126,10 +126,10 @@ export function HomeDashboard() {
           <Link
             key={metric.label}
             href={metric.href}
-            className="rounded border border-line p-5 focus-visible:outline-signal"
+            className="bg-paper p-5 transition-colors last:col-span-2 hover:bg-panel focus-visible:outline-signal lg:last:col-span-1"
           >
             <p className="text-xs text-muted">{metric.label}</p>
-            <p className="mt-3 font-serif text-3xl">
+            <p className="mt-4 font-mono text-3xl tracking-[-0.04em]">
               {connected && metric.loading
                 ? "Loading..."
                 : (metric.value ?? "—")}
@@ -157,8 +157,8 @@ export function HomeDashboard() {
         </div>
       )}
       {connected && approved.data?.total === 0 && pending.data?.total === 0 && (
-        <div className="space-y-3 rounded border border-line p-6">
-          <h2 className="font-serif text-2xl">
+        <div className="space-y-3 rounded-lg border border-line p-6">
+          <h2 className="text-2xl">
             No memories in this project yet
           </h2>
           <p className="text-sm leading-7 text-muted">
@@ -175,7 +175,7 @@ export function HomeDashboard() {
       )}
       <div className="grid gap-8 lg:grid-cols-2">
         <section className="space-y-5">
-          <h2 className="font-serif text-2xl">Recent retrievals</h2>
+          <h2 className="text-2xl">Recent retrievals</h2>
           {logs.isLoading && connected && (
             <p role="status">Loading retrievals...</p>
           )}
@@ -192,7 +192,7 @@ export function HomeDashboard() {
           </div>
         </section>
         <section className="space-y-5">
-          <h2 className="font-serif text-2xl">Recent activity</h2>
+          <h2 className="text-2xl">Recent activity</h2>
           {timeline.isLoading && connected && (
             <p role="status">Loading activity...</p>
           )}

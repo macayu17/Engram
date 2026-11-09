@@ -70,19 +70,19 @@ export function ConnectionConsent() {
       ))}
       {consent.isLoading && <p role="status">Checking connection request...</p>}
       {consent.data && (
-        <dl className="space-y-6 rounded border border-line bg-panel p-6">
+        <dl className="space-y-6 rounded-lg border border-line bg-panel p-6">
           <div>
-            <dt className="text-xs uppercase text-muted">Assistant</dt>
-            <dd className="mt-2 font-serif text-2xl">
+            <dt className="text-xs text-muted">Assistant</dt>
+            <dd className="mt-2 text-2xl">
               {consent.data.client_name}
             </dd>
           </div>
           <div>
-            <dt className="text-xs uppercase text-muted">Project</dt>
+            <dt className="text-xs text-muted">Project</dt>
             <dd className="mt-2">{namespace}</dd>
           </div>
           <div>
-            <dt className="text-xs uppercase text-muted">
+            <dt className="text-xs text-muted">
               Requested permissions
             </dt>
             <dd className="mt-2 space-y-2">
@@ -99,7 +99,7 @@ export function ConnectionConsent() {
             </dd>
           </div>
           <div>
-            <dt className="text-xs uppercase text-muted">Return address</dt>
+            <dt className="text-xs text-muted">Return address</dt>
             <dd className="mt-2 break-all font-mono text-xs">
               {consent.data.redirect_uri}
             </dd>
@@ -132,7 +132,7 @@ export function ConnectionConsent() {
             authorize.isPending
           }
           onClick={() => authorize.mutate()}
-          className="min-h-11 rounded border border-ink bg-ink px-5 text-sm text-paper disabled:opacity-40"
+          className="min-h-11 rounded-lg border border-ink bg-ink px-5 text-sm text-paper disabled:opacity-40"
         >
           {authorize.isPending ? "Authorizing..." : "Authorize project access"}
         </button>

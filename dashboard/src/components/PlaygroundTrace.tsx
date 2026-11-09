@@ -41,10 +41,10 @@ export function PlaygroundTrace({
   return (
     <section
       aria-label="Actual retrieval trace"
-      className="space-y-5 rounded border border-line p-5"
+      className="space-y-5 rounded-lg border border-line p-5"
     >
       <div className="flex flex-wrap justify-between gap-3">
-        <h2 className="font-serif text-2xl">Actual retrieval trace</h2>
+        <h2 className="text-2xl">Actual retrieval trace</h2>
         <button
           type="button"
           onClick={() => void logs.refetch()}
@@ -58,7 +58,7 @@ export function PlaygroundTrace({
         {injectedCount} injected
       </p>
       <div>
-        <h3 className="text-xs uppercase text-muted">Original request</h3>
+        <h3 className="text-xs text-muted">Original request</h3>
         <p className="mt-2 whitespace-pre-wrap text-sm leading-7">
           {originalRequest}
         </p>
@@ -83,7 +83,7 @@ export function PlaygroundTrace({
             Mode: {log.retrieval_mode ?? "proxy"} ·{" "}
             {log.injected_count ?? injectedCount} facts injected
           </p>
-          <h3 className="text-xs uppercase text-muted">Retrieved facts</h3>
+          <h3 className="text-xs text-muted">Retrieved facts</h3>
           {log.retrieved_memories.length === 0 && (
             <p className="text-sm text-muted">
               No approved memories matched this request.
@@ -105,7 +105,7 @@ export function PlaygroundTrace({
                     onClick={() =>
                       feedback.mutate({ id: memory.memory_id, relevant: true })
                     }
-                    className="min-h-9 rounded border border-line px-3 text-xs disabled:opacity-40"
+                    className="min-h-9 rounded-lg border border-line px-3 text-xs disabled:opacity-40"
                   >
                     Relevant
                   </button>
@@ -115,7 +115,7 @@ export function PlaygroundTrace({
                     onClick={() =>
                       feedback.mutate({ id: memory.memory_id, relevant: false })
                     }
-                    className="min-h-9 rounded border border-line px-3 text-xs disabled:opacity-40"
+                    className="min-h-9 rounded-lg border border-line px-3 text-xs disabled:opacity-40"
                   >
                     Not relevant
                   </button>

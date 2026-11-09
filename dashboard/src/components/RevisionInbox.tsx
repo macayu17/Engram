@@ -22,8 +22,8 @@ export function RevisionInbox() {
       void queryClient.invalidateQueries({ queryKey: ["memories"] }),
   });
   return (
-    <section className="space-y-4 rounded border border-line p-5">
-      <h2 className="font-serif text-2xl">Proposed revisions</h2>
+    <section className="space-y-4 rounded-lg border border-line p-5">
+      <h2 className="text-2xl">Proposed revisions</h2>
       <p className="text-sm text-muted">
         Approved facts stay unchanged until you accept a revision. Concurrent
         edits must be reviewed again.
@@ -51,13 +51,13 @@ export function RevisionInbox() {
         >
           <div className="grid gap-4 md:grid-cols-2">
             <div>
-              <h3 className="text-xs uppercase text-muted">Approved</h3>
+              <h3 className="text-xs text-muted">Approved</h3>
               <p className="mt-2 whitespace-pre-wrap text-sm leading-7">
                 {revision.original_content}
               </p>
             </div>
             <div>
-              <h3 className="text-xs uppercase text-muted">Proposed</h3>
+              <h3 className="text-xs text-muted">Proposed</h3>
               <p className="mt-2 whitespace-pre-wrap text-sm leading-7">
                 {revision.proposed_content}
               </p>
@@ -75,7 +75,7 @@ export function RevisionInbox() {
               onClick={() =>
                 resolve.mutate({ id: revision.id, action: "accept" })
               }
-              className="min-h-10 rounded border border-line px-4 text-sm disabled:opacity-40"
+              className="min-h-10 rounded-lg border border-line px-4 text-sm disabled:opacity-40"
             >
               Accept revision
             </button>

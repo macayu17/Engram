@@ -43,14 +43,13 @@ export function LogsWorkspace() {
   return (
     <section className="space-y-12">
       <ProductPageHeader
-        eyebrow="§ II — Retrieval trace"
         title="Logs"
         description="Inspect queries, saved memory snapshots, and the context actually injected into each request."
         actions={
           <button
             type="button"
             onClick={() => logsQuery.refetch()}
-            className="inline-flex min-h-10 items-center gap-2 rounded-full border border-line px-4 font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-muted transition hover:border-signal hover:text-signal active:translate-y-px"
+            className="inline-flex min-h-10 items-center gap-2 rounded-sm border border-line px-4 font-sans text-xs font-medium text-muted transition hover:border-signal hover:text-signal active:translate-y-px"
           >
             <RefreshCw size={16} aria-hidden="true" />
             Refresh
@@ -71,7 +70,7 @@ export function LogsWorkspace() {
         </label>
         <button
           type="submit"
-          className="inline-flex min-h-12 items-center justify-center rounded-lg border border-ink px-5 font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-ink transition hover:border-signal hover:bg-signal hover:text-paper"
+          className="inline-flex min-h-12 items-center justify-center rounded-lg border border-ink px-5 font-sans text-xs font-medium text-ink transition hover:border-signal hover:bg-signal hover:text-paper"
         >
           Filter
         </button>
@@ -97,7 +96,7 @@ export function LogsWorkspace() {
         </div>
       )}
 
-      <div className="flex items-center justify-between font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-muted">
+      <div className="flex items-center justify-between font-sans text-xs font-medium text-muted">
         <span>
           Showing {logs.length} of {total}
         </span>

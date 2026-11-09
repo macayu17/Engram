@@ -86,7 +86,7 @@ export function MemoryTable({
   return (
     <div className="overflow-x-auto border-y border-line">
       <table className="min-w-full divide-y divide-line text-sm">
-        <thead className="text-left font-sans text-[11px] uppercase tracking-[0.12em] text-muted">
+        <thead className="text-left font-sans text-xs text-muted">
           <tr>
             {onToggle && (
               <th scope="col" className="pr-3">
@@ -124,7 +124,7 @@ export function MemoryTable({
                       aria-label="Edit memory content"
                       value={draft}
                       onChange={(event) => setDraft(event.target.value)}
-                      className="min-h-24 w-full rounded-md border border-line bg-panel p-3 font-sans text-sm leading-6 text-ink outline-none focus:border-signal"
+                      className="min-h-24 w-full rounded-lg border border-line bg-panel p-3 font-sans text-sm leading-6 text-ink outline-none focus:border-signal"
                     />
                   ) : (
                     <div className="space-y-3">
@@ -142,7 +142,7 @@ export function MemoryTable({
                         <button
                           type="button"
                           onClick={() => toggleExpanded(memory.id)}
-                          className="inline-flex items-center gap-2 font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-muted hover:text-signal"
+                          className="inline-flex items-center gap-2 font-sans text-xs font-medium text-muted hover:text-signal"
                         >
                           {isExpanded ? (
                             <ChevronUp size={15} aria-hidden="true" />
@@ -154,36 +154,36 @@ export function MemoryTable({
                       )}
                     </div>
                   )}
-                  <p className="mt-2 font-sans text-[11px] uppercase tracking-[0.12em] text-muted">
+                  <p className="mt-2 font-sans text-xs text-muted">
                     {memory.id}
                   </p>
-                  <div className="mt-3 flex flex-wrap gap-2 font-sans text-[10px] uppercase tracking-[0.12em] text-muted">
-                    <span className="rounded-md border border-line bg-tag/40 px-2 py-1">
+                  <div className="mt-3 flex flex-wrap gap-2 font-sans text-xs text-muted">
+                    <span className="rounded-lg border border-line bg-tag/40 px-2 py-1">
                       {memory.category}
                     </span>
-                    <span className="rounded-md border border-line bg-tag/40 px-2 py-1">
+                    <span className="rounded-lg border border-line bg-tag/40 px-2 py-1">
                       {memory.source}
                     </span>
                     {memory.pinned && (
-                      <span className="rounded-md border border-signal px-2 py-1 text-signal">
+                      <span className="rounded-lg border border-signal px-2 py-1 text-signal">
                         pinned
                       </span>
                     )}
                   </div>
                 </td>
-                <td className="px-4 py-5 font-sans text-[11px] uppercase tracking-[0.12em] text-muted">
+                <td className="px-4 py-5 font-sans text-xs text-muted">
                   {memory.confidence.toFixed(2)}
                 </td>
-                <td className="px-4 py-5 font-sans text-[11px] uppercase tracking-[0.12em] text-muted">
+                <td className="px-4 py-5 font-sans text-xs text-muted">
                   {memory.status}
                 </td>
-                <td className="px-4 py-5 font-sans text-[11px] uppercase tracking-[0.12em] text-muted">
+                <td className="px-4 py-5 font-sans text-xs text-muted">
                   {memory.access_count}
                 </td>
-                <td className="px-4 py-5 font-sans text-[11px] uppercase tracking-[0.12em] text-muted">
+                <td className="px-4 py-5 font-sans text-xs text-muted">
                   {formatOptionalDate(memory.last_accessed)}
                 </td>
-                <td className="px-4 py-5 font-sans text-[11px] uppercase tracking-[0.12em] text-muted">
+                <td className="px-4 py-5 font-sans text-xs text-muted">
                   {formatOptionalDate(memory.created_at)}
                 </td>
                 <td className="py-5 pl-4">
@@ -192,7 +192,7 @@ export function MemoryTable({
                       <button
                         type="button"
                         onClick={() => onHistory(memory.id)}
-                        className="rounded border border-line p-2 text-xs text-muted hover:text-ink"
+                        className="rounded-lg border border-line p-2 text-xs text-muted hover:text-ink"
                       >
                         History / expiry
                       </button>
@@ -204,7 +204,7 @@ export function MemoryTable({
                           title="Save memory"
                           onClick={() => saveEditing(memory.id)}
                           disabled={isBusy}
-                          className="rounded bg-tag p-2 text-signal hover:text-ink disabled:opacity-50"
+                          className="rounded-lg bg-tag p-2 text-signal hover:text-ink disabled:opacity-50"
                         >
                           <Check size={16} aria-hidden="true" />
                         </button>
@@ -212,7 +212,7 @@ export function MemoryTable({
                           type="button"
                           title="Cancel edit"
                           onClick={() => setEditingId(null)}
-                          className="rounded bg-tag p-2 text-muted hover:text-ink"
+                          className="rounded-lg bg-tag p-2 text-muted hover:text-ink"
                         >
                           <X size={16} aria-hidden="true" />
                         </button>
@@ -227,7 +227,7 @@ export function MemoryTable({
                               onUpdate(memory.id, { status: "approved" })
                             }
                             disabled={isBusy}
-                            className="rounded bg-tag p-2 text-muted hover:text-signal disabled:opacity-50"
+                            className="rounded-lg bg-tag p-2 text-muted hover:text-signal disabled:opacity-50"
                           >
                             <ShieldCheck size={16} aria-hidden="true" />
                           </button>
@@ -239,7 +239,7 @@ export function MemoryTable({
                             onUpdate(memory.id, { pinned: !memory.pinned })
                           }
                           disabled={isBusy}
-                          className="rounded bg-tag p-2 text-muted hover:text-signal disabled:opacity-50"
+                          className="rounded-lg bg-tag p-2 text-muted hover:text-signal disabled:opacity-50"
                         >
                           {memory.pinned ? (
                             <PinOff size={16} aria-hidden="true" />
@@ -252,7 +252,7 @@ export function MemoryTable({
                           title="View source"
                           onClick={() => onSource(memory.id)}
                           disabled={isBusy}
-                          className="rounded bg-tag p-2 text-muted hover:text-signal disabled:opacity-50"
+                          className="rounded-lg bg-tag p-2 text-muted hover:text-signal disabled:opacity-50"
                         >
                           <Eye size={16} aria-hidden="true" />
                         </button>
@@ -260,7 +260,7 @@ export function MemoryTable({
                           type="button"
                           title="Edit memory"
                           onClick={() => startEditing(memory)}
-                          className="rounded bg-tag p-2 text-muted hover:text-signal"
+                          className="rounded-lg bg-tag p-2 text-muted hover:text-signal"
                         >
                           <Pencil size={16} aria-hidden="true" />
                         </button>
@@ -279,7 +279,7 @@ export function MemoryTable({
                             }
                           }}
                           disabled={isBusy}
-                          className="rounded bg-tag p-2 text-muted hover:text-fault disabled:opacity-50"
+                          className="rounded-lg bg-tag p-2 text-muted hover:text-fault disabled:opacity-50"
                         >
                           <Trash2 size={16} aria-hidden="true" />
                         </button>

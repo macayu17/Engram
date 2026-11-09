@@ -8,10 +8,10 @@ import { ClerkEngramBridge } from "@/components/ClerkEngramBridge";
 import { CommandPalette } from "@/components/CommandPalette";
 import { EngramLogo } from "@/components/EngramLogo";
 import { NamespaceSelector } from "@/components/NamespaceSelector";
+import { ThemeToggle } from "@/components/ThemeToggle";
+import { cn } from "@/lib/cn";
 import { useActiveApiKey } from "@/lib/useActiveApiKey";
 import { useNamespace } from "@/lib/useNamespace";
-
-import { ThemeToggle } from "@/components/ThemeToggle";
 
 const navItems = [
   { href: "/overview", label: "Overview" },
@@ -24,13 +24,9 @@ const navItems = [
   { href: "/settings", label: "Settings" },
 ];
 
-export function AppFrame({
-  authEnabled,
-  children,
-}: {
-  authEnabled: boolean;
-  children: React.ReactNode;
-}) {
+const focusRing = "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-signal";
+
+export function AppFrame({ authEnabled, children }: { authEnabled: boolean; children: React.ReactNode }) {
   const pathname = usePathname();
   const apiKey = useActiveApiKey();
   const namespace = useNamespace();
@@ -39,83 +35,86 @@ export function AppFrame({
     return children;
   }
 
+  const isActive = (href: string) => pathname === href || pathname.startsWith(`${href}/`);
+
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen lg:grid lg:grid-cols-[15rem_minmax(0,1fr)]">
       <a
         href="#product-content"
-        className="sr-only fixed left-4 top-4 z-50 rounded-md bg-signal px-4 py-2 font-sans text-sm font-semibold text-paper focus:not-sr-only"
+        className="sr-only fixed left-4 top-4 z-50 rounded-lg bg-signal px-4 py-2 text-sm font-medium text-paper focus:not-sr-only"
       >
         Skip to product content
       </a>
       {authEnabled && <ClerkEngramBridge />}
-      <header className="sticky top-0 z-40 border-b border-line bg-paper/90 backdrop-blur-xl">
-        <div className="mx-auto grid min-h-16 max-w-[1400px] grid-cols-[1fr_auto] items-center gap-4 px-4 py-3 lg:grid-cols-[180px_minmax(18rem,30rem)_1fr] lg:px-8">
-          <Link
-            href="/overview"
-            className="group focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-signal"
-          >
+
+      <aside className="hidden border-r border-line lg:block">
+        <div className="sticky top-0 flex h-screen flex-col px-5 py-7">
+          <Link href="/" className={cn("rounded-lg px-2", focusRing)}>
             <EngramLogo />
           </Link>
-          <div className="col-span-2 row-start-2 flex w-full min-w-0 justify-center lg:col-span-1 lg:row-start-auto">
-            <CommandPalette key={`${apiKey}:${namespace}`} />
-          </div>
-          <nav className="flex items-center justify-end gap-3 font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-muted">
-            <div className="hidden items-center gap-4 xl:flex">
-              {navItems.map((item) => {
-                const active =
-                  pathname === item.href ||
-                  pathname.startsWith(`${item.href}/`);
-                return (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    aria-current={active ? "page" : undefined}
-                    className={`border-b py-2 transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-signal ${active ? "border-signal text-ink" : "border-transparent hover:border-line hover:text-signal"}`}
-                  >
-                    {item.label}
-                  </Link>
-                );
-              })}
-            </div>
-            <div className="hidden items-center sm:flex">
-              <AuthControls enabled={authEnabled} />
-            </div>
-            <ThemeToggle />
+          <nav aria-label="Product navigation" className="mt-10 flex flex-col gap-0.5">
+            {navItems.map((item) => (
+              <Link
+                key={item.href}
+                href={item.href}
+                aria-current={isActive(item.href) ? "page" : undefined}
+                className={cn(
+                  "flex items-center gap-3 rounded-lg px-3 py-2 text-[0.94rem] transition-colors",
+                  isActive(item.href) ? "bg-tag text-ink" : "text-muted hover:bg-tag/60 hover:text-ink",
+                  focusRing,
+                )}
+              >
+                <span className={cn("h-1.5 w-1.5 shrink-0", isActive(item.href) ? "bg-signal" : "bg-line")} aria-hidden="true" />
+                {item.label}
+              </Link>
+            ))}
           </nav>
+          <div className="mt-auto flex items-center justify-between gap-2 px-1">
+            <AuthControls enabled={authEnabled} />
+            <ThemeToggle />
+          </div>
         </div>
-      </header>
-      <main
-        id="product-content"
-        tabIndex={-1}
-        className="mx-auto max-w-[1400px] scroll-mt-20 px-4 pb-32 pt-10 outline-none sm:px-8 sm:pb-20 md:py-16"
-      >
-        <NamespaceSelector />
-        <div key={`${apiKey}:${namespace}`}>{children}</div>
-      </main>
-      <footer className="mx-auto max-w-[1400px] border-t border-line px-4 pb-28 pt-6 sm:px-8 sm:pb-10">
-        <p className="font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-muted">
-          Copyright (c) 2026 Ayush
-        </p>
-      </footer>
-      <nav
-        aria-label="Product navigation"
-        className="fixed bottom-0 left-0 z-40 grid w-full grid-cols-4 border-t border-line bg-paper/95 px-2 py-2 text-center font-sans text-[10px] font-semibold uppercase tracking-[0.04em] text-muted backdrop-blur-xl sm:grid-cols-8 xl:hidden"
-      >
-        {navItems.map((item) => {
-          const active =
-            pathname === item.href || pathname.startsWith(`${item.href}/`);
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              aria-current={active ? "page" : undefined}
-              className={`flex min-h-11 items-center justify-center rounded-md px-1 transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-signal ${active ? "bg-tag text-signal" : "hover:bg-tag/50 hover:text-ink"}`}
-            >
-              {item.label}
+      </aside>
+
+      <div className="min-w-0">
+        <header className="sticky top-0 z-30 border-b border-line bg-paper/85 backdrop-blur-md lg:hidden">
+          <div className="flex items-center justify-between gap-3 px-4 py-3">
+            <Link href="/" className={cn("rounded-lg", focusRing)}>
+              <EngramLogo />
             </Link>
-          );
-        })}
-      </nav>
+            <div className="flex items-center gap-1">
+              <AuthControls enabled={authEnabled} />
+              <ThemeToggle />
+            </div>
+          </div>
+          <nav aria-label="Product navigation" className="flex gap-1 overflow-x-auto px-3 pb-2 [scrollbar-width:none]">
+            {navItems.map((item) => (
+              <Link
+                key={item.href}
+                href={item.href}
+                aria-current={isActive(item.href) ? "page" : undefined}
+                className={cn(
+                  "shrink-0 rounded-sm px-3 py-1.5 text-sm transition-colors",
+                  isActive(item.href) ? "bg-tag text-ink" : "text-muted hover:text-ink",
+                  focusRing,
+                )}
+              >
+                {item.label}
+              </Link>
+            ))}
+          </nav>
+        </header>
+
+        <main id="product-content" tabIndex={-1} className="mx-auto max-w-6xl scroll-mt-24 px-4 pb-24 pt-8 outline-none sm:px-8 lg:px-12 lg:pt-10">
+          <div className="mb-10 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+            <NamespaceSelector />
+            <div className="md:w-80">
+              <CommandPalette key={`${apiKey}:${namespace}`} />
+            </div>
+          </div>
+          <div key={`${apiKey}:${namespace}`}>{children}</div>
+        </main>
+      </div>
     </div>
   );
 }

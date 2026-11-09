@@ -225,7 +225,6 @@ export function SettingsPanel() {
   return (
     <section className="space-y-12">
       <ProductPageHeader
-        eyebrow="§ VII — Workspace control"
         title="Settings"
         description="The dashboard stores one Engram key in this browser. Workspace provider keys are encrypted by the API."
       />
@@ -233,12 +232,12 @@ export function SettingsPanel() {
       <div className="grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
         <form onSubmit={saveApiKey} className="border-y border-line py-6">
           <div className="mb-4 flex items-center gap-3">
-            <span className="flex h-10 w-10 items-center justify-center rounded bg-tag text-signal">
+            <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-tag text-signal">
               <KeyRound size={18} aria-hidden="true" />
             </span>
             <div>
-              <h2 className="font-serif text-2xl font-semibold">API Key</h2>
-              <p className="font-sans text-[11px] uppercase tracking-[0.12em] text-muted">
+              <h2 className="text-2xl font-normal">API Key</h2>
+              <p className="font-sans text-xs text-muted">
                 Stored as engram_api_key
               </p>
             </div>
@@ -252,14 +251,14 @@ export function SettingsPanel() {
                 setKeyError("");
               }}
               placeholder="ek_..."
-              className="min-h-12 min-w-0 flex-1 rounded-full border border-line bg-paper px-4 font-serif text-base text-ink outline-none focus:border-signal"
+              className="min-h-12 min-w-0 flex-1 rounded-sm border border-line bg-paper px-4 text-base text-ink outline-none focus:border-signal"
               type={showApiKey ? "text" : "password"}
             />
             <button
               type="button"
               onClick={() => setShowApiKey((value) => !value)}
               title={showApiKey ? "Hide saved key" : "View saved key"}
-              className="inline-flex min-h-12 items-center justify-center gap-2 border border-line px-4 font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-muted hover:border-signal hover:text-signal"
+              className="inline-flex min-h-12 items-center justify-center gap-2 border border-line px-4 font-sans text-xs font-medium text-muted hover:border-signal hover:text-signal"
             >
               {showApiKey ? (
                 <EyeOff size={16} aria-hidden="true" />
@@ -272,50 +271,50 @@ export function SettingsPanel() {
               type="button"
               onClick={copyApiKey}
               title="Copy saved key"
-              className="inline-flex min-h-12 items-center justify-center gap-2 border border-line px-4 font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-muted hover:border-signal hover:text-signal"
+              className="inline-flex min-h-12 items-center justify-center gap-2 border border-line px-4 font-sans text-xs font-medium text-muted hover:border-signal hover:text-signal"
             >
               <Copy size={16} aria-hidden="true" />
               Copy
             </button>
             <button
               type="submit"
-              className="inline-flex min-h-12 items-center justify-center gap-2 border border-ink px-5 font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-ink hover:border-signal hover:text-signal"
+              className="inline-flex min-h-12 items-center justify-center gap-2 border border-ink px-5 font-sans text-xs font-medium text-ink hover:border-signal hover:text-signal"
             >
               <Check size={16} aria-hidden="true" />
               Save
             </button>
           </div>
           {keyError && (
-            <p className="mt-3 font-serif text-base text-fault">{keyError}</p>
+            <p className="mt-3 text-base text-fault">{keyError}</p>
           )}
           {saved && (
-            <p className="mt-3 font-serif text-base text-signal">Saved.</p>
+            <p className="mt-3 text-base text-signal">Saved.</p>
           )}
         </form>
 
         <div className="border-y border-line py-6">
-          <h2 className="font-serif text-2xl font-semibold">Current User</h2>
+          <h2 className="text-2xl font-normal">Current User</h2>
           {apiKey ? (
             malformedApiKey ? (
-              <p className="mt-4 font-serif text-base text-fault">
+              <p className="mt-4 text-base text-fault">
                 Use an Engram key that starts with ek_.
               </p>
             ) : userQuery.isLoading ? (
-              <p className="mt-4 font-serif text-base text-muted">
+              <p className="mt-4 text-base text-muted">
                 Loading user...
               </p>
             ) : userQuery.isError ? (
-              <p className="mt-4 font-serif text-base text-fault">
+              <p className="mt-4 text-base text-fault">
                 Unable to authenticate this key.
               </p>
             ) : (
               <div className="mt-4 space-y-5">
                 <form onSubmit={updateExternalId} className="space-y-3">
                   <label className="block">
-                    <span className="font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-muted">
+                    <span className="font-sans text-xs font-medium text-muted">
                       Username
                     </span>
-                    <span className="mt-1 block font-sans text-[11px] uppercase tracking-[0.12em] text-muted/70">
+                    <span className="mt-1 block font-sans text-xs text-muted/70">
                       Stored as external ID
                     </span>
                   </label>
@@ -326,28 +325,28 @@ export function SettingsPanel() {
                         setExternalIdDraft(event.target.value);
                         setExternalIdMessage("");
                       }}
-                      className="min-h-12 min-w-0 flex-1 rounded-full border border-line bg-paper px-4 font-serif text-base text-ink outline-none focus:border-signal"
+                      className="min-h-12 min-w-0 flex-1 rounded-sm border border-line bg-paper px-4 text-base text-ink outline-none focus:border-signal"
                     />
                     <button
                       type="submit"
                       disabled={updateUserMutation.isPending}
-                      className="inline-flex min-h-12 items-center justify-center gap-2 border border-ink px-5 font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-ink hover:border-signal hover:text-signal disabled:cursor-not-allowed disabled:opacity-50"
+                      className="inline-flex min-h-12 items-center justify-center gap-2 border border-ink px-5 font-sans text-xs font-medium text-ink hover:border-signal hover:text-signal disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       <Check size={16} aria-hidden="true" />
                       Save
                     </button>
                   </div>
                   {externalIdMessage && (
-                    <p className="font-serif text-base text-muted">
+                    <p className="text-base text-muted">
                       {externalIdMessage}
                     </p>
                   )}
                 </form>
                 <div>
-                  <p className="font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-muted">
+                  <p className="font-sans text-xs font-medium text-muted">
                     Created
                   </p>
-                  <p className="mt-1 font-serif text-lg text-ink">
+                  <p className="mt-1 text-lg text-ink">
                     {userQuery.data
                       ? formatDate(userQuery.data.created_at)
                       : ""}
@@ -356,7 +355,7 @@ export function SettingsPanel() {
               </div>
             )
           ) : (
-            <p className="mt-4 font-serif text-base text-muted">
+            <p className="mt-4 text-base text-muted">
               No key saved.
             </p>
           )}
@@ -366,14 +365,14 @@ export function SettingsPanel() {
       {!hosted && (
         <form onSubmit={createEngramKey} className="border-y border-line py-6">
           <div className="mb-4 flex items-center gap-3">
-            <span className="flex h-10 w-10 items-center justify-center rounded bg-tag text-signal">
+            <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-tag text-signal">
               <Plus size={18} aria-hidden="true" />
             </span>
             <div>
-              <h2 className="font-serif text-2xl font-semibold">
+              <h2 className="text-2xl font-normal">
                 Generate Engram Key
               </h2>
-              <p className="font-sans text-[11px] uppercase tracking-[0.12em] text-muted">
+              <p className="font-sans text-xs text-muted">
                 Creates a user and saves the new ek_ key
               </p>
             </div>
@@ -386,12 +385,12 @@ export function SettingsPanel() {
                 setGenerationMessage("");
               }}
               placeholder="dashboard_user_1"
-              className="min-h-12 min-w-0 flex-1 rounded-full border border-line bg-paper px-4 font-serif text-base text-ink outline-none focus:border-signal"
+              className="min-h-12 min-w-0 flex-1 rounded-sm border border-line bg-paper px-4 text-base text-ink outline-none focus:border-signal"
             />
             <button
               type="submit"
               disabled={createUserMutation.isPending}
-              className="inline-flex min-h-12 items-center justify-center gap-2 border border-ink px-5 font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-ink hover:border-signal hover:text-signal disabled:cursor-not-allowed disabled:opacity-50"
+              className="inline-flex min-h-12 items-center justify-center gap-2 border border-ink px-5 font-sans text-xs font-medium text-ink hover:border-signal hover:text-signal disabled:cursor-not-allowed disabled:opacity-50"
             >
               <Plus size={16} aria-hidden="true" />
               Generate
@@ -400,19 +399,19 @@ export function SettingsPanel() {
           {generatedKey && (
             <div className="mt-5 grid gap-3 lg:grid-cols-[1fr_auto]">
               <div>
-                <p className="font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-muted">
+                <p className="font-sans text-xs font-medium text-muted">
                   One-time key for {generatedExternalId}
                 </p>
                 <input
                   readOnly
                   value={generatedKey}
-                  className="mt-2 min-h-12 w-full rounded-full border border-line bg-paper px-4 font-serif text-base text-ink outline-none"
+                  className="mt-2 min-h-12 w-full rounded-sm border border-line bg-paper px-4 text-base text-ink outline-none"
                 />
               </div>
               <button
                 type="button"
                 onClick={copyGeneratedKey}
-                className="inline-flex min-h-12 items-center justify-center gap-2 self-end border border-line px-4 font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-muted hover:border-signal hover:text-signal"
+                className="inline-flex min-h-12 items-center justify-center gap-2 self-end border border-line px-4 font-sans text-xs font-medium text-muted hover:border-signal hover:text-signal"
               >
                 <Copy size={16} aria-hidden="true" />
                 Copy New Key
@@ -420,7 +419,7 @@ export function SettingsPanel() {
             </div>
           )}
           {generationMessage && (
-            <p className="mt-3 font-serif text-base text-muted">
+            <p className="mt-3 text-base text-muted">
               {generationMessage}
             </p>
           )}
@@ -430,11 +429,11 @@ export function SettingsPanel() {
       <section className="border-y border-line py-6">
         <div className="grid gap-6 lg:grid-cols-[0.8fr_1.2fr]">
           <div>
-            <p className="font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-muted">
+            <p className="font-sans text-xs font-medium text-muted">
               Workspace access
             </p>
-            <h2 className="mt-2 font-serif text-2xl font-semibold">API Keys</h2>
-            <p className="mt-2 max-w-md font-serif text-base leading-7 text-muted">
+            <h2 className="mt-2 text-2xl font-normal">API Keys</h2>
+            <p className="mt-2 max-w-md text-base leading-7 text-muted">
               Create named credentials and revoke one key without rotating every
               client.
             </p>
@@ -448,19 +447,19 @@ export function SettingsPanel() {
                 value={managedKeyName}
                 onChange={(event) => setManagedKeyName(event.target.value)}
                 placeholder="Key name"
-                className="min-h-11 min-w-0 flex-1 rounded-md border border-line bg-panel px-4 font-sans text-sm text-ink outline-none focus:border-signal"
+                className="min-h-11 min-w-0 flex-1 rounded-lg border border-line bg-panel px-4 font-sans text-sm text-ink outline-none focus:border-signal"
               />
               <button
                 type="submit"
                 disabled={!apiKey || createManagedKeyMutation.isPending}
-                className="min-h-11 rounded-md border border-ink px-4 font-sans text-[11px] font-medium uppercase tracking-[0.12em] hover:border-signal hover:text-signal disabled:opacity-40"
+                className="min-h-11 rounded-lg border border-ink px-4 font-sans text-xs font-medium hover:border-signal hover:text-signal disabled:opacity-40"
               >
                 Create key
               </button>
             </form>
             {revealedManagedKey && (
               <div className="mt-4 border border-signal/40 bg-signal/5 p-4">
-                <p className="font-sans text-[10px] font-medium uppercase tracking-[0.12em] text-signal">
+                <p className="font-sans text-xs font-medium text-signal">
                   Shown once
                 </p>
                 <div className="mt-2 flex gap-3">
@@ -489,7 +488,7 @@ export function SettingsPanel() {
                     <p className="font-sans text-sm font-medium text-ink">
                       {key.name}
                     </p>
-                    <p className="mt-1 font-sans text-[10px] uppercase tracking-[0.1em] text-muted">
+                    <p className="mt-1 font-sans text-xs text-muted">
                       Created {formatDate(key.created_at)} · Last used{" "}
                       {key.last_used_at
                         ? formatDate(key.last_used_at)
@@ -502,7 +501,7 @@ export function SettingsPanel() {
                       window.confirm(`Revoke ${key.name}?`) &&
                       revokeManagedKeyMutation.mutate(key.id)
                     }
-                    className="justify-self-start font-sans text-[10px] uppercase tracking-[0.1em] text-fault sm:justify-self-end"
+                    className="justify-self-start font-sans text-xs text-fault sm:justify-self-end"
                   >
                     Revoke
                   </button>
@@ -523,11 +522,11 @@ export function SettingsPanel() {
       <section className="border-y border-line py-6">
         <div className="grid gap-6 lg:grid-cols-[0.8fr_1.2fr]">
           <div>
-            <p className="font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-muted">
+            <p className="font-sans text-xs font-medium text-muted">
               Subscription
             </p>
-            <h2 className="mt-2 font-serif text-2xl font-semibold">Billing</h2>
-            <p className="mt-2 max-w-md font-serif text-base leading-7 text-muted">
+            <h2 className="mt-2 text-2xl font-normal">Billing</h2>
+            <p className="mt-2 max-w-md text-base leading-7 text-muted">
               Hosted plans limit stored memories, monthly retrievals, and
               workspace seats. Model usage stays on your provider account.
             </p>
@@ -557,7 +556,7 @@ export function SettingsPanel() {
               <button
                 type="button"
                 onClick={openBilling}
-                className="mt-5 min-h-11 rounded-md border border-ink px-4 font-sans text-[11px] font-medium uppercase tracking-[0.12em] hover:border-signal hover:text-signal"
+                className="mt-5 min-h-11 rounded-lg border border-ink px-4 font-sans text-xs font-medium hover:border-signal hover:text-signal"
               >
                 {usageQuery.data?.plan === "pro"
                   ? "Manage billing"
@@ -571,7 +570,7 @@ export function SettingsPanel() {
       <ProviderConfigSection apiKey={apiKey} onError={setKeyError} />
 
       <div className="border-y border-fault/30 bg-fault/5 py-6">
-        <h2 className="px-0 font-serif text-2xl font-semibold text-fault">
+        <h2 className="px-0 text-2xl font-normal text-fault">
           Danger Zone
         </h2>
         <div className="mt-4 flex flex-col gap-3 sm:flex-row">
@@ -579,7 +578,7 @@ export function SettingsPanel() {
             type="button"
             onClick={deleteMemories}
             disabled={!apiKey || deleteMemoriesMutation.isPending}
-            className="inline-flex items-center justify-center gap-2 border border-fault/40 px-4 py-2 font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-fault hover:bg-fault/10 disabled:cursor-not-allowed disabled:opacity-50"
+            className="inline-flex items-center justify-center gap-2 border border-fault/40 px-4 py-2 font-sans text-xs font-medium text-fault hover:bg-fault/10 disabled:cursor-not-allowed disabled:opacity-50"
           >
             <Trash2 size={16} aria-hidden="true" />
             Delete Memories
@@ -588,7 +587,7 @@ export function SettingsPanel() {
             type="button"
             onClick={deleteAccount}
             disabled={!apiKey || deleteAccountMutation.isPending}
-            className="inline-flex items-center justify-center gap-2 border border-fault/40 bg-fault/10 px-4 py-2 font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-fault hover:bg-fault/15 disabled:cursor-not-allowed disabled:opacity-50"
+            className="inline-flex items-center justify-center gap-2 border border-fault/40 bg-fault/10 px-4 py-2 font-sans text-xs font-medium text-fault hover:bg-fault/15 disabled:cursor-not-allowed disabled:opacity-50"
           >
             <Trash2 size={16} aria-hidden="true" />
             Delete Account
@@ -615,10 +614,10 @@ function formatUsage(current?: number, limit?: number): string {
 function UsageValue({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <dt className="font-sans text-[10px] uppercase tracking-[0.1em] text-muted">
+      <dt className="font-sans text-xs text-muted">
         {label}
       </dt>
-      <dd className="mt-2 font-serif text-xl font-semibold text-ink">
+      <dd className="mt-2 text-xl font-semibold text-ink">
         {value}
       </dd>
     </div>
@@ -707,8 +706,8 @@ function ProviderConfigSection({
   if (malformed) {
     return (
       <div className="border-y border-line py-6">
-        <h2 className="font-serif text-2xl font-semibold">Extraction</h2>
-        <p className="mt-2 font-serif text-base text-muted">
+        <h2 className="text-2xl font-normal">Extraction</h2>
+        <p className="mt-2 text-base text-muted">
           Save a valid Engram key first.
         </p>
       </div>
@@ -717,30 +716,30 @@ function ProviderConfigSection({
 
   return (
     <div className="border-y border-line py-6">
-      <h2 className="font-serif text-2xl font-semibold">Extraction</h2>
-      <p className="mt-1 font-serif text-base text-muted">
+      <h2 className="text-2xl font-normal">Extraction</h2>
+      <p className="mt-1 text-base text-muted">
         Choose which provider extracts durable memories. The key is encrypted
         with Fernet on the server before storage.
       </p>
       {providerQuery.isLoading ? (
-        <p className="mt-4 font-serif text-base text-muted">
+        <p className="mt-4 text-base text-muted">
           Loading provider config...
         </p>
       ) : providerQuery.isError ? (
-        <p className="mt-4 font-serif text-base text-fault">
+        <p className="mt-4 text-base text-fault">
           Unable to load provider config.
         </p>
       ) : (
         <form onSubmit={save} className="mt-5 space-y-4">
           <div>
             <label className="block">
-              <span className="font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-muted">
+              <span className="font-sans text-xs font-medium text-muted">
                 Provider
               </span>
               <select
                 value={provider}
                 onChange={(event) => setProvider(event.target.value)}
-                className="mt-2 min-h-12 w-full rounded-full border border-line bg-paper px-4 font-serif text-base text-ink outline-none focus:border-signal"
+                className="mt-2 min-h-12 w-full rounded-sm border border-line bg-paper px-4 text-base text-ink outline-none focus:border-signal"
               >
                 <option value="openai">OpenAI</option>
                 <option value="gemini">Gemini</option>
@@ -751,21 +750,21 @@ function ProviderConfigSection({
           </div>
           <div>
             <label className="block">
-              <span className="font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-muted">
+              <span className="font-sans text-xs font-medium text-muted">
                 Model
               </span>
               <input
                 value={model}
                 onChange={(event) => setModel(event.target.value)}
                 placeholder="gpt-4o-mini"
-                className="mt-2 min-h-12 w-full rounded-full border border-line bg-paper px-4 font-serif text-base text-ink outline-none focus:border-signal"
+                className="mt-2 min-h-12 w-full rounded-sm border border-line bg-paper px-4 text-base text-ink outline-none focus:border-signal"
               />
             </label>
           </div>
           {provider !== "ollama" && (
             <div>
               <label className="block">
-                <span className="font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-muted">
+                <span className="font-sans text-xs font-medium text-muted">
                   {provider === "openai"
                     ? "OpenAI"
                     : provider === "gemini"
@@ -773,7 +772,7 @@ function ProviderConfigSection({
                       : "Anthropic"}{" "}
                   API key
                 </span>
-                <span className="mt-1 block font-sans text-[11px] uppercase tracking-[0.12em] text-muted/70">
+                <span className="mt-1 block font-sans text-xs text-muted/70">
                   {providerQuery.data?.user_api_key_preview
                     ? `Stored as ${providerQuery.data.user_api_key_preview}`
                     : "No workspace key stored."}
@@ -789,7 +788,7 @@ function ProviderConfigSection({
                       ? "••• (leave blank to keep stored key)"
                       : "Paste key"
                   }
-                  className="min-h-12 min-w-0 flex-1 rounded-full border border-line bg-paper px-4 font-serif text-base text-ink outline-none focus:border-signal"
+                  className="min-h-12 min-w-0 flex-1 rounded-sm border border-line bg-paper px-4 text-base text-ink outline-none focus:border-signal"
                 />
                 <button
                   type="button"
@@ -798,7 +797,7 @@ function ProviderConfigSection({
                     !providerQuery.data?.has_user_api_key ||
                     updateMutation.isPending
                   }
-                  className="inline-flex min-h-12 items-center justify-center gap-2 border border-line px-4 font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-muted hover:border-signal hover:text-signal disabled:cursor-not-allowed disabled:opacity-50"
+                  className="inline-flex min-h-12 items-center justify-center gap-2 border border-line px-4 font-sans text-xs font-medium text-muted hover:border-signal hover:text-signal disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   Clear
                 </button>
@@ -809,12 +808,12 @@ function ProviderConfigSection({
             <button
               type="submit"
               disabled={updateMutation.isPending}
-              className="inline-flex min-h-12 items-center justify-center gap-2 border border-ink px-5 font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-ink hover:border-signal hover:text-signal disabled:cursor-not-allowed disabled:opacity-50"
+              className="inline-flex min-h-12 items-center justify-center gap-2 border border-ink px-5 font-sans text-xs font-medium text-ink hover:border-signal hover:text-signal disabled:cursor-not-allowed disabled:opacity-50"
             >
               Save Provider
             </button>
             {saveMessage && (
-              <span className="font-serif text-base text-signal">
+              <span className="text-base text-signal">
                 {saveMessage}
               </span>
             )}

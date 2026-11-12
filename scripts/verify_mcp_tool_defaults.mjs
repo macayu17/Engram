@@ -29,7 +29,6 @@ assert.deepEqual(parseResult(await addMemoryTool.handler({ content: "User prefer
 assert.deepEqual(parseResult(await searchMemoriesTool.handler({ query: "backend" })), {
   query: "backend",
   limit: 5,
-  threshold: 0.5,
 });
 assert.deepEqual(parseResult(await captureConversationTool.handler({
   user_message: "Remember that I use Engram from VS Code.",

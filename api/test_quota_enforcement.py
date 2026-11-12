@@ -115,7 +115,6 @@ async def test_proxy_rejects_before_retrieval_or_provider(monkeypatch, streaming
         "max_memories_injected": 5,
         "retrieval_threshold": 0.5,
         "dedup_threshold": 0.95,
-        "retrieval_mode": "vector",
     }
 
     class FakeAcquire:

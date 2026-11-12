@@ -149,7 +149,6 @@ async def prepare_authenticated_proxy_request(
                     float(user["retrieval_threshold"]),
                     override_provider=provider,
                     override_provider_key=override_provider_key,
-                    retrieval_mode=str(user.get("retrieval_mode") or "vector"),
                     namespace=namespace,
                 )
         except QuotaExceeded as error:

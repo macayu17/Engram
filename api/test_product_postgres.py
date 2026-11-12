@@ -65,7 +65,7 @@ async def test_postgres_revision_history_restore_and_conflicts(product_database)
     memory_id = await seed_memory(db, user_id, org_id, "project", "User prefers Flask")
     proposed = await revisions.propose_revision(user_id, org_id, memory_id, "User prefers FastAPI", uuid4(), db, "project")
     assert (await memories.get_memory(user_id, org_id, memory_id, db))["content"] == "User prefers Flask"
-    accepted = await revisions.decide_revision(user_id, org_id, proposed["id"], True, db, "project")
+    accepted = await revisions.decide_revision(user_id, org_id, proposed["id"], "accept", db, "project")
     assert accepted["status"] == "accepted"
     versions = await revisions.memory_history(user_id, org_id, memory_id, db, "project")
     assert versions[0]["content"] == "User prefers Flask"
@@ -74,10 +74,10 @@ async def test_postgres_revision_history_restore_and_conflicts(product_database)
     stale = await revisions.propose_revision(user_id, org_id, memory_id, "User prefers Django", uuid4(), db, "project")
     await memories.update_memory(user_id, org_id, memory_id, "User prefers Litestar", db, namespace="project")
     with pytest.raises(HTTPException) as conflict:
-        await revisions.decide_revision(user_id, org_id, stale["id"], True, db, "project")
+        await revisions.decide_revision(user_id, org_id, stale["id"], "accept", db, "project")
     assert conflict.value.status_code == 409
     with pytest.raises(HTTPException) as wrong_project:
-        await revisions.decide_revision(user_id, org_id, stale["id"], False, db, "other")
+        await revisions.decide_revision(user_id, org_id, stale["id"], "reject", db, "other")
     assert wrong_project.value.status_code == 404
     await memories.update_memory(user_id, org_id, memory_id, None, db, namespace="project", target_namespace="other")
     assert await revisions.list_revisions(user_id, org_id, db, "project") == []
@@ -103,34 +103,36 @@ async def test_postgres_trace_snapshots_survive_edits_and_redact_forget(product_
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize(("resolution", "existing_status", "proposed_status"), [
-    ("accept_new", "rejected", "approved"),
-    ("keep_old", "approved", "rejected"),
-    ("keep_both", "approved", "approved"),
+@pytest.mark.parametrize(("decision", "current_content", "approved_contents"), [
+    ("accept", "User prefers FastAPI", ["User prefers FastAPI"]),
+    ("reject", "User prefers Flask", ["User prefers Flask"]),
+    ("keep_both", "User prefers Flask", ["User prefers FastAPI", "User prefers Flask"]),
 ])
-async def test_postgres_conflict_resolution_preserves_revisions_and_project_scope(
-    product_database: tuple[asyncpg.Connection, object, object], resolution: str, existing_status: str, proposed_status: str,
+async def test_postgres_conflict_proposals_resolve_within_project(
+    product_database: tuple[asyncpg.Connection, object, object], decision: str, current_content: str, approved_contents: list[str],
 ) -> None:
-    from api.services.extraction import store_memory_conflict
-
     db, user_id, org_id = product_database
     memory_id = await seed_memory(db, user_id, org_id, "project", "User prefers Flask")
     conversation_id = uuid4()
-    proposed = await store_memory_conflict(user_id, org_id, memory_id, "User prefers FastAPI", [1.0] + [0.0] * 383, conversation_id, "project", db)
-    repeated = await store_memory_conflict(user_id, org_id, memory_id, "User prefers FastAPI", [1.0] + [0.0] * 383, conversation_id, "project", db)
-    assert proposed["id"] == repeated["id"]
-    conflicts, total = await memories.list_memory_conflicts(user_id, org_id, db, 10, 0, namespace="project")
-    assert total == 1
-    assert await memories.list_memory_conflicts(user_id, org_id, db, 10, 0, namespace="other") == ([], 0)
-    assert await memories.resolve_memory_conflict(user_id, org_id, conflicts[0]["id"], resolution, db, namespace="other") is None
-    resolved = await memories.resolve_memory_conflict(user_id, org_id, conflicts[0]["id"], resolution, db, namespace="project")
-    assert resolved["existing_memory"]["status"] == existing_status
-    assert resolved["proposed_memory"]["status"] == proposed_status
-    assert resolved["existing_memory"]["content"] == "User prefers Flask"
-    assert await memories.resolve_memory_conflict(user_id, org_id, conflicts[0]["id"], resolution, db, namespace="project") is None
-    history, total = await memories.list_memory_conflicts(user_id, org_id, db, 10, 0, "resolved", "project")
-    assert total == 1
-    assert history[0]["resolution"] == resolution
+    proposed = await revisions.propose_revision(user_id, org_id, memory_id, "User prefers FastAPI", conversation_id, db, "project", kind="conflict")
+    repeated = await revisions.propose_revision(user_id, org_id, memory_id, "User prefers FastAPI", conversation_id, db, "project", kind="conflict")
+    assert proposed["kind"] == "conflict"
+    assert repeated is None
+    assert await revisions.list_revisions(user_id, org_id, db, "other") == []
+    with pytest.raises(HTTPException) as wrong_project:
+        await revisions.decide_revision(user_id, org_id, proposed["id"], decision, db, "other")
+    assert wrong_project.value.status_code == 404
+    decided = await revisions.decide_revision(user_id, org_id, proposed["id"], decision, db, "project")
+    assert decided["status"] == {"accept": "accepted", "reject": "rejected", "keep_both": "kept_both"}[decision]
+    assert (await memories.get_memory(user_id, org_id, memory_id, db))["content"] == current_content
+    approved = await db.fetch(
+        "SELECT content FROM memories WHERE user_id=$1 AND org_id=$2 AND namespace='project' AND status='approved' ORDER BY content",
+        user_id, org_id,
+    )
+    assert [row["content"] for row in approved] == approved_contents
+    with pytest.raises(HTTPException) as repeated_decision:
+        await revisions.decide_revision(user_id, org_id, proposed["id"], decision, db, "project")
+    assert repeated_decision.value.status_code == 409
 
 
 @pytest.mark.asyncio
@@ -148,9 +150,9 @@ async def test_postgres_oauth_cannot_read_or_write_other_projects(product_databa
     namespace = authenticated["oauth_namespace"]
     own_memory = await seed_memory(db, user["id"], user["org_id"], namespace, "Own project")
     other_memory = await seed_memory(db, user["id"], user["org_id"], "other-project", "Other project")
-    conflict_id = await db.fetchval(
-        "INSERT INTO memory_conflicts(user_id,org_id,existing_memory_id,proposed_memory_id) VALUES($1,$2,$3,$4) RETURNING id",
-        user["id"], user["org_id"], own_memory, other_memory,
+    revision_id = await db.fetchval(
+        "INSERT INTO memory_revision_proposals(memory_id,user_id,org_id,namespace,original_content,proposed_content,kind) VALUES($1,$2,$3,'other-project','Other project','Changed','conflict') RETURNING id",
+        other_memory, user["id"], user["org_id"],
     )
     personal_memory = await seed_memory(db, user["id"], user["org_id"], "personal", "Private personal fact")
     await retrieval.log_retrieval(user["id"], user["org_id"], str(uuid4()), "fact", [
@@ -171,10 +173,10 @@ async def test_postgres_oauth_cannot_read_or_write_other_projects(product_databa
         assert (await client.get("/memories?namespace=other-project")).status_code == 403
         assert (await client.patch(f"/memories/{own_memory}", json={"namespace": "other-project"})).status_code == 403
         assert (await client.get("/users/me/api-keys")).status_code == 403
-        conflicts = await client.get("/memories/conflicts")
-        assert conflicts.status_code == 200
-        assert conflicts.json()["total"] == 0
-        assert (await client.post(f"/memories/conflicts/{conflict_id}/resolve", json={"resolution": "accept_new"})).status_code == 404
+        pending = await client.get("/memories/revisions")
+        assert pending.status_code == 200
+        assert pending.json()["revisions"] == []
+        assert (await client.post(f"/memories/revisions/{revision_id}/accept")).status_code == 404
         assert (await client.post("/memories/search", json={"query": "fact", "include_personal": True})).status_code == 403
         response = await client.get("/logs")
         assert response.status_code == 200

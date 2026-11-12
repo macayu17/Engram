@@ -7,7 +7,7 @@ export type SearchParams = ScopedParams & {
   include_personal?: boolean;
   query: string;
   limit: number;
-  threshold: number;
+  threshold?: number;
 };
 
 export type ListParams = ScopedParams & {

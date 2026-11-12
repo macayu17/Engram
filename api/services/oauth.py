@@ -158,7 +158,7 @@ async def get_user_by_access_token(token: str, db: asyncpg.Connection) -> asyncp
         return None
     row = await db.fetchrow(
         """SELECT users.id, grants.org_id, membership.role, users.external_id, users.created_at,
-            users.max_memories_injected, users.retrieval_threshold, users.dedup_threshold, users.retrieval_mode,
+            users.max_memories_injected, users.retrieval_threshold, users.dedup_threshold,
             orgs.extraction_provider, orgs.extraction_model, orgs.openai_api_key_encrypted,
             orgs.gemini_api_key_encrypted, orgs.anthropic_api_key_encrypted,
             grants.scope AS oauth_scope, grants.namespace AS oauth_namespace,

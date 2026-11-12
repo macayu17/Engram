@@ -8,13 +8,13 @@ const InputSchema = z.object({
   include_personal: z.boolean().optional(),
   query: z.string().trim().min(1).max(10000).describe("Natural language query to search memories"),
   limit: z.number().int().min(1).max(20).default(5),
-  threshold: z.number().min(0).max(1).default(0.5),
+  threshold: z.number().min(0).max(1).optional(),
 }).strict();
 
 export const searchMemoriesTool = {
   definition: {
     name: "search_memories",
-    description: "Search for relevant memories given a natural language query",
+    description: "Search for relevant memories given a natural language query. The response includes a prompt-ready context block.",
     annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
     _meta: { securitySchemes: [{ type: "oauth2", scopes: ["memory:read"] }] },
     inputSchema: {
@@ -25,7 +25,7 @@ export const searchMemoriesTool = {
         include_personal: { type: "boolean", default: false, description: "Explicit API-key opt-in to personal memories; unavailable for OAuth" },
         query: { type: "string", description: "Natural language query" },
         limit: { type: "number", default: 5 },
-        threshold: { type: "number", default: 0.5 },
+        threshold: { type: "number", minimum: 0, maximum: 1, description: "Minimum similarity; defaults to the account setting" },
       },
       required: ["query"],
     },

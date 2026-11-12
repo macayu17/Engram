@@ -69,12 +69,12 @@ async def test_extraction_paths_preserve_quota_namespace_and_transaction(
         assert active_connections == 0
         return [("update", target_id), ("add", None)]
 
-    async def store(*args: object, **kwargs: object) -> tuple[int, list[tuple[UUID, str]]]:
+    async def store(*args: object, **kwargs: object) -> int:
         assert args[:2] == (user_id, org_id)
         assert in_transaction
         assert kwargs["namespace"] == namespace
         assert kwargs["decisions"] == [("update", target_id), ("discard", None)]
-        return 1, []
+        return 1
 
     async def record(*args: object) -> None:
         records.append((str(args[5]), int(args[6])))

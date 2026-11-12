@@ -1,15 +1,10 @@
 import pytest
 
-from api.services.entitlements import PLAN_LIMITS, QuotaExceeded, enforce_limit, remaining_capacity
+from api.services.entitlements import QuotaExceeded, enforce_limit, remaining_capacity, workspace_limits
 
 
-def test_plan_limits_match_launch_contract() -> None:
-    assert PLAN_LIMITS["free"].members == 1
-    assert PLAN_LIMITS["free"].memories == 2_000
-    assert PLAN_LIMITS["free"].retrievals == 10_000
-    assert PLAN_LIMITS["pro"].members == 5
-    assert PLAN_LIMITS["pro"].memories == 50_000
-    assert PLAN_LIMITS["pro"].retrievals == 250_000
+def test_workspace_limits_default_to_free_tier_protection() -> None:
+    assert workspace_limits() == {"members": 5, "memories": 2_000, "retrievals": 10_000}
 
 
 def test_limit_allows_last_available_unit() -> None:

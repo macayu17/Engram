@@ -13,7 +13,6 @@ const isProductRoute = createRouteMatcher([
   "/chat(.*)",
   "/connections(.*)",
   "/logs(.*)",
-  "/graph(.*)",
   "/settings(.*)",
 ]);
 

@@ -31,11 +31,14 @@ export type MemoryRevision = {
   memory_id: string;
   original_content: string;
   proposed_content: string;
+  kind: "update" | "conflict";
   status: string;
   source_conversation_id: string | null;
   namespace: string;
   created_at: string;
 };
+
+export type RevisionDecision = "accept" | "reject" | "keep_both";
 
 export type MemoryVersion = {
   id: string;
@@ -119,26 +122,6 @@ export type MemoryListResponse = {
   offset: number;
 };
 
-export type MemoryConflictResolution = "accept_new" | "keep_old" | "keep_both";
-export type MemoryConflictStatus = "open" | "resolved" | "all";
-
-export type MemoryConflict = {
-  id: string;
-  status: "open" | "resolved";
-  resolution: MemoryConflictResolution | null;
-  created_at: string;
-  resolved_at: string | null;
-  existing_memory: Memory;
-  proposed_memory: Memory;
-};
-
-export type MemoryConflictListResponse = {
-  conflicts: MemoryConflict[];
-  total: number;
-  limit: number;
-  offset: number;
-};
-
 export type SearchResponse = {
   results: Array<{ memory: Memory; score: number }>;
 };
@@ -146,12 +129,6 @@ export type SearchResponse = {
 export type MemorySourceResponse = {
   memory: Memory;
   conversation: Record<string, unknown> | null;
-};
-
-export type MemoryMergeSuggestion = {
-  primary: Memory;
-  duplicate: Memory;
-  reason: string;
 };
 
 export type MemoryTimelineItem = {
@@ -249,10 +226,7 @@ export type ApiKeyCreateResponse = ApiKeyRecord & {
 };
 
 export type WorkspaceUsage = {
-  plan: "free" | "pro";
-  subscription_status: string;
   period_start: string;
-  current_period_end: string | null;
   members: number;
   memories: number;
   retrievals: number;
@@ -261,14 +235,6 @@ export type WorkspaceUsage = {
     memories: number;
     retrievals: number;
   };
-};
-
-export type Workspace = {
-  id: string;
-  name: string;
-  role: "owner" | "admin" | "member";
-  plan: "free" | "pro";
-  created_at: string;
 };
 
 export type ChatMessage = {
@@ -286,28 +252,6 @@ const API_BASE_URL = (
   process.env.NEXT_PUBLIC_API_URL?.trim() || "http://localhost:8000"
 ).replace(/\/+$/, "");
 const ACTIVE_API_KEY_STORAGE_KEY = "engram_api_key";
-export type GraphEntity = {
-  id: string;
-  name: string;
-  entity_type: string;
-  memory_count: number;
-};
-
-export type GraphEdge = {
-  source: string;
-  target: string;
-  weight: number;
-};
-
-export type GraphMemoryItem = {
-  id: string;
-  content: string;
-  confidence: number;
-  category: string;
-  pinned: boolean;
-  created_at: string;
-};
-
 const CLERK_API_KEY_STORAGE_PREFIX = "engram_api_key:clerk:";
 const ACTIVE_API_KEY_CHANGED_EVENT = "engram-api-key-changed";
 
@@ -401,7 +345,7 @@ function toQuery(params?: Record<string, string | number | undefined>): string {
 
 const DEFAULT_TIMEOUT_MS = 30_000;
 const LONG_TIMEOUT_MS = 300_000;
-const LONG_PATHS = ["/graph/extract", "/memories/import"];
+const LONG_PATHS = ["/memories/import"];
 
 async function request<T>(
   method: string,
@@ -565,21 +509,6 @@ export const api = {
         "GET",
         `/memories/review${toQuery({ namespace: readActiveNamespace(), ...params })}`,
       ),
-    conflicts: (params?: {
-      limit?: number;
-      offset?: number;
-      status?: MemoryConflictStatus;
-    }) =>
-      request<MemoryConflictListResponse>(
-        "GET",
-        `/memories/conflicts${toQuery({ namespace: readActiveNamespace(), ...params })}`,
-      ),
-    resolveConflict: (id: string, resolution: MemoryConflictResolution) =>
-      request<MemoryConflict>(
-        "POST",
-        `/memories/conflicts/${id}/resolve${toQuery({ namespace: readActiveNamespace() })}`,
-        { resolution },
-      ),
     exportAll: () =>
       request<{ memories: Memory[] }>(
         "GET",
@@ -596,26 +525,6 @@ export const api = {
       request<MemorySourceResponse>(
         "GET",
         `/memories/${id}/source${toQuery({ namespace: readActiveNamespace() })}`,
-      ),
-    mergeSuggestions: (limit = 5) =>
-      request<{ suggestions: MemoryMergeSuggestion[] }>(
-        "GET",
-        `/memories/merge-suggestions${toQuery({ limit, namespace: readActiveNamespace() })}`,
-      ),
-    merge: (payload: {
-      primary_id: string;
-      duplicate_id: string;
-      content?: string;
-    }) =>
-      request<Memory>(
-        "POST",
-        `/memories/merge${toQuery({ namespace: readActiveNamespace() })}`,
-        payload,
-      ),
-    decay: () =>
-      request<{ updated: number }>(
-        "POST",
-        `/memories/decay${toQuery({ namespace: readActiveNamespace() })}`,
       ),
     timeline: (limit = 12) =>
       request<{ items: MemoryTimelineItem[] }>(
@@ -638,8 +547,11 @@ export const api = {
         "GET",
         `/memories/revisions${toQuery({ namespace: readActiveNamespace(), status: "pending" })}`,
       ),
-    resolveRevision: (id: string, action: "accept" | "reject") =>
-      request<MemoryRevision>("POST", `/memories/revisions/${id}/${action}`),
+    resolveRevision: (id: string, decision: RevisionDecision) =>
+      request<MemoryRevision>(
+        "POST",
+        `/memories/revisions/${id}/${decision}${toQuery({ namespace: readActiveNamespace() })}`,
+      ),
     history: (id: string) =>
       request<{ versions: MemoryVersion[] }>(
         "GET",
@@ -650,12 +562,6 @@ export const api = {
         "POST",
         `/memories/${id}/restore${toQuery({ namespace: readActiveNamespace() })}`,
         { version_id: versionId },
-      ),
-    feedback: (id: string, relevant: boolean, query?: string) =>
-      request<{ saved: boolean }>(
-        "POST",
-        `/memories/${id}/feedback${toQuery({ namespace: readActiveNamespace() })}`,
-        { relevant, query },
       ),
     search: (
       query: string,
@@ -719,32 +625,8 @@ export const api = {
       request<{ connections: OAuthConnection[] }>("GET", "/oauth/connections"),
     revoke: (id: string) => request<void>("DELETE", `/oauth/connections/${id}`),
   },
-  graph: {
-    listEntities: () =>
-      request<{ entities: GraphEntity[] }>("GET", "/graph/entities"),
-    listEdges: () => request<{ edges: GraphEdge[] }>("GET", "/graph/edges"),
-    entityMemories: (entityType: string, entityName: string) =>
-      request<{
-        entity_name: string;
-        entity_type: string;
-        memories: GraphMemoryItem[];
-      }>(
-        "GET",
-        `/graph/entities/${encodeURIComponent(entityType)}/${encodeURIComponent(entityName)}/memories`,
-      ),
-    neighbors: (memoryId: string) =>
-      request<{
-        memory_id: string;
-        neighbors: GraphMemoryItem[];
-        entities: GraphEntity[];
-      }>("GET", `/graph/memories/${memoryId}/neighbors`),
-    extract: () =>
-      request<{ processed: number; entities_created: number }>(
-        "POST",
-        "/graph/extract",
-      ),
-  },
   users: {
+    usage: () => request<WorkspaceUsage>("GET", "/users/me/usage"),
     create: (externalId: string) =>
       requestInternal<UserCreateResponse>("POST", "/api/engram/users", {
         external_id: externalId,
@@ -769,20 +651,6 @@ export const api = {
     create: (name: string) =>
       request<ApiKeyCreateResponse>("POST", "/users/me/api-keys", { name }),
     revoke: (id: string) => request<void>("DELETE", `/users/me/api-keys/${id}`),
-  },
-  billing: {
-    usage: () => request<WorkspaceUsage>("GET", "/billing/usage"),
-    checkout: (orgId: string) =>
-      requestInternal<{ url: string }>("POST", "/api/billing/checkout", {
-        orgId,
-      }),
-    portal: (orgId: string) =>
-      requestInternal<{ url: string }>("POST", "/api/billing/portal", {
-        orgId,
-      }),
-  },
-  orgs: {
-    list: () => request<Workspace[]>("GET", "/orgs"),
   },
 };
 

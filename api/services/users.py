@@ -11,7 +11,7 @@ from api.services.security import api_key_hashes_match, encrypt_provider_key, ge
 
 _USER_COLUMNS: str = (
     "id, external_id, api_key_hash, created_at, max_memories_injected, "
-    "retrieval_threshold, dedup_threshold, retrieval_mode, extraction_provider, "
+    "retrieval_threshold, dedup_threshold, extraction_provider, "
     "extraction_model, openai_api_key_encrypted, gemini_api_key_encrypted, anthropic_api_key_encrypted"
 )
 
@@ -26,7 +26,6 @@ class CachedUser(TypedDict):
     max_memories_injected: int
     retrieval_threshold: float
     dedup_threshold: float
-    retrieval_mode: str
     extraction_provider: str
     extraction_model: str
     cached_at: float
@@ -291,7 +290,7 @@ async def get_user_by_api_key(api_key: str, db: asyncpg.Connection) -> asyncpg.R
         """
         SELECT users.id, membership.org_id, membership.role, users.external_id,
                users.api_key_hash, users.created_at, users.max_memories_injected,
-               users.retrieval_threshold, users.dedup_threshold, users.retrieval_mode,
+               users.retrieval_threshold, users.dedup_threshold,
                orgs.extraction_provider, orgs.extraction_model,
                orgs.openai_api_key_encrypted, orgs.gemini_api_key_encrypted,
                orgs.anthropic_api_key_encrypted
@@ -315,7 +314,7 @@ async def get_user_by_api_key(api_key: str, db: asyncpg.Connection) -> asyncpg.R
         SELECT users.id, user_api_keys.org_id, org_memberships.role,
                users.external_id, user_api_keys.api_key_hash, users.created_at,
                users.max_memories_injected, users.retrieval_threshold, users.dedup_threshold,
-               users.retrieval_mode, orgs.extraction_provider, orgs.extraction_model,
+               orgs.extraction_provider, orgs.extraction_model,
                orgs.openai_api_key_encrypted, orgs.gemini_api_key_encrypted,
                orgs.anthropic_api_key_encrypted, user_api_keys.last_used_at
         FROM user_api_keys
@@ -584,7 +583,6 @@ def cache_user_auth(api_key_hash: str, row: asyncpg.Record | dict[str, object]) 
     max_memories_injected = get_row_value(row, "max_memories_injected", settings.max_memories_injected)
     retrieval_threshold = get_row_value(row, "retrieval_threshold", settings.retrieval_threshold)
     dedup_threshold = get_row_value(row, "dedup_threshold", settings.dedup_threshold)
-    retrieval_mode = get_row_value(row, "retrieval_mode", settings.retrieval_mode)
     extraction_provider = get_row_value(row, "extraction_provider", settings.extraction_provider)
     extraction_model = get_row_value(row, "extraction_model", settings.extraction_model)
     _user_auth_cache[api_key_hash] = {
@@ -597,7 +595,6 @@ def cache_user_auth(api_key_hash: str, row: asyncpg.Record | dict[str, object]) 
         "max_memories_injected": int(max_memories_injected),
         "retrieval_threshold": float(retrieval_threshold),
         "dedup_threshold": float(dedup_threshold),
-        "retrieval_mode": str(retrieval_mode),
         "extraction_provider": str(extraction_provider),
         "extraction_model": str(extraction_model),
         "cached_at": monotonic(),

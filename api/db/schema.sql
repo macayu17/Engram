@@ -13,10 +13,10 @@ CREATE TABLE IF NOT EXISTS users (
 );
 
 ALTER TABLE users ADD COLUMN IF NOT EXISTS max_memories_injected INT NOT NULL DEFAULT 5;
-ALTER TABLE users ADD COLUMN IF NOT EXISTS retrieval_threshold DOUBLE PRECISION NOT NULL DEFAULT 0.5;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS retrieval_threshold DOUBLE PRECISION NOT NULL DEFAULT 0.3;
+ALTER TABLE users ALTER COLUMN retrieval_threshold SET DEFAULT 0.3;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS dedup_threshold DOUBLE PRECISION NOT NULL DEFAULT 0.95;
 
-ALTER TABLE users ADD COLUMN IF NOT EXISTS retrieval_mode TEXT NOT NULL DEFAULT 'vector';
 ALTER TABLE users ADD COLUMN IF NOT EXISTS extraction_provider TEXT NOT NULL DEFAULT 'openai';
 ALTER TABLE users ADD COLUMN IF NOT EXISTS extraction_model TEXT NOT NULL DEFAULT 'gpt-4o-mini';
 ALTER TABLE users ADD COLUMN IF NOT EXISTS openai_api_key_encrypted BYTEA;
@@ -62,7 +62,7 @@ BEGIN
 END;
 $$;
 
-CREATE INDEX IF NOT EXISTS memories_embedding_idx ON memories USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100);
+DROP INDEX IF EXISTS memories_embedding_idx;
 CREATE INDEX IF NOT EXISTS memories_user_id_idx ON memories(user_id);
 CREATE INDEX IF NOT EXISTS memories_user_created_at_idx ON memories(user_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS memories_user_access_count_idx ON memories(user_id, access_count DESC);
@@ -131,32 +131,6 @@ ALTER TABLE orgs ADD COLUMN IF NOT EXISTS extraction_model TEXT NOT NULL DEFAULT
 ALTER TABLE orgs ADD COLUMN IF NOT EXISTS openai_api_key_encrypted BYTEA;
 ALTER TABLE orgs ADD COLUMN IF NOT EXISTS gemini_api_key_encrypted BYTEA;
 ALTER TABLE orgs ADD COLUMN IF NOT EXISTS anthropic_api_key_encrypted BYTEA;
-ALTER TABLE orgs ADD COLUMN IF NOT EXISTS plan TEXT NOT NULL DEFAULT 'free';
-ALTER TABLE orgs ADD COLUMN IF NOT EXISTS stripe_customer_id TEXT;
-ALTER TABLE orgs ADD COLUMN IF NOT EXISTS stripe_subscription_id TEXT;
-ALTER TABLE orgs ADD COLUMN IF NOT EXISTS subscription_status TEXT NOT NULL DEFAULT 'inactive';
-ALTER TABLE orgs ADD COLUMN IF NOT EXISTS current_period_end TIMESTAMPTZ;
-
-DO $$
-BEGIN
-    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'orgs_plan_check') THEN
-        ALTER TABLE orgs ADD CONSTRAINT orgs_plan_check CHECK (plan IN ('free', 'pro'));
-    END IF;
-END;
-$$;
-
-CREATE UNIQUE INDEX IF NOT EXISTS orgs_stripe_customer_id_idx
-ON orgs(stripe_customer_id)
-WHERE stripe_customer_id IS NOT NULL;
-
-CREATE UNIQUE INDEX IF NOT EXISTS orgs_stripe_subscription_id_idx
-ON orgs(stripe_subscription_id)
-WHERE stripe_subscription_id IS NOT NULL;
-
-CREATE TABLE IF NOT EXISTS stripe_events (
-    event_id TEXT PRIMARY KEY,
-    processed_at TIMESTAMPTZ NOT NULL DEFAULT now()
-);
 
 DO $$
 BEGIN
@@ -189,68 +163,15 @@ CREATE INDEX IF NOT EXISTS org_memberships_user_id_idx ON org_memberships(user_i
 ALTER TABLE memories ADD COLUMN IF NOT EXISTS org_id UUID REFERENCES orgs(id) ON DELETE SET NULL;
 CREATE INDEX IF NOT EXISTS memories_org_id_idx ON memories(org_id);
 
-CREATE TABLE IF NOT EXISTS memory_entities (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    name TEXT NOT NULL,
-    entity_type TEXT NOT NULL,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    UNIQUE (user_id, name, entity_type)
-);
 
-DO $$
-BEGIN
-    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'memory_entities_type_check') THEN
-        ALTER TABLE memory_entities ADD CONSTRAINT memory_entities_type_check
-            CHECK (entity_type IN ('person', 'project', 'skill', 'technology', 'preference', 'topic', 'organization'));
-    END IF;
-END;
-$$;
-
-CREATE INDEX IF NOT EXISTS memory_entities_user_idx ON memory_entities(user_id);
-
-CREATE TABLE IF NOT EXISTS memory_entity_links (
-    memory_id UUID NOT NULL REFERENCES memories(id) ON DELETE CASCADE,
-    entity_id UUID NOT NULL REFERENCES memory_entities(id) ON DELETE CASCADE,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    PRIMARY KEY (memory_id, entity_id)
-);
-CREATE INDEX IF NOT EXISTS memory_entity_links_entity_idx ON memory_entity_links(entity_id);
-
-CREATE TABLE IF NOT EXISTS memory_relationships (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    source_memory_id UUID NOT NULL REFERENCES memories(id) ON DELETE CASCADE,
-    target_memory_id UUID NOT NULL REFERENCES memories(id) ON DELETE CASCADE,
-    relationship_type TEXT NOT NULL,
-    strength DOUBLE PRECISION NOT NULL DEFAULT 0.8,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    UNIQUE (source_memory_id, target_memory_id, relationship_type)
-);
-
-DO $$
-BEGIN
-    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'memory_relationships_type_check') THEN
-        ALTER TABLE memory_relationships ADD CONSTRAINT memory_relationships_type_check
-            CHECK (relationship_type IN ('related_to', 'contradicts', 'refines', 'supports', 'mentions'));
-    END IF;
-END;
-$$;
-
-CREATE INDEX IF NOT EXISTS memory_relationships_source_idx ON memory_relationships(source_memory_id);
-CREATE INDEX IF NOT EXISTS memory_relationships_target_idx ON memory_relationships(target_memory_id);
 
 ALTER TABLE user_api_keys ADD COLUMN IF NOT EXISTS org_id UUID REFERENCES orgs(id) ON DELETE CASCADE;
 ALTER TABLE retrieval_logs ADD COLUMN IF NOT EXISTS org_id UUID REFERENCES orgs(id) ON DELETE CASCADE;
 ALTER TABLE conversations ADD COLUMN IF NOT EXISTS org_id UUID REFERENCES orgs(id) ON DELETE CASCADE;
-ALTER TABLE memory_entities ADD COLUMN IF NOT EXISTS org_id UUID REFERENCES orgs(id) ON DELETE CASCADE;
-ALTER TABLE memory_relationships ADD COLUMN IF NOT EXISTS org_id UUID REFERENCES orgs(id) ON DELETE CASCADE;
 
 CREATE INDEX IF NOT EXISTS user_api_keys_org_id_idx ON user_api_keys(org_id);
 CREATE INDEX IF NOT EXISTS retrieval_logs_org_created_at_idx ON retrieval_logs(org_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS conversations_org_created_at_idx ON conversations(org_id, created_at DESC);
-CREATE INDEX IF NOT EXISTS memory_entities_org_idx ON memory_entities(org_id);
-CREATE INDEX IF NOT EXISTS memory_relationships_org_idx ON memory_relationships(org_id);
 
 DO $$
 DECLARE
@@ -312,33 +233,6 @@ BEGIN
         SET org_id = personal_org_id
         WHERE user_id = user_row.id
           AND org_id IS NULL;
-
-        UPDATE memory_entities AS entity
-        SET org_id = COALESCE(
-            (
-                SELECT memory.org_id
-                FROM memory_entity_links AS link
-                JOIN memories AS memory ON memory.id = link.memory_id
-                WHERE link.entity_id = entity.id
-                ORDER BY memory.created_at
-                LIMIT 1
-            ),
-            personal_org_id
-        )
-        WHERE entity.user_id = user_row.id
-          AND entity.org_id IS NULL;
-
-        UPDATE memory_relationships AS relationship
-        SET org_id = COALESCE(
-            (
-                SELECT memory.org_id
-                FROM memories AS memory
-                WHERE memory.id = relationship.source_memory_id
-            ),
-            personal_org_id
-        )
-        WHERE relationship.user_id = user_row.id
-          AND relationship.org_id IS NULL;
     END LOOP;
 END;
 $$;
@@ -358,7 +252,6 @@ ALTER TABLE memories DROP CONSTRAINT IF EXISTS memories_org_id_fkey;
 ALTER TABLE memories ADD CONSTRAINT memories_org_id_fkey
     FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE CASCADE;
 
-ALTER TABLE memory_entities DROP CONSTRAINT IF EXISTS memory_entities_user_id_name_entity_type_key;
 CREATE UNIQUE INDEX IF NOT EXISTS user_api_keys_user_org_name_idx
     ON user_api_keys(user_id, org_id, name);
 
@@ -368,76 +261,12 @@ CREATE INDEX IF NOT EXISTS retrieval_logs_org_user_created_at_idx
     ON retrieval_logs(org_id, user_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS conversations_org_user_created_at_idx
     ON conversations(org_id, user_id, created_at DESC);
-CREATE INDEX IF NOT EXISTS memory_entities_org_user_idx
-    ON memory_entities(org_id, user_id);
 
 ALTER TABLE memories ALTER COLUMN org_id SET NOT NULL;
 ALTER TABLE user_api_keys ALTER COLUMN org_id SET NOT NULL;
 ALTER TABLE retrieval_logs ALTER COLUMN org_id SET NOT NULL;
 ALTER TABLE conversations ALTER COLUMN org_id SET NOT NULL;
-ALTER TABLE memory_entities ALTER COLUMN org_id SET NOT NULL;
-ALTER TABLE memory_relationships ALTER COLUMN org_id SET NOT NULL;
 
-CREATE TABLE IF NOT EXISTS memory_revisions (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    org_id UUID NOT NULL REFERENCES orgs(id) ON DELETE CASCADE,
-    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    memory_id UUID NOT NULL REFERENCES memories(id) ON DELETE CASCADE,
-    content TEXT NOT NULL,
-    source_conversation_id UUID,
-    status TEXT NOT NULL,
-    category TEXT NOT NULL,
-    source TEXT NOT NULL,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-
-CREATE INDEX IF NOT EXISTS memory_revisions_org_user_memory_idx
-    ON memory_revisions(org_id, user_id, memory_id, created_at DESC);
-
-CREATE TABLE IF NOT EXISTS memory_conflicts (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    org_id UUID NOT NULL REFERENCES orgs(id) ON DELETE CASCADE,
-    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    existing_memory_id UUID NOT NULL REFERENCES memories(id) ON DELETE CASCADE,
-    proposed_memory_id UUID NOT NULL REFERENCES memories(id) ON DELETE CASCADE,
-    status TEXT NOT NULL DEFAULT 'open',
-    resolution TEXT,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    resolved_at TIMESTAMPTZ,
-    UNIQUE (existing_memory_id, proposed_memory_id),
-    CHECK (existing_memory_id <> proposed_memory_id),
-    CHECK (status IN ('open', 'resolved')),
-    CHECK (resolution IS NULL OR resolution IN ('accept_new', 'keep_old', 'keep_both')),
-    CHECK (
-        (status = 'open' AND resolution IS NULL AND resolved_at IS NULL)
-        OR (status = 'resolved' AND resolution IS NOT NULL AND resolved_at IS NOT NULL)
-    )
-);
-
-CREATE INDEX IF NOT EXISTS memory_conflicts_org_user_status_idx
-    ON memory_conflicts(org_id, user_id, status, created_at DESC);
-
--- Merge case/type-variant duplicate entities ("Cutscene" vs "cutscene"|topic) into one node per (org, user, lower(name)).
-INSERT INTO memory_entity_links (memory_id, entity_id)
-SELECT mel.memory_id, k.keeper_id
-FROM memory_entity_links mel
-JOIN (
-    SELECT id, first_value(id) OVER (PARTITION BY org_id, user_id, lower(name) ORDER BY created_at, id) AS keeper_id
-    FROM memory_entities
-) k ON k.id = mel.entity_id AND k.id <> k.keeper_id
-ON CONFLICT DO NOTHING;
-
-DELETE FROM memory_entities e
-USING (
-    SELECT id, first_value(id) OVER (PARTITION BY org_id, user_id, lower(name) ORDER BY created_at, id) AS keeper_id
-    FROM memory_entities
-) k
-WHERE e.id = k.id AND k.id <> k.keeper_id;
-
-DROP INDEX IF EXISTS memory_entities_user_lower_name_idx;
-DROP INDEX IF EXISTS memory_entities_org_user_name_type_idx;
-CREATE UNIQUE INDEX IF NOT EXISTS memory_entities_org_user_lower_name_idx
-    ON memory_entities (org_id, user_id, lower(name));
 
 ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.memories ENABLE ROW LEVEL SECURITY;
@@ -446,19 +275,13 @@ ALTER TABLE public.retrieval_logs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.conversations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.orgs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.org_memberships ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.memory_entities ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.memory_entity_links ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.memory_relationships ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.memory_revisions ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.memory_conflicts ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.stripe_events ENABLE ROW LEVEL SECURITY;
 
 DO $$
 DECLARE
     target_table TEXT;
     target_role TEXT;
 BEGIN
-    FOREACH target_table IN ARRAY ARRAY['users', 'memories', 'user_api_keys', 'retrieval_logs', 'conversations', 'orgs', 'org_memberships', 'memory_entities', 'memory_entity_links', 'memory_relationships', 'memory_revisions', 'memory_conflicts', 'stripe_events'] LOOP
+    FOREACH target_table IN ARRAY ARRAY['users', 'memories', 'user_api_keys', 'retrieval_logs', 'conversations', 'orgs', 'org_memberships'] LOOP
         EXECUTE format('DROP POLICY IF EXISTS engram_server_access ON public.%I', target_table);
         EXECUTE format(
             'CREATE POLICY engram_server_access ON public.%I FOR ALL TO %I USING (true) WITH CHECK (true)',

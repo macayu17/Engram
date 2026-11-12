@@ -19,7 +19,6 @@ const navItems = [
   { href: "/chat", label: "Playground" },
   { href: "/connections", label: "Connections" },
   { href: "/logs", label: "Logs" },
-  { href: "/graph", label: "Graph" },
   { href: "/docs", label: "Docs" },
   { href: "/settings", label: "Settings" },
 ];

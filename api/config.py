@@ -24,23 +24,21 @@ class Settings(BaseSettings):
     embedding_model: str = "BAAI/bge-small-en-v1.5"
     extraction_model: str = "gpt-4o-mini"
     max_memories_injected: int = 5
-    retrieval_threshold: float = 0.5
+    retrieval_threshold: float = 0.3
     dedup_threshold: float = 0.95
     memory_refinement_threshold: float = 0.8
-    retrieval_mode: str = "vector"
     retrieval_recency_weight: float = 0.05
     retrieval_recency_half_life_days: float = 30.0
-    retrieval_access_weight: float = 0.03
+    retrieval_keyword_weight: float = 0.3
+    retrieval_relative_cutoff: float = 0.08
     enable_reconciliation: bool = True
     reconcile_threshold: float = 0.6
-    enable_reranker: bool = False
-    enable_graph: bool = False
     log_level: str = "info"
     cors_origins: str = "http://localhost:3001"
     engram_service_key: str = ""
-    stripe_secret_key: str = ""
-    stripe_webhook_secret: str = ""
-    stripe_pro_price_id: str = ""
+    workspace_member_limit: int = Field(default=5, ge=1)
+    workspace_memory_limit: int = Field(default=2_000, ge=1)
+    workspace_monthly_retrieval_limit: int = Field(default=10_000, ge=1)
     dashboard_url: str = "http://localhost:3001"
     api_public_url: str = "http://localhost:8000"
     mcp_public_url: str = "http://localhost:3000/mcp"

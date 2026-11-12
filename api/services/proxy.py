@@ -10,7 +10,7 @@ import httpx
 from api.config import settings
 from api.services.providers.base import build_chat_completions_url, stringify_message_content
 from api.services.provider_keys import ProviderConfigError, ResolvedProvider, resolve_user_provider
-from api.services.retrieval import get_retrieval_query, log_retrieval, retrieve_memories, retrieve_memories_graph, retrieve_memories_hybrid
+from api.services.retrieval import get_retrieval_query, log_retrieval, retrieve_memories
 from api.services.users import get_workspace_provider_context
 
 
@@ -60,24 +60,6 @@ class ProviderStream:
         await self.client.aclose()
 
 
-async def _dispatch_retrieve(
-    user_id: UUID,
-    org_id: UUID,
-    query: str,
-    db: asyncpg.Connection,
-    retrieval_mode: str,
-    max_memories_injected: int | None,
-    retrieval_threshold: float | None,
-    namespace: str = "default",
-    include_personal: bool = False,
-) -> list[dict[str, object]]:
-    if retrieval_mode == "hybrid":
-        return await retrieve_memories_hybrid(user_id, org_id, query, db, max_memories_injected, retrieval_threshold, namespace=namespace, include_personal=include_personal)
-    if retrieval_mode == "graph":
-        return await retrieve_memories_graph(user_id, org_id, query, db, max_memories_injected, retrieval_threshold, namespace=namespace, include_personal=include_personal)
-    return await retrieve_memories(user_id, org_id, query, db, max_memories_injected, retrieval_threshold, namespace=namespace, include_personal=include_personal)
-
-
 async def prepare_proxy_request(
     user_id: UUID,
     org_id: UUID,
@@ -91,7 +73,6 @@ async def prepare_proxy_request(
     retrieval_threshold: float | None = None,
     override_provider: str | None = None,
     override_provider_key: str | None = None,
-    retrieval_mode: str = "vector",
     namespace: str = "default",
 ) -> PreparedProxyRequest:
     if requested_external_id is not None and external_id != requested_external_id:
@@ -104,7 +85,7 @@ async def prepare_proxy_request(
     if not disable_injection:
         try:
             async with db.transaction():
-                memories = await _dispatch_retrieve(user_id, org_id, query, db, retrieval_mode, max_memories_injected, retrieval_threshold, namespace=namespace, include_personal=include_personal)
+                memories = await retrieve_memories(user_id, org_id, query, db, max_memories_injected, retrieval_threshold, namespace=namespace, include_personal=include_personal, focused=True)
             injected_count = len(memories)
             body = inject_memories(body, memories)
         except Exception as error:
@@ -113,7 +94,7 @@ async def prepare_proxy_request(
         else:
             try:
                 async with db.transaction():
-                    await log_retrieval(user_id, org_id, str(conversation_id), query, memories, db, namespace=namespace, injected_count=injected_count, retrieval_mode=retrieval_mode)
+                    await log_retrieval(user_id, org_id, str(conversation_id), query, memories, db, namespace=namespace, injected_count=injected_count, retrieval_mode="hybrid")
             except Exception as error:
                 logger.warning("Failed to log retrieval: %s", error)
     user_row = await get_workspace_provider_context(user_id, org_id, db)
@@ -162,12 +143,20 @@ async def build_proxy_passthrough_result(
     )
 
 
+def build_memory_context(memories: list[dict[str, object]]) -> str:
+    if not memories:
+        return ""
+    facts = "\n".join(f"- {memory['content']}" for memory in memories)
+    return (
+        "[MEMORY CONTEXT]\nThe following facts are known about this user from previous conversations:\n"
+        f"{facts}\n[END MEMORY CONTEXT]"
+    )
+
+
 def inject_memories(body: dict[str, object], memories: list[dict[str, object]]) -> dict[str, object]:
     if not memories:
         return body
-    memory_block = "[MEMORY CONTEXT]\nThe following facts are known about this user from previous conversations:\n"
-    memory_block += "\n".join(f"- {memory['content']}" for memory in memories)
-    memory_block += "\n[END MEMORY CONTEXT]"
+    memory_block = build_memory_context(memories)
     raw_messages = body.get("messages")
     messages = raw_messages if isinstance(raw_messages, list) else []
     existing_system = find_system_message(messages)

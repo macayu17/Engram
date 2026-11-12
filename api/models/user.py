@@ -82,6 +82,20 @@ class UserConfigUpdate(BaseModel):
     dedup_threshold: float | None = Field(default=None, ge=0, le=1)
 
 
+class UsageValues(BaseModel):
+    members: int
+    memories: int
+    retrievals: int
+
+
+class WorkspaceUsageResponse(BaseModel):
+    period_start: datetime
+    members: int
+    memories: int
+    retrievals: int
+    limits: UsageValues
+
+
 class UserConfigResponse(BaseModel):
     max_memories_injected: int
     retrieval_threshold: float

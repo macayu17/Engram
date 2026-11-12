@@ -28,6 +28,33 @@ CREATE TABLE IF NOT EXISTS memory_revision_proposals (
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS memory_revision_proposals_scope_status_idx ON memory_revision_proposals(org_id, user_id, namespace, status, created_at DESC);
+ALTER TABLE memory_revision_proposals ADD COLUMN IF NOT EXISTS kind TEXT NOT NULL DEFAULT 'update';
+ALTER TABLE memory_revision_proposals DROP CONSTRAINT IF EXISTS memory_revision_proposals_kind_check;
+ALTER TABLE memory_revision_proposals ADD CONSTRAINT memory_revision_proposals_kind_check CHECK (kind IN ('update', 'conflict'));
+ALTER TABLE memory_revision_proposals DROP CONSTRAINT IF EXISTS memory_revision_proposals_status_check;
+ALTER TABLE memory_revision_proposals ADD CONSTRAINT memory_revision_proposals_status_check
+    CHECK (status IN ('pending', 'accepted', 'rejected', 'kept_both'));
+
+DO $$
+BEGIN
+    IF to_regclass('public.memory_conflicts') IS NOT NULL THEN
+        INSERT INTO memory_revision_proposals(memory_id, user_id, org_id, namespace, original_content, proposed_content, source_conversation_id, kind, created_at)
+        SELECT existing.id, conflict.user_id, conflict.org_id, existing.namespace, existing.content, proposed.content,
+               proposed.source_conversation_id, 'conflict', conflict.created_at
+        FROM memory_conflicts conflict
+        JOIN memories existing ON existing.id = conflict.existing_memory_id
+        JOIN memories proposed ON proposed.id = conflict.proposed_memory_id
+        WHERE conflict.status = 'open' AND existing.content <> proposed.content
+          AND NOT EXISTS (
+              SELECT 1 FROM memory_revision_proposals already
+              WHERE already.memory_id = existing.id AND already.proposed_content = proposed.content AND already.kind = 'conflict'
+          );
+        DELETE FROM memories
+        WHERE status = 'pending'
+          AND id IN (SELECT proposed_memory_id FROM memory_conflicts WHERE status = 'open');
+    END IF;
+END;
+$$;
 
 CREATE TABLE IF NOT EXISTS memory_versions (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -45,16 +72,6 @@ CREATE TABLE IF NOT EXISTS memory_versions (
 );
 CREATE INDEX IF NOT EXISTS memory_versions_memory_created_idx ON memory_versions(org_id, user_id, memory_id, created_at DESC);
 
-CREATE TABLE IF NOT EXISTS memory_feedback (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    memory_id UUID NOT NULL REFERENCES memories(id) ON DELETE CASCADE,
-    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    org_id UUID NOT NULL REFERENCES orgs(id) ON DELETE CASCADE,
-    relevant BOOLEAN NOT NULL,
-    query TEXT,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-CREATE INDEX IF NOT EXISTS memory_feedback_memory_idx ON memory_feedback(org_id, user_id, memory_id);
 
 CREATE OR REPLACE FUNCTION engram_save_memory_version() RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
@@ -100,7 +117,7 @@ DECLARE
     target_table TEXT;
     target_role TEXT;
 BEGIN
-    FOREACH target_table IN ARRAY ARRAY['memory_revision_proposals', 'memory_versions', 'memory_feedback'] LOOP
+    FOREACH target_table IN ARRAY ARRAY['memory_revision_proposals', 'memory_versions'] LOOP
         EXECUTE format('ALTER TABLE public.%I ENABLE ROW LEVEL SECURITY', target_table);
         EXECUTE format('DROP POLICY IF EXISTS engram_server_access ON public.%I', target_table);
         EXECUTE format('CREATE POLICY engram_server_access ON public.%I FOR ALL TO %I USING (true) WITH CHECK (true)', target_table, current_user);

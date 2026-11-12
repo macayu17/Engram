@@ -38,9 +38,9 @@ export function HomeDashboard() {
     queryFn: () => api.memories.timeline(8),
     enabled: connected,
   });
-  const conflicts = useQuery({
-    queryKey: ["memories", "conflicts", "count", apiKey, namespace],
-    queryFn: () => api.memories.conflicts({ limit: 1 }),
+  const revisions = useQuery({
+    queryKey: ["memories", "revisions", apiKey, namespace],
+    queryFn: api.memories.revisions,
     enabled: connected,
   });
   const failedJobs =
@@ -82,7 +82,7 @@ export function HomeDashboard() {
         logs.error,
         status.error,
         timeline.error,
-        conflicts.error,
+        revisions.error,
       ]
         .filter(Boolean)
         .map((error, index) => (
@@ -93,9 +93,9 @@ export function HomeDashboard() {
       <div className="grid grid-cols-2 gap-px border border-line bg-line lg:grid-cols-5">
         {[
           {
-            label: "Open conflicts",
-            value: conflicts.data?.total,
-            loading: conflicts.isLoading,
+            label: "Proposed changes",
+            value: revisions.data?.revisions.length,
+            loading: revisions.isLoading,
             href: "/memories",
           },
           {

@@ -2,7 +2,7 @@ import inspect
 
 import pytest
 
-from api.services import deduplication, extraction, graph, logs, memories, proxy, retrieval
+from api.services import deduplication, extraction, logs, memories, proxy, retrieval
 
 
 SCOPED_FUNCTIONS = [
@@ -16,14 +16,8 @@ SCOPED_FUNCTIONS = [
     memories.export_memories,
     memories.import_memories,
     memories.get_memory_source,
-    memories.list_merge_suggestions,
-    memories.merge_memories,
-    memories.apply_confidence_decay,
     memories.timeline,
     retrieval.retrieve_memories,
-    retrieval.retrieve_memories_fulltext,
-    retrieval.retrieve_memories_hybrid,
-    retrieval.retrieve_memories_graph,
     retrieval.log_retrieval,
     logs.list_retrieval_logs,
     logs.get_retrieval_log,
@@ -38,13 +32,6 @@ SCOPED_FUNCTIONS = [
     extraction.process_conversation_memories,
     extraction.record_conversation,
     extraction.mark_conversation_failed,
-    graph.extract_entities_for_memory,
-    graph.list_entity_edges,
-    graph.list_user_entities,
-    graph.list_memories_for_entity,
-    graph.get_memory_neighbors,
-    graph.get_memory_entities,
-    graph.backfill_entities_for_user,
     proxy.prepare_proxy_request,
 ]
 
@@ -56,7 +43,7 @@ def test_workspace_scoped_service_accepts_org_after_user(service_function) -> No
     assert parameters[:2] == ["user_id", "org_id"]
 
 
-@pytest.mark.parametrize("module", [deduplication, extraction, graph, logs, memories, retrieval])
+@pytest.mark.parametrize("module", [deduplication, extraction, logs, memories, retrieval])
 def test_workspace_scoped_sql_mentions_org_id(module) -> None:
     source = inspect.getsource(module)
 

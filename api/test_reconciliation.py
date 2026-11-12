@@ -14,7 +14,7 @@ def make_candidates(*memory_ids: object) -> list[dict[str, object]]:
 def test_parse_reconcile_decisions_maps_actions() -> None:
     target = uuid4()
     decisions = parse_reconcile_decisions(
-        ["ADD", f"UPDATE {target}", f"CONFLICT {target}", "DISCARD"],
+        ["ADD", "UPDATE 1", "CONFLICT 1", "DISCARD"],
         [make_candidates(uuid4()), make_candidates(target), make_candidates(target), make_candidates(uuid4())],
     )
 
@@ -32,16 +32,16 @@ def test_parse_reconcile_decisions_defaults_to_add_on_missing_or_invalid() -> No
 
 def test_parse_reconcile_decisions_rejects_update_targeting_unknown_memory() -> None:
     decisions = parse_reconcile_decisions(
-        [f"UPDATE {uuid4()}"],
-        [make_candidates(uuid4())],
+        ["UPDATE 2", "UPDATE 0"],
+        [make_candidates(uuid4()), make_candidates(uuid4())],
     )
 
-    assert decisions == [("add", None)]
+    assert decisions == [("add", None), ("add", None)]
 
 
 def test_parse_reconcile_decisions_rejects_invalid_conflict_target() -> None:
     decisions = parse_reconcile_decisions(
-        [f"CONFLICT {uuid4()}", "CONFLICT not-a-uuid"],
+        ["CONFLICT 5", "CONFLICT not-a-number"],
         [make_candidates(uuid4()), make_candidates(uuid4())],
     )
 
@@ -59,98 +59,48 @@ def test_limit_add_decisions_counts_conflict_proposals_against_capacity() -> Non
     assert decisions == [("conflict", target), ("discard", None), ("update", target)]
 
 
-def test_parse_update_target_requires_valid_uuid() -> None:
-    candidates = make_candidates(uuid4())
+def test_parse_update_target_maps_numbers_to_candidate_ids() -> None:
+    target = uuid4()
+    candidates = make_candidates(uuid4(), target)
 
-    assert parse_update_target("UPDATE not-a-uuid", candidates) is None
+    assert parse_update_target("UPDATE 2", candidates) == target
+    assert parse_update_target(f"UPDATE {target}", candidates) is None
+    assert parse_update_target("UPDATE not-a-number", candidates) is None
     assert parse_update_target("UPDATE", candidates) is None
 
 
 @pytest.mark.asyncio
-async def test_store_extracted_memory_preserves_conflict_as_pending_proposal(monkeypatch) -> None:
+async def test_store_extracted_memory_routes_conflict_to_review_proposal(monkeypatch) -> None:
     user_id = uuid4()
     org_id = uuid4()
     conversation_id = uuid4()
     existing_memory_id = uuid4()
-    proposed_memory_id = uuid4()
+    proposals: list[tuple[tuple[object, ...], dict[str, object]]] = []
 
-    class FakeDb:
-        def __init__(self) -> None:
-            self.calls: list[tuple[str, tuple[object, ...]]] = []
-
-        async def fetchrow(self, query: str, *args: object) -> dict[str, object]:
-            self.calls.append((query, args))
-            if "FROM memory_conflicts" in query:
-                return None
-            return {"id": proposed_memory_id}
-
-        async def execute(self, query: str, *args: object) -> str:
-            self.calls.append((query, args))
-            return "INSERT 0 1"
+    async def record_proposal(*args: object, **kwargs: object) -> dict[str, object]:
+        proposals.append((args, kwargs))
+        return {"id": uuid4()}
 
     async def fail_deduplication(*args: object, **kwargs: object) -> object:
         raise AssertionError("conflict proposals must bypass similarity refinement")
 
+    monkeypatch.setattr(extraction, "propose_revision", record_proposal)
     monkeypatch.setattr(extraction, "store_memory_with_deduplication", fail_deduplication)
-    db = FakeDb()
 
-    stored_count, stored_refs = await extraction.store_extracted_memories(
+    stored_count = await extraction.store_extracted_memories(
         user_id,
         org_id,
         conversation_id,
         ["User now prefers Flask for this project"],
-        db,
+        object(),
         embeddings=[[0.0] * 384],
         decisions=[("conflict", existing_memory_id)],
     )
 
     assert stored_count == 1
-    assert stored_refs == [(proposed_memory_id, "User now prefers Flask for this project")]
-    assert "FROM memory_conflicts" in db.calls[0][0]
-    assert "INSERT INTO memories" in db.calls[1][0]
-    assert db.calls[1][1][6] == "pending"
-    assert "INSERT INTO memory_conflicts" in db.calls[2][0]
-    assert db.calls[2][1] == (user_id, org_id, existing_memory_id, proposed_memory_id)
-
-
-@pytest.mark.asyncio
-async def test_store_memory_conflict_reuses_existing_open_proposal(monkeypatch) -> None:
-    from api.services.extraction import store_memory_conflict
-
-    existing_memory_id = uuid4()
-    proposed_memory_id = uuid4()
-    user_id = uuid4()
-    org_id = uuid4()
-    conversation_id = uuid4()
-
-    class FakeDb:
-        def __init__(self) -> None:
-            self.calls: list[str] = []
-
-        async def fetchrow(self, query: str, *args: object) -> dict[str, object]:
-            self.calls.append(query)
-            return {"id": proposed_memory_id}
-
-        async def execute(self, query: str, *args: object) -> str:
-            raise AssertionError("an existing open conflict must not create another proposal")
-
-    monkeypatch.setattr("api.services.embedding.format_embedding_for_pgvector", lambda embedding: "vector")
-    db = FakeDb()
-
-    result = await store_memory_conflict(
-        user_id,
-        org_id,
-        existing_memory_id,
-        "User prefers Flask",
-        [0.0] * 384,
-        conversation_id,
-        "default",
-        db,
-    )
-
-    assert result == {"id": proposed_memory_id}
-    assert len(db.calls) == 1
-    assert "FROM memory_conflicts" in db.calls[0]
+    args, kwargs = proposals[0]
+    assert args[:5] == (user_id, org_id, existing_memory_id, "User now prefers Flask for this project", conversation_id)
+    assert kwargs == {"kind": "conflict"}
 
 
 def test_resolve_bearer_api_key_prefers_engram_header() -> None:

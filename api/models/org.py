@@ -1,5 +1,4 @@
 from datetime import datetime
-from typing import Literal
 
 from pydantic import UUID4, BaseModel
 
@@ -13,7 +12,6 @@ class OrgResponse(BaseModel):
     name: str
     created_at: datetime
     role: str | None = None
-    plan: Literal["free", "pro"] = "free"
 
 
 class OrgMemberAdd(BaseModel):

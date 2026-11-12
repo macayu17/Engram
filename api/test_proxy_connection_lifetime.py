@@ -55,7 +55,6 @@ def user_row() -> dict[str, object]:
         "max_memories_injected": 5,
         "retrieval_threshold": 0.5,
         "dedup_threshold": 0.95,
-        "retrieval_mode": "vector",
     }
 
 

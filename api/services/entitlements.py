@@ -1,24 +1,12 @@
-from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Literal
 
 import asyncpg
 
+from api.config import settings
+
 
 QuotaResource = Literal["members", "memories", "retrievals"]
-
-
-@dataclass(frozen=True)
-class PlanLimits:
-    members: int
-    memories: int
-    retrievals: int
-
-
-PLAN_LIMITS = {
-    "free": PlanLimits(members=1, memories=2_000, retrievals=10_000),
-    "pro": PlanLimits(members=5, memories=50_000, retrievals=250_000),
-}
 
 
 class QuotaExceeded(RuntimeError):
@@ -27,6 +15,14 @@ class QuotaExceeded(RuntimeError):
         self.current = current
         self.limit = limit
         super().__init__(f"{resource} limit reached ({current}/{limit})")
+
+
+def workspace_limits() -> dict[str, int]:
+    return {
+        "members": settings.workspace_member_limit,
+        "memories": settings.workspace_memory_limit,
+        "retrievals": settings.workspace_monthly_retrieval_limit,
+    }
 
 
 def quota_headers(error: QuotaExceeded) -> dict[str, str]:
@@ -53,10 +49,7 @@ async def get_workspace_usage(org_id: object, db: asyncpg.Connection) -> dict[st
     period_start = datetime.now(UTC).replace(day=1, hour=0, minute=0, second=0, microsecond=0)
     row = await db.fetchrow(
         """
-        SELECT orgs.plan,
-               orgs.subscription_status,
-               orgs.current_period_end,
-               (SELECT count(*) FROM org_memberships WHERE org_id = orgs.id) AS members,
+        SELECT (SELECT count(*) FROM org_memberships WHERE org_id = orgs.id) AS members,
                (SELECT count(*) FROM memories WHERE org_id = orgs.id) AS memories,
                (SELECT count(*) FROM retrieval_logs
                 WHERE org_id = orgs.id AND created_at >= $2) AS retrievals
@@ -68,21 +61,12 @@ async def get_workspace_usage(org_id: object, db: asyncpg.Connection) -> dict[st
     )
     if row is None:
         raise RuntimeError("Workspace not found")
-    plan = str(row["plan"])
-    limits = PLAN_LIMITS[plan]
     return {
-        "plan": plan,
-        "subscription_status": str(row["subscription_status"]),
-        "current_period_end": row["current_period_end"],
         "period_start": period_start,
         "members": int(row["members"]),
         "memories": int(row["memories"]),
         "retrievals": int(row["retrievals"]),
-        "limits": {
-            "members": limits.members,
-            "memories": limits.memories,
-            "retrievals": limits.retrievals,
-        },
+        "limits": workspace_limits(),
     }
 
 
@@ -99,8 +83,5 @@ async def enforce_workspace_limit(
     if workspace_exists is None:
         raise RuntimeError("Workspace not found")
     usage = await get_workspace_usage(org_id, db)
-    limits = usage["limits"]
-    if not isinstance(limits, dict):
-        raise RuntimeError("Workspace limits are invalid")
-    enforce_limit(resource, int(usage[resource]), int(limits[resource]), amount)
+    enforce_limit(resource, int(usage[resource]), workspace_limits()[resource], amount)
     return usage

@@ -69,9 +69,7 @@ jobs:
         working-directory: dashboard
       - run: npm run verify:logic
         working-directory: dashboard
-      - run: npm run verify:conflicts
         working-directory: dashboard
-      - run: npm run verify:billing
         working-directory: dashboard
       - run: npm run build
         working-directory: dashboard

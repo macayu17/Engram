@@ -6,172 +6,18 @@ import asyncpg
 
 from api.services.deduplication import store_memory_with_deduplication
 from api.services.embedding import embed, format_embedding_for_pgvector
-from api.services.retrieval import build_retrieval_texts, retrieve_memories
+from api.services.retrieval import retrieve_memories
 
 
 MemoryOrder = Literal["created_at", "last_accessed", "access_count"]
 SortDirection = Literal["asc", "desc"]
 MemoryStatus = Literal["pending", "approved", "rejected"]
-MemoryConflictResolution = Literal["accept_new", "keep_old", "keep_both"]
 
 
 MEMORY_COLUMNS = (
     "id, content, confidence, access_count, last_accessed, created_at, source_conversation_id, "
     "status, category, pinned, source, last_confirmed, namespace, expires_at"
 )
-
-
-async def list_memory_conflicts(
-    user_id: object,
-    org_id: object,
-    db: asyncpg.Connection,
-    limit: int,
-    offset: int,
-    status: Literal["open", "resolved", "all"] = "open",
-    namespace: str | None = None,
-) -> tuple[list[dict[str, object]], int]:
-    status_clause = "" if status == "all" else "AND status = $3"
-    query_args: tuple[object, ...] = (user_id, org_id) if status == "all" else (user_id, org_id, status)
-    if namespace is not None:
-        query_args += (namespace,)
-        status_clause += f" AND EXISTS (SELECT 1 FROM memories current JOIN memories proposed ON proposed.id=memory_conflicts.proposed_memory_id WHERE current.id=memory_conflicts.existing_memory_id AND current.namespace=${len(query_args)} AND proposed.namespace=${len(query_args)})"
-
-    rows = await db.fetch(
-        f"""
-        SELECT id, existing_memory_id, proposed_memory_id, status, resolution, created_at, resolved_at
-        FROM memory_conflicts
-        WHERE user_id = $1
-          AND org_id = $2
-          {status_clause}
-        ORDER BY created_at DESC
-        LIMIT ${len(query_args) + 1}
-        OFFSET ${len(query_args) + 2}
-        """,
-        *query_args,
-        limit,
-        offset,
-    )
-    conflicts: list[dict[str, object]] = []
-    for row in rows:
-        conflict = dict(row)
-        existing_memory = await get_memory(user_id, org_id, conflict["existing_memory_id"], db, namespace=namespace)
-        proposed_memory = await get_memory(user_id, org_id, conflict["proposed_memory_id"], db, namespace=namespace)
-        if existing_memory is None or proposed_memory is None:
-            continue
-        conflicts.append(
-            {
-                "id": conflict["id"],
-                "status": conflict["status"],
-                "resolution": conflict["resolution"],
-                "created_at": conflict["created_at"],
-                "resolved_at": conflict["resolved_at"],
-                "existing_memory": existing_memory,
-                "proposed_memory": proposed_memory,
-            }
-        )
-    total = await db.fetchval(
-        f"""
-        SELECT COUNT(*)
-        FROM memory_conflicts
-        WHERE user_id = $1
-          AND org_id = $2
-          {status_clause}
-        """,
-        *query_args,
-    )
-    return conflicts, int(total)
-
-
-async def resolve_memory_conflict(
-    user_id: object,
-    org_id: object,
-    conflict_id: object,
-    resolution: MemoryConflictResolution,
-    db: asyncpg.Connection,
-    namespace: str | None = None,
-) -> dict[str, object] | None:
-    conflict_row = await db.fetchrow(
-        """
-        SELECT id, existing_memory_id, proposed_memory_id, status, resolution, created_at, resolved_at
-        FROM memory_conflicts
-        WHERE user_id = $1
-          AND org_id = $2
-          AND id = $3
-          AND status = 'open'
-        FOR UPDATE
-        """,
-        user_id,
-        org_id,
-        conflict_id,
-    )
-    if conflict_row is None:
-        return None
-    conflict = dict(conflict_row)
-    if namespace is not None:
-        for memory_id in (conflict["existing_memory_id"], conflict["proposed_memory_id"]):
-            memory = await lock_memory(user_id, org_id, memory_id, db)
-            if memory is None or memory["namespace"] != namespace:
-                return None
-
-    status_by_resolution: dict[MemoryConflictResolution, tuple[MemoryStatus, MemoryStatus]] = {
-        "accept_new": ("rejected", "approved"),
-        "keep_old": ("approved", "rejected"),
-        "keep_both": ("approved", "approved"),
-    }
-    existing_status, proposed_status = status_by_resolution[resolution]
-    existing_memory_id = conflict["existing_memory_id"]
-    proposed_memory_id = conflict["proposed_memory_id"]
-    updated = await db.execute(
-        """
-        UPDATE memories
-        SET status = CASE WHEN id = $1 THEN $2 ELSE $3 END,
-            last_confirmed = CASE WHEN (CASE WHEN id = $1 THEN $2 ELSE $3 END) = 'approved' THEN now() ELSE last_confirmed END
-        WHERE user_id = $4
-          AND org_id = $5
-          AND id = ANY($6::uuid[])
-        """,
-        existing_memory_id,
-        existing_status,
-        proposed_status,
-        user_id,
-        org_id,
-        [existing_memory_id, proposed_memory_id],
-    )
-    if updated != "UPDATE 2":
-        raise RuntimeError("Conflict memories are unavailable")
-    resolved_row = await db.fetchrow(
-        """
-        UPDATE memory_conflicts
-        SET status = 'resolved',
-            resolution = $4,
-            resolved_at = now()
-        WHERE user_id = $1
-          AND org_id = $2
-          AND id = $3
-          AND status = 'open'
-        RETURNING id, existing_memory_id, proposed_memory_id, status, resolution, created_at, resolved_at
-        """,
-        user_id,
-        org_id,
-        conflict_id,
-        resolution,
-    )
-    if resolved_row is None:
-        return None
-    existing_memory = await get_memory(user_id, org_id, existing_memory_id, db)
-    proposed_memory = await get_memory(user_id, org_id, proposed_memory_id, db)
-    if existing_memory is None or proposed_memory is None:
-        raise RuntimeError("Conflict memories are unavailable")
-    resolved = dict(resolved_row)
-    return {
-        "id": resolved["id"],
-        "status": resolved["status"],
-        "resolution": resolved["resolution"],
-        "created_at": resolved["created_at"],
-        "resolved_at": resolved["resolved_at"],
-        "existing_memory": existing_memory,
-        "proposed_memory": proposed_memory,
-    }
 
 
 async def create_memory(
@@ -316,7 +162,7 @@ async def delete_all_memories(user_id: object, org_id: object, db: asyncpg.Conne
 
 
 async def search_memories(
-    user_id: object, org_id: object, query: str, limit: int, threshold: float, db: asyncpg.Connection,
+    user_id: object, org_id: object, query: str, limit: int, threshold: float | None, db: asyncpg.Connection,
     namespace: str = "default", include_personal: bool = False,
 ) -> list[dict[str, object]]:
     from api.services.retrieval import log_retrieval
@@ -397,130 +243,6 @@ async def get_memory_source(
     return {"memory": memory, "conversation": conversation}
 
 
-async def list_merge_suggestions(
-    user_id: object,
-    org_id: object,
-    db: asyncpg.Connection,
-    limit: int = 10,
-    namespace: str | None = None,
-) -> list[dict[str, object]]:
-    rows = await db.fetch(
-        f"""
-        SELECT {MEMORY_COLUMNS}
-        FROM memories
-        WHERE user_id = $1
-          AND org_id = $2
-          AND status = 'approved' AND ($3::text IS NULL OR namespace=$3)
-        ORDER BY category, created_at DESC
-        LIMIT 200
-        """,
-        user_id,
-        org_id,
-        namespace,
-    )
-    memories = [dict(row) for row in rows]
-    suggestions: list[dict[str, object]] = []
-    for index, primary in enumerate(memories):
-        for duplicate in memories[index + 1:]:
-            if primary["category"] != duplicate["category"] or primary.get("namespace", "default") != duplicate.get("namespace", "default"):
-                continue
-            if memory_similarity_hint(str(primary["content"]), str(duplicate["content"])) < 0.42:
-                continue
-            suggestions.append({"primary": primary, "duplicate": duplicate, "reason": "Similar wording and category"})
-            if len(suggestions) >= limit:
-                return suggestions
-    return suggestions
-
-
-async def merge_memories(
-    user_id: object,
-    org_id: object,
-    primary_id: object,
-    duplicate_id: object,
-    content: str | None,
-    db: asyncpg.Connection,
-    namespace: str | None = None,
-) -> dict[str, object] | None:
-    if primary_id == duplicate_id:
-        return None
-    async with db.transaction():
-        primary = await lock_memory(user_id, org_id, primary_id, db)
-        duplicate = await lock_memory(user_id, org_id, duplicate_id, db)
-        if primary is None or duplicate is None:
-            return None
-        if primary.get("namespace", "default") != duplicate.get("namespace", "default"):
-            return None
-        if namespace is not None and primary.get("namespace") != namespace:
-            return None
-        merged_content = content or f"{primary['content']}\n{duplicate['content']}"
-        embedding = format_embedding_for_pgvector(embed(merged_content))
-        row = await db.fetchrow(
-            f"""
-            UPDATE memories
-            SET content = $1,
-                embedding = $2::vector,
-                confidence = GREATEST(confidence, $3),
-                access_count = access_count + $4,
-                last_accessed = CASE
-                    WHEN last_accessed IS NULL THEN $5::timestamptz
-                    WHEN $5::timestamptz IS NULL THEN last_accessed
-                    ELSE GREATEST(last_accessed, $5::timestamptz)
-                END,
-                category = $6,
-                pinned = $7,
-                status = 'approved',
-                last_confirmed = now()
-            WHERE user_id = $8
-              AND org_id = $9
-              AND id = $10
-            RETURNING {MEMORY_COLUMNS}
-            """,
-            merged_content,
-            embedding,
-            float(duplicate["confidence"]),
-            int(duplicate["access_count"]),
-            duplicate["last_accessed"],
-            str(primary["category"]),
-            bool(primary["pinned"]) or bool(duplicate["pinned"]),
-            user_id,
-            org_id,
-            primary_id,
-        )
-        await db.execute(
-            """
-            DELETE FROM memories
-            WHERE user_id = $1
-              AND org_id = $2
-              AND id = $3
-            """,
-            user_id,
-            org_id,
-            duplicate_id,
-        )
-    return dict(row) if row is not None else None
-
-
-async def apply_confidence_decay(user_id: object, org_id: object, db: asyncpg.Connection, namespace: str | None = None) -> int:
-    result = await db.execute(
-        """
-        UPDATE memories
-        SET confidence = GREATEST(0.1, confidence * 0.92)
-        WHERE user_id = $1
-          AND org_id = $2
-          AND status = 'approved' AND ($3::text IS NULL OR namespace=$3)
-          AND pinned = false
-          AND (
-            last_accessed IS NULL AND created_at < now() - interval '30 days'
-            OR last_accessed < now() - interval '30 days'
-          )
-        """,
-        user_id,
-        org_id,
-        namespace,
-    )
-    return int(result.split()[1])
-
-
 async def timeline(user_id: object, org_id: object, db: asyncpg.Connection, limit: int = 50, namespace: str | None = None) -> list[dict[str, object]]:
     memory_rows = await db.fetch(
         """
@@ -570,28 +292,20 @@ async def search_memory_rows_for_listing(
     if not search.strip():
         return []
     status_clause, category_clause, params = build_memory_filters(user_id, org_id, status, category, namespace)
-    matched_memories: dict[object, dict[str, object]] = {}
-    for retrieval_text in build_retrieval_texts(search):
-        query_embedding = format_embedding_for_pgvector(embed(retrieval_text))
-        rows = await db.fetch(
-            f"""
-            SELECT {MEMORY_COLUMNS},
-                   1 - (embedding <=> ${len(params) + 1}::vector) + CASE WHEN pinned THEN 0.08 ELSE 0 END AS score
-            FROM memories
-            WHERE {status_clause}
-              {category_clause}
-              AND (1 - (embedding <=> ${len(params) + 1}::vector) > 0 OR pinned = true)
-            ORDER BY score DESC
-            """,
-            *params,
-            query_embedding,
-        )
-        for row in rows:
-            memory = dict(row)
-            current = matched_memories.get(memory["id"])
-            if current is None or float(memory["score"]) > float(current["score"]):
-                matched_memories[memory["id"]] = memory
-    return sorted(matched_memories.values(), key=lambda memory: float(memory["score"]), reverse=True)
+    rows = await db.fetch(
+        f"""
+        SELECT {MEMORY_COLUMNS},
+               1 - (embedding <=> ${len(params) + 1}::vector) + CASE WHEN pinned THEN 0.08 ELSE 0 END AS score
+        FROM memories
+        WHERE {status_clause}
+          {category_clause}
+          AND (1 - (embedding <=> ${len(params) + 1}::vector) > 0 OR pinned = true)
+        ORDER BY score DESC
+        """,
+        *params,
+        format_embedding_for_pgvector(embed(search)),
+    )
+    return [dict(row) for row in rows]
 
 
 async def mark_memories_accessed(
@@ -615,28 +329,6 @@ async def mark_memories_accessed(
         org_id,
         memory_ids,
     )
-
-
-async def lock_memory(
-    user_id: object,
-    org_id: object,
-    memory_id: object,
-    db: asyncpg.Connection,
-) -> dict[str, object] | None:
-    row = await db.fetchrow(
-        f"""
-        SELECT {MEMORY_COLUMNS}
-        FROM memories
-        WHERE user_id = $1
-          AND org_id = $2
-          AND id = $3
-        FOR UPDATE
-        """,
-        user_id,
-        org_id,
-        memory_id,
-    )
-    return dict(row) if row is not None else None
 
 
 def build_memory_filters(
@@ -679,14 +371,6 @@ def infer_category(content: str) -> str:
     if any(token in text for token in ("correction", "actually", "not ", "instead")):
         return "corrections"
     return "profile"
-
-
-def memory_similarity_hint(first: str, second: str) -> float:
-    first_words = set(first.lower().split())
-    second_words = set(second.lower().split())
-    if not first_words or not second_words:
-        return 0.0
-    return len(first_words & second_words) / len(first_words | second_words)
 
 
 def validate_order_column(order: MemoryOrder) -> str:

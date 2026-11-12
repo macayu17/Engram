@@ -5,7 +5,7 @@ from collections.abc import Mapping, Sequence
 import asyncpg
 
 from api.config import settings
-from api.services.embedding import embed, format_embedding_for_pgvector, is_reranker_loaded, rerank
+from api.services.embedding import embed, format_embedding_for_pgvector
 
 
 def get_retrieval_query(body: Mapping[str, object], max_user_messages: int = 6) -> str:
@@ -39,12 +39,12 @@ def extract_text_from_content_parts(parts: Sequence[object]) -> str:
     return "\n".join(text_parts)
 
 
-def build_retrieval_texts(query: str) -> list[str]:
-    return [query]
+MAX_KEYWORD_TERMS = 64
 
 
-def build_log_embedding_text(query: str) -> str:
-    return "\n".join(build_retrieval_texts(query))
+def build_keyword_query(query: str) -> str:
+    terms = dict.fromkeys(term.lower() for term in re.findall(r"[A-Za-z0-9]+", query))
+    return " | ".join(list(terms)[:MAX_KEYWORD_TERMS])
 
 
 async def retrieve_memories(
@@ -56,210 +56,69 @@ async def retrieve_memories(
     threshold: float | None = None,
     namespace: str = "default",
     include_personal: bool = False,
+    focused: bool = False,
 ) -> list[dict[str, object]]:
     if not query.strip():
         return []
     threshold_value = settings.retrieval_threshold if threshold is None else threshold
     limit_value = settings.max_memories_injected if limit is None else limit
-    matched_memories: dict[object, dict[str, object]] = {}
-    for retrieval_text in build_retrieval_texts(query):
-        query_embedding = format_embedding_for_pgvector(embed(retrieval_text))
-        rows = await db.fetch(
-            """
+    rows = await db.fetch(
+        """
+        WITH candidates AS (
             SELECT id, content, confidence, access_count, last_accessed, created_at, source_conversation_id,
                    status, category, pinned, source, last_confirmed, namespace, expires_at,
-                   1 - (embedding <=> $1::vector)
-                     + CASE WHEN pinned THEN 0.08 ELSE 0 END
-                     + $7 * exp(-0.6931471805599453 * GREATEST(extract(epoch FROM now() - COALESCE(last_accessed, created_at)), 0) / ($8 * 86400.0))
-                     + $9 * LEAST(access_count, 20) / 20.0 AS score
+                   1 - (embedding <=> $1::vector) AS semantic,
+                   CASE WHEN $7 = '' THEN 0 ELSE ts_rank_cd(content_tsv, to_tsquery('english', $7), 32) END AS keyword
             FROM memories
             WHERE user_id = $2
               AND org_id = $3
               AND status = 'approved'
               AND namespace = ANY($6::text[])
               AND (expires_at IS NULL OR expires_at > now())
-              AND (1 - (embedding <=> $1::vector) > $4 OR pinned = true)
-            ORDER BY score DESC
-            LIMIT $5
-            """,
-            query_embedding,
-            user_id,
-            org_id,
-            threshold_value,
-            limit_value,
-            list(dict.fromkeys([namespace, "personal"])) if include_personal else [namespace],
-            settings.retrieval_recency_weight,
-            settings.retrieval_recency_half_life_days,
-            settings.retrieval_access_weight,
         )
-        for row in rows:
-            memory = dict(row)
-            memory_id = memory["id"]
-            current_memory = matched_memories.get(memory_id)
-            if current_memory is None or float(memory["score"]) > float(current_memory["score"]):
-                matched_memories[memory_id] = memory
-    candidates = sorted(matched_memories.values(), key=lambda memory: float(memory["score"]), reverse=True)
-    if is_reranker_loaded() and candidates and query.strip():
-        try:
-            rerank_scores = rerank(query, [str(m["content"]) for m in candidates])
-            for memory, score in zip(candidates, rerank_scores):
-                memory["score"] = score
-            candidates.sort(key=lambda m: float(m["score"]), reverse=True)
-        except Exception:
-            pass
-    memories = candidates[:limit_value]
-    memory_ids = [memory["id"] for memory in memories]
-    if memory_ids:
-        await db.execute(
-            """
-            UPDATE memories
-            SET access_count = access_count + 1,
-                last_accessed = now()
-            WHERE user_id = $1
-              AND org_id = $2
-              AND id = ANY($3::uuid[])
-            """,
-            user_id,
-            org_id,
-            memory_ids,
-        )
-    return memories
-
-
-def to_tsquery_safe(query: str) -> str:
-    tokens = re.findall(r"[A-Za-z0-9]+", query)
-    if not tokens:
-        return ""
-    return " & ".join(tokens)
-
-
-def rrf_merge(
-    vector_hits: list[dict[str, object]],
-    fulltext_hits: list[dict[str, object]],
-    limit: int,
-    k: int = 60,
-) -> list[dict[str, object]]:
-    scores: dict[object, float] = {}
-    merged: dict[object, dict[str, object]] = {}
-    for rank, memory in enumerate(vector_hits):
-        memory_id = memory["id"]
-        scores[memory_id] = scores.get(memory_id, 0.0) + 1.0 / (k + rank + 1)
-        merged[memory_id] = memory
-    for rank, memory in enumerate(fulltext_hits):
-        memory_id = memory["id"]
-        scores[memory_id] = scores.get(memory_id, 0.0) + 1.0 / (k + rank + 1)
-        if memory_id not in merged:
-            merged[memory_id] = memory
-    sorted_ids = sorted(scores, key=lambda mid: scores[mid], reverse=True)
-    result = []
-    for memory_id in sorted_ids[:limit]:
-        entry = dict(merged[memory_id])
-        entry["score"] = scores[memory_id]
-        result.append(entry)
-    return result
-
-
-async def retrieve_memories_fulltext(
-    user_id: object,
-    org_id: object,
-    query: str,
-    db: asyncpg.Connection,
-    limit: int,
-    namespace: str = "default",
-    include_personal: bool = False,
-) -> list[dict[str, object]]:
-    ts_query = to_tsquery_safe(query)
-    if not ts_query:
-        return []
-    rows = await db.fetch(
-        """
-        SELECT id, content, confidence, access_count, last_accessed, created_at, source_conversation_id,
-               status, category, pinned, source, last_confirmed, namespace, expires_at,
-               ts_rank_cd(content_tsv, to_tsquery('english', $1)) AS score
-        FROM memories
-        WHERE user_id = $2
-          AND org_id = $3
-          AND status = 'approved'
-          AND namespace = ANY($5::text[])
-          AND (expires_at IS NULL OR expires_at > now())
-          AND content_tsv @@ to_tsquery('english', $1)
-        ORDER BY score DESC
-        LIMIT $4
-        """,
-        ts_query,
-        user_id,
-        org_id,
-        limit * 2,
-        list(dict.fromkeys([namespace, "personal"])) if include_personal else [namespace],
-    )
-    return [dict(row) for row in rows]
-
-
-async def retrieve_memories_hybrid(
-    user_id: object,
-    org_id: object,
-    query: str,
-    db: asyncpg.Connection,
-    limit: int | None = None,
-    threshold: float | None = None,
-    namespace: str = "default",
-    include_personal: bool = False,
-) -> list[dict[str, object]]:
-    limit_value = settings.max_memories_injected if limit is None else limit
-    vector_hits = await retrieve_memories(user_id, org_id, query, db, limit_value * 2, threshold, namespace=namespace, include_personal=include_personal)
-    fulltext_hits = await retrieve_memories_fulltext(user_id, org_id, query, db, limit_value, namespace=namespace, include_personal=include_personal)
-    return rrf_merge(vector_hits, fulltext_hits, limit_value)
-
-
-async def retrieve_memories_graph(
-    user_id: object,
-    org_id: object,
-    query: str,
-    db: asyncpg.Connection,
-    limit: int | None = None,
-    threshold: float | None = None,
-    namespace: str = "default",
-    include_personal: bool = False,
-) -> list[dict[str, object]]:
-    limit_value = settings.max_memories_injected if limit is None else limit
-    seeds = await retrieve_memories(user_id, org_id, query, db, limit_value * 2, threshold, namespace=namespace, include_personal=include_personal)
-    if not seeds:
-        return []
-    seed_ids = [memory["id"] for memory in seeds]
-    expanded_rows = await db.fetch(
-        """
-        SELECT DISTINCT m.id, m.content, m.confidence, m.access_count, m.last_accessed,
-                        m.created_at, m.source_conversation_id, m.status, m.category,
-                        m.pinned, m.source, m.last_confirmed, m.namespace, m.expires_at
-        FROM memories m
-        JOIN memory_entity_links mel ON mel.memory_id = m.id
-        WHERE mel.entity_id IN (
-            SELECT entity_id FROM memory_entity_links WHERE memory_id = ANY($1::uuid[])
-        )
-        AND m.id != ALL($1::uuid[])
-        AND m.user_id = $2
-        AND m.org_id = $3
-        AND m.status = 'approved'
-        AND m.namespace = ANY($4::text[])
-        AND (m.expires_at IS NULL OR m.expires_at > now())
+        SELECT *,
+               semantic + $8 * keyword AS relevance,
+               semantic
+                 + $8 * keyword
+                 + CASE WHEN pinned THEN 0.08 ELSE 0 END
+                 + $9 * exp(-0.6931471805599453 * GREATEST(extract(epoch FROM now() - COALESCE(last_confirmed, created_at)), 0) / 86400.0 / $10)
+                 AS score
+        FROM candidates
+        WHERE semantic > $4 OR pinned
+        ORDER BY relevance DESC
         LIMIT $5
         """,
-        seed_ids,
+        format_embedding_for_pgvector(embed(query)),
         user_id,
         org_id,
+        threshold_value,
+        limit_value,
         list(dict.fromkeys([namespace, "personal"])) if include_personal else [namespace],
-        limit_value * 2,
+        build_keyword_query(query),
+        settings.retrieval_keyword_weight,
+        settings.retrieval_recency_weight,
+        settings.retrieval_recency_half_life_days,
     )
-    merged: list[dict[str, object]] = list(seeds)
-    seen_ids = set(seed_ids)
-    for row in expanded_rows:
-        memory = dict(row)
-        if memory["id"] in seen_ids:
-            continue
-        seen_ids.add(memory["id"])
-        memory["score"] = float(memory.get("confidence", 0.5)) * 0.5
-        merged.append(memory)
-    return merged[:limit_value]
+    if not rows:
+        return []
+    memories = sorted((dict(row) for row in rows), key=lambda memory: float(memory["score"]), reverse=True)
+    if focused:
+        cutoff = max(float(row["relevance"]) for row in rows) - settings.retrieval_relative_cutoff
+        memories = [memory for memory in memories if memory["pinned"] or float(memory["relevance"]) >= cutoff]
+    await db.execute(
+        """
+        UPDATE memories
+        SET access_count = access_count + 1,
+            last_accessed = now()
+        WHERE user_id = $1
+          AND org_id = $2
+          AND id = ANY($3::uuid[])
+        """,
+        user_id,
+        org_id,
+        [memory["id"] for memory in memories],
+    )
+    return memories
 
 
 async def log_retrieval(

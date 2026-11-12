@@ -27,7 +27,6 @@ class SecondaryKeyDb:
             "max_memories_injected": 7,
             "retrieval_threshold": 0.61,
             "dedup_threshold": 0.91,
-            "retrieval_mode": "graph",
             "extraction_provider": "anthropic",
             "extraction_model": "claude-3-5-haiku-latest",
             "openai_api_key_encrypted": None,
@@ -59,14 +58,14 @@ async def test_secondary_key_loads_workspace_role_and_all_runtime_settings() -> 
     assert result is not None
     assert result["org_id"] == "org-1"
     assert result["role"] == "admin"
-    assert result["retrieval_mode"] == "graph"
+    assert result["retrieval_threshold"] == 0.61
     primary_query = db.fetch_queries[0]
     secondary_query = db.fetch_queries[1]
     assert "user_api_keys.last_used_at" not in primary_query
     assert "user_api_keys.last_used_at" in secondary_query
     assert "user_api_keys.org_id" in secondary_query
     assert "org_memberships.role" in secondary_query
-    assert "users.retrieval_mode" in secondary_query
+    assert "users.retrieval_threshold" in secondary_query
     assert "orgs.extraction_provider" in secondary_query
     assert any("last_used_at = now()" in query for query in db.execute_queries)
 
@@ -82,7 +81,7 @@ async def test_recent_secondary_key_usage_does_not_write_again() -> None:
     assert db.execute_queries == []
 
 
-def test_cached_user_preserves_workspace_role_and_retrieval_mode() -> None:
+def test_cached_user_preserves_workspace_role_and_retrieval_settings() -> None:
     api_key = "ek_cached_workspace"
     users.cache_user_auth(
         hash_api_key(api_key),
@@ -96,7 +95,6 @@ def test_cached_user_preserves_workspace_role_and_retrieval_mode() -> None:
             "max_memories_injected": 5,
             "retrieval_threshold": 0.5,
             "dedup_threshold": 0.95,
-            "retrieval_mode": "hybrid",
             "extraction_provider": "openai",
             "extraction_model": "gpt-4o-mini",
         },
@@ -107,4 +105,4 @@ def test_cached_user_preserves_workspace_role_and_retrieval_mode() -> None:
     assert cached is not None
     assert cached["org_id"] == "org-1"
     assert cached["role"] == "owner"
-    assert cached["retrieval_mode"] == "hybrid"
+    assert cached["retrieval_threshold"] == 0.5

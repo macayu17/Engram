@@ -42,14 +42,9 @@ export function SettingsPanel() {
     queryFn: () => api.users.me(),
     enabled: Boolean(apiKey) && !malformedApiKey,
   });
-  const workspaceQuery = useQuery({
-    queryKey: ["workspaces", apiKey, namespace],
-    queryFn: () => api.orgs.list(),
-    enabled: Boolean(apiKey) && !malformedApiKey,
-  });
   const usageQuery = useQuery({
-    queryKey: ["billing", "usage", apiKey, namespace],
-    queryFn: () => api.billing.usage(),
+    queryKey: ["usage", apiKey, namespace],
+    queryFn: () => api.users.usage(),
     enabled: Boolean(apiKey) && !malformedApiKey,
   });
   const managedKeysQuery = useQuery({
@@ -57,7 +52,6 @@ export function SettingsPanel() {
     queryFn: () => api.keys.list(),
     enabled: Boolean(apiKey) && !malformedApiKey,
   });
-  const workspace = workspaceQuery.data?.[0];
   const deleteAccountMutation = useMutation({
     mutationFn: () => api.users.deleteMe(),
     onSuccess: () => {
@@ -193,21 +187,6 @@ export function SettingsPanel() {
     event.preventDefault();
     const name = managedKeyName.trim();
     if (name) createManagedKeyMutation.mutate(name);
-  }
-
-  async function openBilling() {
-    if (!workspace) return;
-    try {
-      const response =
-        usageQuery.data?.plan === "pro"
-          ? await api.billing.portal(workspace.id)
-          : await api.billing.checkout(workspace.id);
-      window.location.assign(response.url);
-    } catch (error) {
-      setKeyError(
-        error instanceof Error ? error.message : "Unable to open billing.",
-      );
-    }
   }
 
   function deleteMemories() {
@@ -523,19 +502,22 @@ export function SettingsPanel() {
         <div className="grid gap-6 lg:grid-cols-[0.8fr_1.2fr]">
           <div>
             <p className="font-sans text-xs font-medium text-muted">
-              Subscription
+              Limits
             </p>
-            <h2 className="mt-2 text-2xl font-normal">Billing</h2>
+            <h2 className="mt-2 text-2xl font-normal">Usage</h2>
             <p className="mt-2 max-w-md text-base leading-7 text-muted">
-              Hosted plans limit stored memories, monthly retrievals, and
-              workspace seats. Model usage stays on your provider account.
+              Each workspace has a cap on stored memories, monthly retrievals
+              and members. Model usage stays on your provider account.
             </p>
           </div>
           <div>
             <dl className="grid gap-4 border-y border-line py-4 sm:grid-cols-3">
               <UsageValue
-                label="Plan"
-                value={usageQuery.data?.plan === "pro" ? "Pro" : "Free"}
+                label="Members"
+                value={formatUsage(
+                  usageQuery.data?.members,
+                  usageQuery.data?.limits.members,
+                )}
               />
               <UsageValue
                 label="Memories"
@@ -552,17 +534,6 @@ export function SettingsPanel() {
                 )}
               />
             </dl>
-            {hosted && workspace?.role === "owner" && (
-              <button
-                type="button"
-                onClick={openBilling}
-                className="mt-5 min-h-11 rounded-lg border border-ink px-4 font-sans text-xs font-medium hover:border-signal hover:text-signal"
-              >
-                {usageQuery.data?.plan === "pro"
-                  ? "Manage billing"
-                  : "Upgrade to Pro"}
-              </button>
-            )}
           </div>
         </div>
       </section>

@@ -1,9 +1,15 @@
+from typing import Literal
 from uuid import UUID
 
 import asyncpg
 from fastapi import HTTPException
 
 from api.services.embedding import embed, format_embedding_for_pgvector
+
+
+RevisionKind = Literal["update", "conflict"]
+RevisionStatus = Literal["pending", "accepted", "rejected", "kept_both"]
+RevisionDecision = Literal["accept", "reject", "keep_both"]
 
 
 async def propose_revision(
@@ -14,6 +20,7 @@ async def propose_revision(
     conversation_id: object | None,
     db: asyncpg.Connection,
     namespace: str = "default",
+    kind: RevisionKind = "update",
 ) -> dict[str, object] | None:
     current = await db.fetchrow(
         "SELECT id, content FROM memories WHERE user_id=$1 AND org_id=$2 AND id=$3 AND namespace=$4 AND status <> 'rejected' FOR UPDATE",
@@ -23,19 +30,19 @@ async def propose_revision(
         return None
     row = await db.fetchrow(
         """
-        INSERT INTO memory_revision_proposals(memory_id,user_id,org_id,namespace,original_content,proposed_content,source_conversation_id)
-        SELECT $1,$2,$3,$4,$5,$6,$7
+        INSERT INTO memory_revision_proposals(memory_id,user_id,org_id,namespace,original_content,proposed_content,source_conversation_id,kind)
+        SELECT $1,$2,$3,$4,$5,$6,$7,$8
         WHERE NOT EXISTS (SELECT 1 FROM memory_revision_proposals WHERE memory_id=$1 AND user_id=$2 AND org_id=$3 AND proposed_content=$6 AND status='pending')
         RETURNING *
         """,
-        memory_id, user_id, org_id, namespace, current["content"], content, conversation_id,
+        memory_id, user_id, org_id, namespace, current["content"], content, conversation_id, kind,
     )
     return dict(row) if row is not None else None
 
 
 async def list_revisions(
     user_id: object, org_id: object, db: asyncpg.Connection,
-    namespace: str | None = None, status: str = "pending",
+    namespace: str | None = None, status: RevisionStatus = "pending",
 ) -> list[dict[str, object]]:
     rows = await db.fetch(
         """
@@ -49,7 +56,7 @@ async def list_revisions(
 
 
 async def decide_revision(
-    user_id: object, org_id: object, revision_id: object, accept: bool,
+    user_id: object, org_id: object, revision_id: object, decision: RevisionDecision,
     db: asyncpg.Connection, namespace: str | None = None,
 ) -> dict[str, object]:
     async with db.transaction():
@@ -61,7 +68,17 @@ async def decide_revision(
             raise HTTPException(status_code=404, detail="Revision not found")
         if revision["status"] != "pending":
             raise HTTPException(status_code=409, detail="Revision has already been reviewed")
-        if accept:
+        if decision == "keep_both":
+            await db.execute(
+                """
+                INSERT INTO memories (user_id, org_id, content, embedding, source_conversation_id, status, source, namespace, last_confirmed)
+                VALUES ($1, $2, $3, $4::vector, $5, 'approved', 'extraction', $6, now())
+                """,
+                user_id, org_id, revision["proposed_content"],
+                format_embedding_for_pgvector(embed(revision["proposed_content"])),
+                revision["source_conversation_id"], revision["namespace"],
+            )
+        if decision == "accept":
             current = await db.fetchrow(
                 "SELECT content, namespace FROM memories WHERE user_id=$1 AND org_id=$2 AND id=$3 FOR UPDATE",
                 user_id, org_id, revision["memory_id"],
@@ -79,7 +96,7 @@ async def decide_revision(
             )
         row = await db.fetchrow(
             "UPDATE memory_revision_proposals SET status=$1 WHERE user_id=$2 AND org_id=$3 AND id=$4 RETURNING *",
-            "accepted" if accept else "rejected", user_id, org_id, revision_id,
+            {"accept": "accepted", "reject": "rejected", "keep_both": "kept_both"}[decision], user_id, org_id, revision_id,
         )
         return dict(row)
 
@@ -126,18 +143,3 @@ async def restore_memory(
             version["status"], version["pinned"], version["namespace"], version["expires_at"], user_id, org_id, memory_id,
         )
         return await get_memory(user_id, org_id, memory_id, db)
-
-
-async def save_feedback(
-    user_id: object, org_id: object, memory_id: object, relevant: bool, query: str | None,
-    db: asyncpg.Connection, namespace: str | None = None,
-) -> None:
-    result = await db.execute(
-        """
-        INSERT INTO memory_feedback(memory_id,user_id,org_id,relevant,query)
-        SELECT id,user_id,org_id,$4,$5 FROM memories
-        WHERE user_id=$1 AND org_id=$2 AND id=$3 AND ($6::text IS NULL OR namespace=$6)
-        """, user_id, org_id, memory_id, relevant, query, namespace,
-    )
-    if result.endswith("0"):
-        raise HTTPException(status_code=404, detail="Memory not found")

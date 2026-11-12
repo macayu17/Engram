@@ -1,0 +1,12 @@
+name: Keep hosted database awake
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 6 */3 * *"
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - run: curl --fail --silent --show-error --max-time 180 --retry 2 https://engram-api.whitedune-6b4bf4e3.centralindia.azurecontainerapps.io/health

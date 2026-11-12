@@ -14,7 +14,8 @@ from api.services.users import get_user_provider_config, regenerate_user_key, up
 async def test_proxy_uses_user_retrieval_config(monkeypatch) -> None:
     captured: dict[str, object] = {}
 
-    async def fake_retrieve_memories(user_id, org_id, query, db, limit=None, threshold=None, namespace="default", include_personal=False):
+    async def fake_retrieve_memories(user_id, org_id, query, db, limit=None, threshold=None, namespace="default", include_personal=False, focused=False):
+        captured["focused"] = focused
         captured["user_id"] = user_id
         captured["org_id"] = org_id
         captured["query"] = query
@@ -80,6 +81,7 @@ async def test_proxy_uses_user_retrieval_config(monkeypatch) -> None:
     assert captured["query"] == "What stack should I use?"
     assert captured["limit"] == 2
     assert captured["threshold"] == 0.72
+    assert captured["focused"] is True
     assert "FROM orgs" in db.query
     assert "orgs.extraction_provider" in db.query
 
@@ -117,7 +119,7 @@ async def test_extracted_memory_storage_uses_user_dedup_threshold(monkeypatch) -
     monkeypatch.setattr(extraction, "store_memory_with_deduplication", fake_store_memory_with_deduplication)
     monkeypatch.setattr("api.services.embedding.embed_batch", fake_embed_batch)
 
-    stored_count, _stored_refs = await extraction.store_extracted_memories(
+    stored_count = await extraction.store_extracted_memories(
         uuid4(),
         uuid4(),
         uuid4(),

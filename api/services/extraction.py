@@ -1,6 +1,6 @@
-import asyncio
 import json
 import logging
+from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
 import asyncpg
@@ -12,6 +12,7 @@ from api.services.entitlements import enforce_workspace_limit, get_workspace_usa
 from api.services.memories import infer_category
 from api.services.providers.base import stringify_message_content
 from api.services.providers.factory import build_extraction_provider
+from api.services.revisions import propose_revision
 from api.services.provider_keys import ProviderConfigError, ResolvedProvider, resolve_user_provider
 from api.services.users import get_workspace_provider_context
 
@@ -29,6 +30,8 @@ RULES:
 6. If the user corrected the assistant, extract the correction as a fact
 7. Maximum 5 memories per conversation. Quality over quantity
 8. If nothing worth remembering was said, return an empty array
+9. The conversation happened on {today}. Rewrite relative time references as absolute dates.
+   Bad: "User started a new job last week". Good: "User started a new job in the week of 2026-03-02"
 
 OUTPUT FORMAT:
 Return ONLY a valid JSON array of strings. No preamble, no explanation, no markdown.
@@ -45,19 +48,19 @@ RECONCILE_PROMPT = """You are a memory reconciliation system. New facts were ext
 
 Decide one action per new fact:
 - "ADD" if the fact is genuinely new information not covered by existing memories
-- "UPDATE <memory_id>" if the fact is an unambiguous correction or newer value that safely replaces that existing memory
-- "CONFLICT <memory_id>" if the new and existing claims contradict each other but either claim may still be valid or needs user clarification
+- "UPDATE <number>" if the fact is an unambiguous correction or newer value that safely replaces that existing memory
+- "CONFLICT <number>" if the new and existing claims contradict each other but either claim may still be valid or needs user clarification
 - "DISCARD" if existing memories already fully cover this fact
 
 RULES:
 1. Prefer UPDATE over ADD when the fact is a newer version of an existing memory (changed preference, corrected detail, progressed situation)
 2. Use CONFLICT instead of UPDATE when replacement could erase a durable or high-impact claim that may still be true
 3. Only DISCARD when the fact adds nothing at all
-4. Use the exact memory_id shown in the existing memory listing
+4. Refer to an existing memory by the number shown before it, never by any other identifier
 
 OUTPUT FORMAT:
 Return ONLY a valid JSON array of strings, one per new fact, in the same order as the facts. No preamble, no markdown.
-Example: ["ADD", "UPDATE 3f2b8c9e-1a2b-4c5d-8e9f-0a1b2c3d4e5f", "CONFLICT 7c7ea9d8-95c2-4ea8-b617-8a29f513f709", "DISCARD"]
+Example: ["ADD", "UPDATE 1", "CONFLICT 2", "DISCARD"]
 
 {sections}
 
@@ -66,7 +69,8 @@ DECISIONS (JSON array only):"""
 
 async def extract_memories(conversation: str, resolved: ResolvedProvider) -> list[str]:
     provider = build_extraction_provider(resolved)
-    return await provider.extract(EXTRACTION_PROMPT.format(conversation=conversation))
+    today = datetime.now(UTC).date().isoformat()
+    return await provider.extract(EXTRACTION_PROMPT.format(conversation=conversation, today=today))
 
 
 def limit_add_decisions(
@@ -124,15 +128,14 @@ async def store_extracted_memories(
     namespace: str = "default",
     embeddings: list[list[float]] | None = None,
     decisions: list[tuple[str, UUID | None]] | None = None,
-) -> tuple[int, list[tuple[UUID, str]]]:
+) -> int:
     if not memories:
-        return 0, []
+        return 0
     from api.services.embedding import embed_batch
 
     memory_embeddings = embed_batch(memories) if embeddings is None else embeddings
     memory_decisions = [("add", None) for _ in memories] if decisions is None else decisions
     stored_count = 0
-    stored_refs: list[tuple[UUID, str]] = []
     for index, content in enumerate(memories):
         action, target_id = memory_decisions[index]
         if action == "discard":
@@ -145,21 +148,11 @@ async def store_extracted_memories(
                 stored_count += 1
             continue
         if action == "conflict" and target_id is not None:
-            proposed = await store_memory_conflict(
-                user_id,
-                org_id,
-                target_id,
-                content,
-                memory_embeddings[index],
-                conversation_id,
-                namespace,
-                db,
+            proposed = await propose_revision(
+                user_id, org_id, target_id, content, conversation_id, db, namespace, kind="conflict"
             )
             if proposed is not None:
-                proposed_id = proposed["id"]
-                if isinstance(proposed_id, UUID):
-                    stored_count += 1
-                    stored_refs.append((proposed_id, content))
+                stored_count += 1
             continue
         result = await store_memory_with_deduplication(
             user_id,
@@ -175,14 +168,9 @@ async def store_extracted_memories(
             "extraction",
             namespace=namespace,
         )
-        if result["action"] == "proposed":
+        if result["action"] == "proposed" or (result["action"] in {"inserted", "updated"} and result["memory"] is not None):
             stored_count += 1
-        if result["action"] in {"inserted", "updated"} and result["memory"] is not None:
-            stored_count += 1
-            memory_id = result["memory"].get("id")
-            if isinstance(memory_id, UUID):
-                stored_refs.append((memory_id, content))
-    return stored_count, stored_refs
+    return stored_count
 
 
 async def reconcile_memories(
@@ -202,7 +190,9 @@ async def reconcile_memories(
         sections.append(f"NEW FACT {index + 1}: {content}")
         if candidates_per_fact[index]:
             sections.append("EXISTING MEMORIES:")
-            sections.extend(f"  {row['id']}: {row['content']}" for row in candidates_per_fact[index])
+            sections.extend(
+                f"  {position}. {row['content']}" for position, row in enumerate(candidates_per_fact[index], start=1)
+            )
         else:
             sections.append("EXISTING MEMORIES: none")
     try:
@@ -277,50 +267,20 @@ def parse_reconcile_decisions(
 
 def parse_update_target(raw_decision: str, candidates: list[dict[str, object]]) -> UUID | None:
     parts = raw_decision.split()
-    if len(parts) < 2:
+    if len(parts) < 2 or not parts[1].isdigit():
         return None
-    try:
-        target = UUID(parts[1])
-    except ValueError:
+    position = int(parts[1])
+    if not 1 <= position <= len(candidates):
         return None
-    candidate_ids = {row["id"] for row in candidates}
-    return target if target in candidate_ids else None
+    target = candidates[position - 1]["id"]
+    return target if isinstance(target, UUID) else None
 
 
 async def apply_memory_update(
     user_id: UUID, org_id: UUID, memory_id: UUID, content: str, embedding: list[float],
     conversation_id: UUID, db: asyncpg.Connection, namespace: str = "default",
 ) -> dict[str, object] | None:
-    from api.services.revisions import propose_revision
-
     return await propose_revision(user_id, org_id, memory_id, content, conversation_id, db, namespace)
-
-
-async def _run_graph_extraction(
-    user_id: UUID,
-    org_id: UUID,
-    memory_refs: list[tuple[UUID, str]],
-    resolved: ResolvedProvider,
-) -> None:
-    if not memory_refs:
-        return
-    from api.services.graph import extract_entities_for_memory
-
-    pool = get_pool()
-    semaphore = asyncio.Semaphore(3)
-
-    async def _one(memory_id: UUID, content: str) -> None:
-        async with semaphore:
-            try:
-                async with pool.acquire() as db:
-                    await extract_entities_for_memory(user_id, org_id, memory_id, content, resolved, db)
-            except Exception as inner_error:
-                logger.warning("Entity extraction failed for memory %s: %s", memory_id, inner_error)
-
-    try:
-        await asyncio.gather(*(_one(mid, content) for mid, content in memory_refs))
-    except Exception as outer_error:
-        logger.warning("Graph extraction task failed: %s", outer_error)
 
 
 async def capture_conversation_memories(
@@ -428,7 +388,6 @@ async def process_conversation_memories(
             )
     decisions = await reconcile_memories(user_id, org_id, extracted, candidates_per_fact, resolved)
     stored_count = 0
-    stored_refs: list[tuple[UUID, str]] = []
     async with pool.acquire() as db:
         async with db.transaction():
             await validate_capture_lease(user_id, org_id, conversation_id, job_token, db)
@@ -436,15 +395,13 @@ async def process_conversation_memories(
             limited_decisions = limit_add_decisions(
                 decisions, remaining_capacity(locked_usage, "memories"),
             )
-            stored_count, stored_refs = await store_extracted_memories(
+            stored_count = await store_extracted_memories(
                 user_id, org_id, conversation_id, extracted, db, dedup_threshold,
                 namespace=namespace, embeddings=embeddings, decisions=limited_decisions,
             )
             await record_conversation(
                 user_id, org_id, conversation_id, request_body, response_body, "completed", stored_count, db
             )
-    if settings.enable_graph and stored_refs:
-        asyncio.create_task(_run_graph_extraction(user_id, org_id, stored_refs, resolved))
     return stored_count, extracted
 
 
@@ -597,88 +554,3 @@ async def mark_conversation_failed(
     db: asyncpg.Connection,
 ) -> None:
     await record_conversation(user_id, org_id, conversation_id, request_body, response_body, "failed", 0, db)
-
-
-async def store_memory_conflict(
-    user_id: UUID,
-    org_id: UUID,
-    existing_memory_id: UUID,
-    content: str,
-    embedding: list[float],
-    conversation_id: UUID,
-    namespace: str,
-    db: asyncpg.Connection,
-) -> dict[str, object] | None:
-    from api.services.embedding import format_embedding_for_pgvector
-
-    existing_proposal = await db.fetchrow(
-        """
-        SELECT proposed.id
-        FROM memory_conflicts AS conflict
-        JOIN memories AS proposed ON proposed.id = conflict.proposed_memory_id
-        WHERE conflict.user_id = $1
-          AND conflict.org_id = $2
-          AND conflict.existing_memory_id = $3
-          AND conflict.status = 'open'
-          AND proposed.source_conversation_id = $4
-          AND proposed.namespace = $5
-          AND proposed.content = $6
-        LIMIT 1
-        """,
-        user_id,
-        org_id,
-        existing_memory_id,
-        conversation_id,
-        namespace,
-        content,
-    )
-    if existing_proposal is not None:
-        return dict(existing_proposal)
-    proposed = await db.fetchrow(
-        """
-        INSERT INTO memories (
-            user_id, org_id, content, embedding, source_conversation_id, confidence,
-            status, category, source, namespace
-        )
-        VALUES ($1, $2, $3, $4::vector, $5, $6, $7, $8, $9, $10)
-        RETURNING id
-        """,
-        user_id,
-        org_id,
-        content,
-        format_embedding_for_pgvector(embedding),
-        conversation_id,
-        1.0,
-        "pending",
-        infer_category(content),
-        "extraction",
-        namespace,
-    )
-    if proposed is None:
-        return None
-    proposed_memory_id = proposed["id"]
-    conflict = await db.fetchrow(
-        """
-        INSERT INTO memory_conflicts (user_id, org_id, existing_memory_id, proposed_memory_id)
-        SELECT $1, $2, id, $4
-        FROM memories
-        WHERE user_id = $1
-          AND org_id = $2
-          AND id = $3
-          AND status = 'approved'
-        RETURNING id
-        """,
-        user_id,
-        org_id,
-        existing_memory_id,
-        proposed_memory_id,
-    )
-    if conflict is None:
-        await db.execute(
-            "DELETE FROM memories WHERE user_id = $1 AND org_id = $2 AND id = $3",
-            user_id,
-            org_id,
-            proposed_memory_id,
-        )
-        return None
-    return dict(proposed)

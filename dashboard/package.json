@@ -7,9 +7,7 @@
     "build": "next build",
     "start": "next start -p 3001",
     "typecheck": "next typegen && tsc --noEmit",
-    "verify:billing": "node scripts/verify-billing-setup.mjs",
     "verify:clerk": "node scripts/verify-clerk-setup.mjs",
-    "verify:conflicts": "node scripts/verify-memory-conflicts.mjs",
     "verify:logic": "node scripts/verify-dashboard-logic.mjs"
   },
   "dependencies": {
@@ -20,7 +18,6 @@
     "next": "^16.2.6",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
-    "react-force-graph-2d": "^1.27.1",
     "three": "^0.180.0"
   },
   "devDependencies": {

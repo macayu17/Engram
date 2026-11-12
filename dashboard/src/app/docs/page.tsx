@@ -13,8 +13,7 @@ const quickLinks = [
   { href: "#mcp", label: "MCP clients" },
   { href: "#auto-capture", label: "Auto capture" },
   { href: "#proxy", label: "Proxy API" },
-  { href: "#retrieval", label: "Retrieval modes" },
-  { href: "#graph", label: "Graph memory" },
+  { href: "#retrieval", label: "Retrieval" },
   { href: "#namespaces", label: "Namespaces & orgs" },
   { href: "#rest", label: "REST API" },
   { href: "#deploy", label: "Deploy" },
@@ -35,7 +34,6 @@ const endpoints = [
   ["Capture", "POST /memories/capture"],
   ["Logs", "GET /logs, GET /logs/{id}"],
   ["Proxy", "POST /v1/chat (supports stream: true)"],
-  ["Graph", "GET /graph/entities, GET /graph/edges, GET /graph/memories/{id}/neighbors, POST /graph/extract"],
   ["Orgs", "POST /orgs, GET /orgs, POST /orgs/{id}/members, DELETE /orgs/{id}/members/{ext_id}"],
 ];
 
@@ -86,13 +84,10 @@ curl -X POST http://localhost:8000/users \\
       <DocsSection id="dashboard" eyebrow="02" title="Dashboard workflow">
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           <DocCard title="Home">
-            Land on the overview: total memories, pending reviews, entity count, recent activity timeline, top connected entities, and latest retrievals.
+            Land on the overview: total memories, pending reviews, proposed changes, recent activity and latest retrievals.
           </DocCard>
           <DocCard title="Memories">
-            The full ledger at <InlineCode>/memories</InlineCode>. Search, add, edit, approve pending extractions, merge duplicates, export, import, and decay confidence.
-          </DocCard>
-          <DocCard title="Graph">
-            <InlineCode>/graph</InlineCode> renders entities extracted from memories as a force-directed graph. Hover to highlight neighborhoods, click for memory lists, filter by type.
+            The full ledger at <InlineCode>/memories</InlineCode>. Search, add, edit, approve pending extractions, review proposed changes, export and import.
           </DocCard>
           <DocCard title="Chat">
             <InlineCode>/chat</InlineCode> talks to your configured provider through the proxy. Memories are injected automatically, new ones extracted in the background.
@@ -101,7 +96,7 @@ curl -X POST http://localhost:8000/users \\
             Every retrieval event: which memories were surfaced, their scores, and the conversation that caused it.
           </DocCard>
           <DocCard title="Settings">
-            Engram API key, provider config, encrypted provider keys, retrieval thresholds, retrieval mode (vector / hybrid / graph), and dedup tuning.
+            Engram API key, provider config, encrypted provider keys, retrieval thresholds and dedup tuning.
           </DocCard>
         </div>
       </DocsSection>
@@ -179,68 +174,32 @@ curl -X POST http://localhost:8000/users \\
         </div>
       </DocsSection>
 
-      <DocsSection id="retrieval" eyebrow="06" title="Retrieval modes">
+      <DocsSection id="retrieval" eyebrow="06" title="How retrieval ranks memories">
         <div className="space-y-4 text-base leading-7 text-muted">
           <p>
-            Each user can pick the retrieval strategy used when memories get injected into the system prompt. Set it via <InlineCode>PATCH /users/me/config</InlineCode> with a <InlineCode>retrieval_mode</InlineCode> field, or from the Settings page.
+            Every proxy call, search and MCP lookup runs the same single SQL query over your approved memories in the active project. There are no modes to pick.
           </p>
         </div>
         <div className="grid gap-4 md:grid-cols-3">
-          <DocCard title="vector (default)">
-            Pure pgvector cosine similarity over the 384-dim embeddings. Fast, single SQL round trip. Best when queries paraphrase memory content.
+          <DocCard title="Meaning plus keywords">
+            Each memory scores its cosine similarity to the query, plus a Postgres full-text rank so exact names, codes and terms count too. Memories below <InlineCode>retrieval_threshold</InlineCode> are skipped unless pinned.
           </DocCard>
-          <DocCard title="hybrid">
-            Runs vector and Postgres full-text (<InlineCode>tsvector</InlineCode>) searches in parallel, then merges with Reciprocal Rank Fusion (k=60). Better recall when queries name specific terms the embedding may not weight highly.
+          <DocCard title="Light recency tilt">
+            Newer or recently confirmed facts get a small boost that halves every 30 days, so an updated preference outranks the one it replaced. Pinned memories get a fixed boost.
           </DocCard>
-          <DocCard title="graph">
-            Vector seed plus 1-hop expansion through the entity graph (memories sharing entities with the seed are pulled in). Requires <InlineCode>ENABLE_GRAPH=true</InlineCode> and a backfilled entity set.
+          <DocCard title="Only what is close to the best match">
+            Results keep only memories within 0.08 of the top score, up to <InlineCode>max_memories_injected</InlineCode>. Unrelated facts stay out of the prompt instead of padding it.
           </DocCard>
         </div>
         <div className="border-y border-line py-5">
-          <p className="font-sans text-xs font-medium text-muted">Reranker (optional)</p>
+          <p className="font-sans text-xs font-medium text-muted">Measured, not guessed</p>
           <p className="mt-3 text-base leading-7 text-muted">
-            Set <InlineCode>ENABLE_RERANKER=true</InlineCode> on the API to load a cross-encoder (<InlineCode>cross-encoder/ms-marco-MiniLM-L-6-v2</InlineCode>) at startup. When loaded, all retrieval modes re-rank their candidate set before returning. Adds ~400 MB to API memory and a small per-query CPU cost.
+            <InlineCode>python -m api.eval.retrieval_eval</InlineCode> scores recall, rank, precision and false hits against a golden set. Run it before changing any ranking weight.
           </p>
         </div>
       </DocsSection>
 
-      <DocsSection id="graph" eyebrow="07" title="Graph memory">
-        <div className="grid gap-8 lg:grid-cols-[0.9fr_1.1fr]">
-          <div className="space-y-4 text-base leading-7 text-muted">
-            <p>
-              Engram extracts named entities (people, projects, skills, technologies, preferences, topics, organizations) from each memory and stores them as a graph in Postgres — no Neo4j required.
-            </p>
-            <p>
-              Set <InlineCode>ENABLE_GRAPH=true</InlineCode> on the API. New memories trigger entity extraction asynchronously (uses your configured extraction provider). Call <InlineCode>POST /graph/extract</InlineCode> to backfill entities on memories that pre-dated the flag.
-            </p>
-            <p>
-              The dashboard <InlineCode>/graph</InlineCode> page renders this as a force-directed graph (Obsidian-style): dots sized by mention count, edges between entities that co-occur in memories, hover to highlight 1-hop neighborhood, click for memory list.
-            </p>
-          </div>
-          <DocsCodeBlock>{`# 1. Enable on the API
-ENABLE_GRAPH=true
-
-# 2. Backfill entities for existing memories
-curl -X POST http://localhost:8000/graph/extract \\
-  -H "X-Engram-Key: ek_..."
-
-# 3. List entities with mention counts
-curl http://localhost:8000/graph/entities \\
-  -H "X-Engram-Key: ek_..."
-
-# 4. Co-occurrence edges (entities sharing memories)
-curl http://localhost:8000/graph/edges \\
-  -H "X-Engram-Key: ek_..."
-
-# 5. Switch retrieval to graph mode
-curl -X PATCH http://localhost:8000/users/me/config \\
-  -H "X-Engram-Key: ek_..." \\
-  -H "Content-Type: application/json" \\
-  -d '{"retrieval_mode":"graph"}'`}</DocsCodeBlock>
-        </div>
-      </DocsSection>
-
-      <DocsSection id="namespaces" eyebrow="08" title="Namespaces & organizations">
+      <DocsSection id="namespaces" eyebrow="07" title="Namespaces & organizations">
         <div className="grid gap-8 lg:grid-cols-[1fr_1fr]">
           <div className="space-y-4 text-base leading-7 text-muted">
             <p>
@@ -268,7 +227,7 @@ curl http://localhost:8000/orgs \\
         </div>
       </DocsSection>
 
-      <DocsSection id="rest" eyebrow="09" title="REST surface">
+      <DocsSection id="rest" eyebrow="08" title="REST surface">
         <div className="overflow-hidden border-y border-line">
           {endpoints.map(([name, routes]) => (
             <div key={name} className="grid gap-3 border-b border-line py-4 last:border-b-0 md:grid-cols-[12rem_1fr]">
@@ -279,7 +238,7 @@ curl http://localhost:8000/orgs \\
         </div>
       </DocsSection>
 
-      <DocsSection id="deploy" eyebrow="10" title="Deployment checklist">
+      <DocsSection id="deploy" eyebrow="09" title="Deployment checklist">
         <div className="grid gap-4 md:grid-cols-2">
           <DocCard title="API">
             Deploy the FastAPI service on a container host (Azure Container Apps, Fly.io, Render, Railway). Set <InlineCode>DATABASE_URL</InlineCode>, <InlineCode>CORS_ORIGINS</InlineCode>, <InlineCode>ENGRAM_SERVICE_KEY</InlineCode>, and <InlineCode>ENGRAM_PROVIDER_KEY_ENCRYPTION_KEY</InlineCode>. Hosted users save their own provider key per workspace.
@@ -293,16 +252,13 @@ curl http://localhost:8000/orgs \\
           <DocCard title="MCP">
             Run MCP locally for desktop clients, or expose SSE from a reachable host for clients that support remote MCP.
           </DocCard>
-          <DocCard title="Feature flags">
-            Optional API env vars: <InlineCode>ENABLE_GRAPH=true</InlineCode> for entity extraction + graph retrieval, <InlineCode>ENABLE_RERANKER=true</InlineCode> for the cross-encoder reranker (adds ~400 MB memory).
-          </DocCard>
           <DocCard title="GHCR image">
             Pushing to <InlineCode>main</InlineCode> auto-builds <InlineCode>ghcr.io/&lt;owner&gt;/engram-api:latest</InlineCode>. Container Apps caches by tag — create a new revision (or pin to <InlineCode>:&lt;sha&gt;</InlineCode>) to pull a fresh image.
           </DocCard>
         </div>
       </DocsSection>
 
-      <DocsSection id="troubleshooting" eyebrow="11" title="Troubleshooting">
+      <DocsSection id="troubleshooting" eyebrow="10" title="Troubleshooting">
         <div className="grid gap-4 md:grid-cols-2">
           <Trouble title="Dashboard says invalid key">
             Confirm the browser saved the same <InlineCode>ek_...</InlineCode> key as your MCP client and that API CORS includes the dashboard origin.
@@ -316,16 +272,10 @@ curl http://localhost:8000/orgs \\
           <Trouble title="Proxy fails provider requests">
             Check the workspace provider key in Settings and verify <InlineCode>X-Engram-Provider</InlineCode> matches the configured provider.
           </Trouble>
-          <Trouble title="Graph page shows Not Found">
-            The deployed API doesn't have the <InlineCode>/graph/*</InlineCode> routes yet. Update the container to the latest image and create a new revision so it actually pulls.
-          </Trouble>
-          <Trouble title="Backfill returns 0 entity links">
-            Either <InlineCode>ENABLE_GRAPH</InlineCode> isn't set on the API, your extraction provider key is missing, or there are no approved memories yet. Check API logs during the call.
-          </Trouble>
           <Trouble title="Streaming requests hang">
             Behind a reverse proxy, ensure SSE buffering is disabled. The proxy already sends <InlineCode>X-Accel-Buffering: no</InlineCode> for nginx; for Cloudflare enable streaming on the route.
           </Trouble>
-          <Trouble title="Hybrid retrieval returns empty">
+          <Trouble title="Keyword matches never count">
             Verify the <InlineCode>memories.content_tsv</InlineCode> column exists (auto-generated by the schema). Run <InlineCode>apply_schema</InlineCode> against the database if you upgraded from an older version.
           </Trouble>
         </div>
@@ -333,7 +283,7 @@ curl http://localhost:8000/orgs \\
 
       <div className="border-y border-line py-8">
         <p className="text-xl leading-8 text-ink">
-          Start with <Link href="/settings" className="text-signal hover:text-ink">Settings</Link> to save a key. Land on the <Link href="/" className="text-signal hover:text-ink">home dashboard</Link> for system state, dive into the <Link href="/memories" className="text-signal hover:text-ink">memory ledger</Link> to browse entries, or open the <Link href="/graph" className="text-signal hover:text-ink">entity graph</Link> to see how they connect.
+          Start with <Link href="/settings" className="text-signal hover:text-ink">Settings</Link> to save a key. Land on the <Link href="/" className="text-signal hover:text-ink">home dashboard</Link> for system state, or dive into the <Link href="/memories" className="text-signal hover:text-ink">memory ledger</Link> to browse entries.
         </p>
       </div>
     </section>

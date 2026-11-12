@@ -11,18 +11,11 @@ from api.models.memory import (
     MemoryCreate,
     MemoryBulkReview,
     MemoryRestore,
-    MemoryFeedback,
     Namespace,
-    MemoryConflictListResponse,
-    MemoryConflictResolveRequest,
-    MemoryConflictResponse,
-    MemoryDecayResponse,
     MemoryExportResponse,
     MemoryImportRequest,
     MemoryImportResponse,
     MemoryListResponse,
-    MemoryMergeRequest,
-    MemoryMergeSuggestionsResponse,
     MemoryResponse,
     MemorySearchRequest,
     MemorySearchResponse,
@@ -31,11 +24,11 @@ from api.models.memory import (
     MemoryUpdate,
 )
 from api.services.extraction import capture_conversation_memories
+from api.services.proxy import build_memory_context
 from api.services.scopes import resolve_namespace, require_personal_permission
-from api.services.revisions import list_revisions, decide_revision, memory_history, restore_memory, save_feedback
+from api.services.revisions import RevisionDecision, RevisionStatus, decide_revision, list_revisions, memory_history, restore_memory
 from api.services.entitlements import QuotaExceeded, enforce_workspace_limit, quota_headers
 from api.services.memories import (
-    apply_confidence_decay,
     create_memory,
     delete_all_memories,
     delete_memory,
@@ -44,10 +37,6 @@ from api.services.memories import (
     get_memory_source,
     import_memories,
     list_memories,
-    list_memory_conflicts,
-    list_merge_suggestions,
-    merge_memories,
-    resolve_memory_conflict,
     search_memories,
     timeline,
     update_memory,
@@ -119,41 +108,6 @@ async def list_review_memories_route(
     return {"memories": memories, "total": total, "limit": limit, "offset": offset}
 
 
-@router.get("/conflicts", response_model=MemoryConflictListResponse)
-async def list_memory_conflicts_route(
-    limit: int = Query(default=20, ge=1, le=100),
-    offset: int = Query(default=0, ge=0),
-    conflict_status: Literal["open", "resolved", "all"] = Query(default="open", alias="status"),
-    user: asyncpg.Record = Depends(get_current_user),
-    db: asyncpg.Connection = Depends(get_db),
-    namespace: Namespace | None = None,
-) -> dict[str, object]:
-    conflicts, total = await list_memory_conflicts(user["id"], user["org_id"], db, limit, offset, conflict_status, namespace=resolve_namespace(user, namespace))
-    return {"conflicts": conflicts, "total": total, "limit": limit, "offset": offset}
-
-
-@router.post("/conflicts/{conflict_id}/resolve", response_model=MemoryConflictResponse)
-async def resolve_memory_conflict_route(
-    conflict_id: UUID4,
-    payload: MemoryConflictResolveRequest,
-    user: asyncpg.Record = Depends(get_current_user),
-    db: asyncpg.Connection = Depends(get_db),
-    namespace: Namespace | None = None,
-) -> dict[str, object]:
-    async with db.transaction():
-        conflict = await resolve_memory_conflict(
-            user["id"],
-            user["org_id"],
-            conflict_id,
-            payload.resolution,
-            db,
-            namespace=resolve_namespace(user, namespace),
-        )
-    if conflict is None:
-        raise HTTPException(status_code=404, detail="Open memory conflict not found")
-    return conflict
-
-
 @router.get("/export", response_model=MemoryExportResponse)
 async def export_memories_route(
     user: asyncpg.Record = Depends(get_current_user),
@@ -183,45 +137,6 @@ async def import_memories_route(
             detail="memories limit reached",
             headers=quota_headers(error),
         ) from error
-
-
-@router.get("/merge-suggestions", response_model=MemoryMergeSuggestionsResponse)
-async def merge_suggestions_route(
-    limit: int = Query(default=10, ge=1, le=50),
-    user: asyncpg.Record = Depends(get_current_user),
-    db: asyncpg.Connection = Depends(get_db),
-    namespace: Namespace | None = None,
-) -> dict[str, object]:
-    namespace = resolve_namespace(user, namespace)
-    return {"suggestions": await list_merge_suggestions(user["id"], user["org_id"], db, limit, namespace=namespace)}
-
-
-@router.post("/merge", response_model=MemoryResponse)
-async def merge_memories_route(
-    payload: MemoryMergeRequest,
-    user: asyncpg.Record = Depends(get_current_user),
-    db: asyncpg.Connection = Depends(get_db),
-    namespace: Namespace | None = None,
-) -> dict[str, object]:
-    namespace = resolve_namespace(user, namespace)
-    if namespace is not None:
-        for memory_id in (payload.primary_id, payload.duplicate_id):
-            if await get_memory(user["id"], user["org_id"], memory_id, db, namespace) is None:
-                raise HTTPException(status_code=404, detail="Memory not found")
-    memory = await merge_memories(user["id"], user["org_id"], payload.primary_id, payload.duplicate_id, payload.content, db, namespace=namespace)
-    if memory is None:
-        raise HTTPException(status_code=404, detail="Memory not found")
-    return memory
-
-
-@router.post("/decay", response_model=MemoryDecayResponse)
-async def decay_memories_route(
-    user: asyncpg.Record = Depends(get_current_user),
-    db: asyncpg.Connection = Depends(get_db),
-    namespace: Namespace | None = None,
-) -> dict[str, object]:
-    namespace = resolve_namespace(user, namespace)
-    return {"updated": await apply_confidence_decay(user["id"], user["org_id"], db, namespace)}
 
 
 @router.get("/timeline", response_model=MemoryTimelineResponse)
@@ -268,8 +183,9 @@ async def search_memories_route(
 ) -> dict[str, object]:
     namespace = resolve_namespace(user, payload.namespace if "namespace" in payload.model_fields_set else None) or "default"
     require_personal_permission(user, payload.include_personal)
-    results = await search_memories(user["id"], user["org_id"], payload.query, payload.limit, payload.threshold, db, namespace, payload.include_personal)
-    return {"results": results}
+    threshold = payload.threshold if payload.threshold is not None else user.get("retrieval_threshold")
+    results = await search_memories(user["id"], user["org_id"], payload.query, payload.limit, threshold, db, namespace, payload.include_personal)
+    return {"results": results, "context": build_memory_context([result["memory"] for result in results])}
 
 
 @router.get("/namespaces")
@@ -293,7 +209,7 @@ async def bulk_review_route(
 
 @router.get("/revisions")
 async def revisions_route(
-    namespace: Namespace | None = None, status: Literal["pending", "accepted", "rejected"] = "pending",
+    namespace: Namespace | None = None, status: RevisionStatus = "pending",
     user: asyncpg.Record = Depends(get_current_user), db: asyncpg.Connection = Depends(get_db),
 ) -> dict[str, object]:
     return {"revisions": await list_revisions(user["id"], user["org_id"], db, resolve_namespace(user, namespace), status)}
@@ -301,10 +217,10 @@ async def revisions_route(
 
 @router.post("/revisions/{revision_id}/{decision}")
 async def revision_decision_route(
-    revision_id: UUID4, decision: Literal["accept", "reject"], namespace: Namespace | None = None,
+    revision_id: UUID4, decision: RevisionDecision, namespace: Namespace | None = None,
     user: asyncpg.Record = Depends(get_current_user), db: asyncpg.Connection = Depends(get_db),
 ) -> dict[str, object]:
-    return await decide_revision(user["id"], user["org_id"], revision_id, decision == "accept", db, resolve_namespace(user, namespace))
+    return await decide_revision(user["id"], user["org_id"], revision_id, decision, db, resolve_namespace(user, namespace))
 
 
 @router.get("/{memory_id}/history")
@@ -321,15 +237,6 @@ async def restore_route(
     user: asyncpg.Record = Depends(get_current_user), db: asyncpg.Connection = Depends(get_db),
 ) -> dict[str, object]:
     return await restore_memory(user["id"], user["org_id"], memory_id, payload.version_id, db, resolve_namespace(user, namespace))
-
-
-@router.post("/{memory_id}/feedback")
-async def feedback_route(
-    memory_id: UUID4, payload: MemoryFeedback, namespace: Namespace | None = None,
-    user: asyncpg.Record = Depends(get_current_user), db: asyncpg.Connection = Depends(get_db),
-) -> dict[str, bool]:
-    await save_feedback(user["id"], user["org_id"], memory_id, payload.relevant, payload.query, db, resolve_namespace(user, namespace))
-    return {"saved": True}
 
 
 @router.get("/{memory_id}/source", response_model=MemorySourceResponse)

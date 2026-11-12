@@ -1,6 +1,6 @@
 "use client";
 
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 
 import { api } from "@/lib/api";
@@ -27,10 +27,6 @@ export function PlaygroundTrace({
       !query.state.data?.logs.length && Date.now() - startedAt < 15000
         ? 2000
         : false,
-  });
-  const feedback = useMutation({
-    mutationFn: ({ id, relevant }: { id: string; relevant: boolean }) =>
-      api.memories.feedback(id, relevant, originalRequest),
   });
   const log =
     logs.data?.logs.find(
@@ -98,42 +94,10 @@ export function PlaygroundTrace({
                 <p className="font-mono text-xs text-muted">
                   Rank score {memory.score.toFixed(3)}
                 </p>
-                <div className="flex gap-3">
-                  <button
-                    type="button"
-                    disabled={feedback.isPending}
-                    onClick={() =>
-                      feedback.mutate({ id: memory.memory_id, relevant: true })
-                    }
-                    className="min-h-9 rounded-lg border border-line px-3 text-xs disabled:opacity-40"
-                  >
-                    Relevant
-                  </button>
-                  <button
-                    type="button"
-                    disabled={feedback.isPending}
-                    onClick={() =>
-                      feedback.mutate({ id: memory.memory_id, relevant: false })
-                    }
-                    className="min-h-9 rounded-lg border border-line px-3 text-xs disabled:opacity-40"
-                  >
-                    Not relevant
-                  </button>
-                </div>
               </li>
             ))}
           </ol>
         </>
-      )}
-      {feedback.error && (
-        <p role="alert" className="text-sm text-fault">
-          {feedback.error.message}
-        </p>
-      )}
-      {feedback.isSuccess && (
-        <p role="status" className="text-sm text-signal">
-          Feedback saved.
-        </p>
       )}
     </section>
   );

@@ -18,7 +18,9 @@ from api.models.user import (
     UserCreateResponse,
     UserResponse,
     UserUpdate,
+    WorkspaceUsageResponse,
 )
+from api.services.entitlements import get_workspace_usage
 from api.services.users import (
     create_user_api_key,
     create_user,
@@ -91,6 +93,14 @@ async def update_current_user_route(
         return await update_user_external_id(user["id"], payload.external_id, db)
     except asyncpg.UniqueViolationError as error:
         raise HTTPException(status_code=409, detail="User external_id already exists") from error
+
+
+@router.get("/me/usage", response_model=WorkspaceUsageResponse)
+async def get_current_usage_route(
+    user: asyncpg.Record = Depends(get_current_user),
+    db: asyncpg.Connection = Depends(get_db),
+) -> dict[str, object]:
+    return await get_workspace_usage(user["org_id"], db)
 
 
 @router.get("/me/config", response_model=UserConfigResponse)

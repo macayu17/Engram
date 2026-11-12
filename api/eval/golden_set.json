@@ -96,5 +96,247 @@
     "non_queries": [
       "Which frontend framework should be used?"
     ]
+  },
+  {
+    "id": "go-services",
+    "memory": "User writes high-throughput network services in Go",
+    "queries": [
+      "what language for the network service",
+      "Go or Rust for the proxy"
+    ],
+    "non_queries": [
+      "user diet"
+    ]
+  },
+  {
+    "id": "rust-hobby",
+    "memory": "User is learning Rust on weekends through Advent of Code puzzles",
+    "queries": [
+      "what is the user learning",
+      "Advent of Code"
+    ],
+    "non_queries": [
+      "user backend framework preference"
+    ]
+  },
+  {
+    "id": "side-project",
+    "memory": "User maintains an open source CLI called driftlog for parsing Kubernetes logs",
+    "queries": [
+      "tell me about driftlog",
+      "what open source tool does the user maintain"
+    ],
+    "non_queries": [
+      "what is the user building at work"
+    ]
+  },
+  {
+    "id": "manager",
+    "memory": "User reports to an engineering manager named Priya Raman",
+    "queries": [
+      "who is the user's manager",
+      "Priya Raman"
+    ],
+    "non_queries": [
+      "user university"
+    ]
+  },
+  {
+    "id": "teammate",
+    "memory": "User pairs with a teammate named Arjun on the payments service",
+    "queries": [
+      "who does the user pair with",
+      "who is Arjun"
+    ],
+    "non_queries": [
+      "user manager name"
+    ]
+  },
+  {
+    "id": "error-code",
+    "memory": "User's deploys fail intermittently with error E_LEASE_TIMEOUT from the job runner",
+    "queries": [
+      "E_LEASE_TIMEOUT",
+      "why do the user's deploys fail"
+    ],
+    "non_queries": [
+      "user editor preference"
+    ]
+  },
+  {
+    "id": "editor",
+    "memory": "User uses Neovim with a Lua configuration as their main editor",
+    "queries": [
+      "which editor does the user use",
+      "vim or vscode"
+    ],
+    "non_queries": [
+      "user programming language"
+    ]
+  },
+  {
+    "id": "os",
+    "memory": "User develops on Windows 11 with WSL2 Ubuntu",
+    "queries": [
+      "what operating system does the user develop on",
+      "does the user use WSL"
+    ],
+    "non_queries": [
+      "user cloud provider"
+    ]
+  },
+  {
+    "id": "cloud",
+    "memory": "User deploys production workloads to Azure Container Apps on the free tier",
+    "queries": [
+      "where does the user deploy",
+      "which cloud provider"
+    ],
+    "non_queries": [
+      "user editor"
+    ]
+  },
+  {
+    "id": "budget",
+    "memory": "User has a hosting budget of zero dollars and must stay on free tiers",
+    "queries": [
+      "how much can the user spend on hosting",
+      "can we use a paid database"
+    ],
+    "non_queries": [
+      "user dog name"
+    ]
+  },
+  {
+    "id": "dog",
+    "memory": "User has a golden retriever named Bruno",
+    "queries": [
+      "does the user have pets",
+      "what is the name of the user's dog"
+    ],
+    "non_queries": [
+      "user cat"
+    ]
+  },
+  {
+    "id": "cat",
+    "memory": "User's sister has a cat named Miso that stays with the user in summer",
+    "queries": [
+      "who is Miso",
+      "does the user look after a cat"
+    ],
+    "non_queries": [
+      "user dog breed"
+    ]
+  },
+  {
+    "id": "allergy",
+    "memory": "User is allergic to peanuts",
+    "queries": [
+      "can the user eat satay",
+      "food allergies"
+    ],
+    "non_queries": [
+      "user diet vegetarian"
+    ]
+  },
+  {
+    "id": "coffee",
+    "memory": "User drinks black coffee and no more than two cups a day",
+    "queries": [
+      "how does the user take coffee",
+      "should I suggest a latte"
+    ],
+    "non_queries": [
+      "user tea preference"
+    ]
+  },
+  {
+    "id": "timezone",
+    "memory": "User works in India Standard Time and prefers meetings before 6pm IST",
+    "queries": [
+      "when should meetings be scheduled",
+      "user's time zone"
+    ],
+    "non_queries": [
+      "user travel"
+    ]
+  },
+  {
+    "id": "language",
+    "memory": "User speaks Kannada, Hindi and English",
+    "queries": [
+      "what languages does the user speak",
+      "can I reply in Hindi"
+    ],
+    "non_queries": [
+      "user programming languages"
+    ]
+  },
+  {
+    "id": "thesis",
+    "memory": "User's final year thesis is on retrieval augmented generation evaluation",
+    "queries": [
+      "what is the user's thesis about",
+      "RAG evaluation research"
+    ],
+    "non_queries": [
+      "user side project"
+    ]
+  },
+  {
+    "id": "gpu",
+    "memory": "User trains models on a single RTX 3060 with 12GB of VRAM",
+    "queries": [
+      "what GPU does the user have",
+      "can the user fine-tune a 7B model locally"
+    ],
+    "non_queries": [
+      "user laptop operating system"
+    ]
+  },
+  {
+    "id": "testing",
+    "memory": "User prefers pytest with real Postgres over mocks for database tests",
+    "queries": [
+      "how should database tests be written",
+      "mock the database or not"
+    ],
+    "non_queries": [
+      "user editor choice"
+    ]
+  },
+  {
+    "id": "style",
+    "memory": "User wants code without comments and with full descriptive names",
+    "queries": [
+      "what coding style does the user want",
+      "should I add comments"
+    ],
+    "non_queries": [
+      "user dog"
+    ]
+  },
+  {
+    "id": "gym",
+    "memory": "User goes to the gym on Monday, Wednesday and Friday mornings",
+    "queries": [
+      "when does the user exercise",
+      "is the user free Wednesday morning"
+    ],
+    "non_queries": [
+      "user meeting times"
+    ]
+  },
+  {
+    "id": "reading",
+    "memory": "User is currently reading Designing Data-Intensive Applications",
+    "queries": [
+      "what book is the user reading",
+      "DDIA"
+    ],
+    "non_queries": [
+      "user thesis topic"
+    ]
   }
 ]

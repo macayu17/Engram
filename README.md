@@ -36,7 +36,7 @@ NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=your_clerk_publishable_key
 CLERK_SECRET_KEY=your_clerk_secret_key
 ```
 
-For this self-hosted quick start, leave `ENGRAM_SERVICE_KEY` and the Clerk keys empty. A service key enables hosted provisioning and disables public user creation. Configure Clerk and the matching service key using Dashboard Login below when you want hosted accounts. Stripe is optional; leave its variables empty unless you want workspace subscriptions.
+For this self-hosted quick start, leave `ENGRAM_SERVICE_KEY` and the Clerk keys empty. A service key enables hosted provisioning and disables public user creation. Configure Clerk and the matching service key using Dashboard Login below when you want hosted accounts.
 
 3. Start the stack.
 
@@ -112,34 +112,19 @@ docker compose up -d --build api dashboard
 
 4. Open `http://localhost:3001`, use Create Account in the top nav, and sign up as the first dashboard user.
 
-## Hosted SaaS Billing
+## Hosted mode and limits
 
-Hosted mode uses Clerk identities, workspace-scoped API keys, Stripe subscriptions, and per-workspace quotas. Provider calls remain bring-your-own-key: each workspace saves its own OpenAI, Anthropic, or Gemini key in Settings. Engram encrypts that key before storing it and does not fall back to a server-funded provider key in hosted mode.
+Hosted mode uses Clerk identities and workspace-scoped API keys. Provider calls remain bring-your-own-key: each workspace saves its own OpenAI, Anthropic, or Gemini key in Settings. Engram encrypts that key before storing it and does not fall back to a server-funded provider key in hosted mode.
 
-The launch limits are:
+Every workspace has fixed limits so one account cannot exhaust a free-tier database. Settings shows current usage.
 
-| Plan | Members | Stored memories | Monthly retrievals |
-| --- | ---: | ---: | ---: |
-| Free | 1 | 2,000 | 10,000 |
-| Pro | 5 | 50,000 | 250,000 |
+| Setting | Default |
+| --- | ---: |
+| `WORKSPACE_MEMBER_LIMIT` | 5 |
+| `WORKSPACE_MEMORY_LIMIT` | 2,000 |
+| `WORKSPACE_MONTHLY_RETRIEVAL_LIMIT` | 10,000 |
 
-To enable paid upgrades, create one recurring Pro price in Stripe and set:
-
-```bash
-STRIPE_SECRET_KEY=sk_live_...
-STRIPE_WEBHOOK_SECRET=whsec_...
-STRIPE_PRO_PRICE_ID=price_...
-DASHBOARD_URL=https://your-dashboard.example.com
-```
-
-Register the API endpoint `https://your-api.example.com/billing/webhook` in Stripe for these events:
-
-- `checkout.session.completed`
-- `customer.subscription.created`
-- `customer.subscription.updated`
-- `customer.subscription.deleted`
-
-The dashboard opens Stripe Checkout for Free workspaces and the Stripe Customer Portal for existing Pro workspaces. Leaving the Stripe variables empty disables upgrade actions at the API without creating charges or external infrastructure.
+Requests over a limit return `429` with `X-Engram-Quota-*` headers. Self-hosters can raise the limits freely.
 
 ## Supabase Postgres
 
@@ -195,8 +180,8 @@ Save the returned `ek_...` API key and use it in the dashboard or API calls.
 The hot path is designed to stay simple:
 
 1. Build a query from up to six recent user messages and embed it with `BAAI/bge-small-en-v1.5`. Retrieval uses the actual request text, without fixture-specific keyword expansion.
-2. Search approved memories within the authenticated user, workspace, and namespace using pgvector cosine similarity.
-3. Inject the top matches into the system prompt.
+2. Score approved memories within the authenticated user, workspace, and namespace by meaning and keywords in one SQL query.
+3. Inject the memories that score close to the best match into the system prompt.
 4. Forward the request to OpenAI, Gemini, Ollama, or Anthropic.
 5. Return the provider response immediately.
 6. Persist the extraction payload in PostgreSQL and schedule an `asyncio.create_task` job.
@@ -204,9 +189,11 @@ The hot path is designed to stay simple:
 
 Retrieval logs record the query, memory snapshots, ranking scores, project, actual injected count, and conversation ID. Editing a memory preserves the earlier trace; deleting or moving it redacts its saved text. Project-only OAuth readers cannot read personal memory snapshots.
 
-Retrieval ranking blends cosine similarity with pinning, a recency boost (exponential decay, `RETRIEVAL_RECENCY_HALF_LIFE_DAYS`, default 30), and a usage boost from `access_count`. The similarity threshold applies before those boosts, except that pinned memories bypass it. Weights are tunable via `RETRIEVAL_RECENCY_WEIGHT` and `RETRIEVAL_ACCESS_WEIGHT`. Optional hybrid retrieval combines vector and full-text search; graph retrieval can add memories linked by entities. The graph and reranker models are disabled by default.
+Retrieval ranking adds four signals: cosine similarity, a Postgres full-text rank (`RETRIEVAL_KEYWORD_WEIGHT`, default 0.3) so exact names and codes count, a fixed pinning boost, and a light recency boost based on when a fact was created or last confirmed (`RETRIEVAL_RECENCY_WEIGHT`, half-life `RETRIEVAL_RECENCY_HALF_LIFE_DAYS`, default 30). Memories below `RETRIEVAL_THRESHOLD` (default 0.3) are skipped unless pinned, and only memories within `RETRIEVAL_RELATIVE_CUTOFF` (default 0.08) of the top score are injected. Search responses include `context`, the exact block the proxy would inject.
 
-Extraction reconciles new facts against existing memories before storing them. When a new fact lands near an existing memory (cosine between `RECONCILE_THRESHOLD`, default 0.6, and the refinement threshold), one extra LLM call decides per fact: add it, propose a revision to the memory it supersedes or contradicts, or discard it as redundant. Proposed revisions require approval and reject stale acceptance if the original fact changed. Any failure falls back to storing all facts. Disable with `ENABLE_RECONCILIATION=false`.
+`python -m api.eval.retrieval_eval` measures recall, MRR, precision and false hits against `api/eval/golden_set.json`. On `bge-small-en-v1.5` it scores recall@5 0.969, precision 0.745 and specificity 0.914 while injecting 1.8 memories per query. Run it before changing any ranking weight.
+
+Extraction rewrites relative dates as absolute ones, then reconciles new facts against existing memories before storing them. When a new fact lands near an existing memory (cosine between `RECONCILE_THRESHOLD`, default 0.6, and the refinement threshold), one extra LLM call decides per fact: add it, propose an update, flag a conflict, or discard it as redundant. Updates and conflicts both become proposed changes that need approval; a conflict can also be resolved by keeping both facts. Acceptance is rejected if the original fact changed in the meantime. Any failure falls back to storing all facts. Disable with `ENABLE_RECONCILIATION=false`.
 
 Both proxy extraction and explicit conversation capture use the same processing pipeline. Database connections are released before extraction and reconciliation provider calls. Retrieval and retrieval logging use separate transactions, so a failed SQL statement does not prevent the proxy from resolving its provider. A logging failure keeps successfully retrieved memories and their injected count.
 
@@ -214,11 +201,11 @@ Background extraction uses PostgreSQL jobs with bounded retries, leases and an a
 
 ## Memory review and projects
 
-The product dashboard separates pending, approved and rejected memories, supports bulk review, and compares proposed revisions against the approved fact. History records manual edits and accepted changes; restoring a version creates another history entry. The Overview shows operational status, and Playground shows the actual retrieval event with per-fact relevance feedback.
+The product dashboard separates pending, approved and rejected memories, supports bulk review, and compares proposed changes against the approved fact. History records manual edits and accepted changes; restoring a version creates another history entry. The Overview shows operational status, and Playground shows the actual retrieval event with each injected fact and its score.
 
 Use the project selector to isolate work. API memory creation, capture and search accept `namespace`; proxy calls accept `X-Engram-Namespace` or `namespace` in the JSON body. Names start with a letter or digit and contain up to 80 letters, digits, periods, underscores or hyphens. Existing data stays in `default`. `personal` is a separate scope: retrieval includes it only with explicit `include_personal: true` on an API-key request. Expired memories stay inspectable but are excluded from retrieval and deduplication.
 
-Review endpoints include `POST /memories/review/bulk`, `GET /memories/revisions`, `POST /memories/revisions/{id}/accept` or `/reject`, `GET /memories/{id}/history`, `POST /memories/{id}/restore`, and `POST /memories/{id}/feedback`. Connections provides `GET /connections/status`, `POST /connections/jobs/{id}/retry`, and `DELETE /connections/captures?older_than_days=30&namespace=default`.
+Review endpoints include `POST /memories/review/bulk`, `GET /memories/revisions`, `POST /memories/revisions/{id}/accept`, `/reject` or `/keep_both`, `GET /memories/{id}/history`, and `POST /memories/{id}/restore`. Connections provides `GET /connections/status`, `POST /connections/jobs/{id}/retry`, and `DELETE /connections/captures?older_than_days=30&namespace=default`.
 
 ## Claude and Codex connections
 
@@ -417,8 +404,6 @@ cd dashboard
 npm ci
 npm run verify:clerk
 npm run verify:logic
-npm run verify:conflicts
-npm run verify:billing
 npm run build
 ```
 
@@ -468,6 +453,6 @@ python -m api.test_proxy_flow
 
 ## Scope
 
-The core remains the inspectable memory loop: retrieve, inject, forward, extract, deduplicate, store, and review through REST, MCP, and dashboard surfaces. The repository also implements streaming, workspace membership, optional Stripe billing, graph retrieval, and manual confidence decay. Workspace membership does not make every member's memories available to other members: memory queries remain scoped by both user and workspace.
+The core remains the inspectable memory loop: retrieve, inject, forward, extract, deduplicate, store, and review through REST, MCP, and dashboard surfaces. The repository also implements streaming, workspace membership and per-workspace limits. Workspace membership does not make every member's memories available to other members: memory queries remain scoped by both user and workspace.
 
 Engram avoids API JWT auth, rate limiting, external vector stores, Redis, Celery, LangChain, and LlamaIndex. Dashboard sign-in is handled separately through Clerk. The original v1 guide in `AGENTS.md` describes the initial implementation scope; the current runtime includes the extensions above.

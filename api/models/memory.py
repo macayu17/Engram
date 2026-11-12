@@ -6,7 +6,6 @@ from pydantic import AwareDatetime, BaseModel, Field, StringConstraints, UUID4
 
 MemoryStatus = Literal["pending", "approved", "rejected"]
 Namespace = Annotated[str, StringConstraints(pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,79}$")]
-MemoryConflictResolution = Literal["accept_new", "keep_old", "keep_both"]
 
 
 class MemoryCreate(BaseModel):
@@ -53,7 +52,7 @@ class MemoryListResponse(BaseModel):
 class MemorySearchRequest(BaseModel):
     query: str = Field(min_length=1, max_length=4000)
     limit: int = Field(default=5, ge=1, le=20)
-    threshold: float = Field(default=0.5, ge=0, le=1)
+    threshold: float | None = Field(default=None, ge=0, le=1)
     namespace: Namespace = "default"
     include_personal: bool = False
 
@@ -65,6 +64,7 @@ class MemorySearchResult(BaseModel):
 
 class MemorySearchResponse(BaseModel):
     results: list[MemorySearchResult]
+    context: str
 
 
 class MemoryImportRequest(BaseModel):
@@ -82,11 +82,6 @@ class MemoryRestore(BaseModel):
     version_id: UUID4
 
 
-class MemoryFeedback(BaseModel):
-    relevant: bool
-    query: str | None = Field(default=None, max_length=4000)
-
-
 class MemoryImportResponse(BaseModel):
     imported: int
 
@@ -100,22 +95,6 @@ class MemorySourceResponse(BaseModel):
     conversation: dict[str, object] | None
 
 
-class MemoryMergeSuggestion(BaseModel):
-    primary: MemoryResponse
-    duplicate: MemoryResponse
-    reason: str
-
-
-class MemoryMergeSuggestionsResponse(BaseModel):
-    suggestions: list[MemoryMergeSuggestion]
-
-
-class MemoryMergeRequest(BaseModel):
-    primary_id: UUID4
-    duplicate_id: UUID4
-    content: str | None = Field(default=None, min_length=1, max_length=4000)
-
-
 class MemoryTimelineItem(BaseModel):
     id: str
     type: str
@@ -126,28 +105,3 @@ class MemoryTimelineItem(BaseModel):
 
 class MemoryTimelineResponse(BaseModel):
     items: list[MemoryTimelineItem]
-
-
-class MemoryDecayResponse(BaseModel):
-    updated: int
-
-
-class MemoryConflictResolveRequest(BaseModel):
-    resolution: MemoryConflictResolution
-
-
-class MemoryConflictResponse(BaseModel):
-    id: UUID4
-    status: Literal["open", "resolved"]
-    resolution: MemoryConflictResolution | None
-    created_at: datetime
-    resolved_at: datetime | None
-    existing_memory: MemoryResponse
-    proposed_memory: MemoryResponse
-
-
-class MemoryConflictListResponse(BaseModel):
-    conflicts: list[MemoryConflictResponse]
-    total: int
-    limit: int
-    offset: int

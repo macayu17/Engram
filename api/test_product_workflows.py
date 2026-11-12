@@ -19,9 +19,10 @@ def test_memory_scope_and_expiration_are_validated() -> None:
     assert MemoryUpdate(namespace="personal").namespace == "personal"
 
 
-def test_retrieval_does_not_expand_with_sample_user_preferences() -> None:
-    query = "What tech stack should I use for my project?"
-    assert retrieval.build_retrieval_texts(query) == [query]
+def test_keyword_query_ors_plain_tokens() -> None:
+    assert retrieval.build_keyword_query("Why does E_LEASE_TIMEOUT happen? Why?") == "why | does | e | lease | timeout | happen"
+    assert retrieval.build_keyword_query("?!") == ""
+    assert len(retrieval.build_keyword_query(" ".join(f"word{index}" for index in range(20_000))).split(" | ")) == 64
 
 
 def test_retrieval_evaluation_requires_the_complete_expected_fact() -> None:
@@ -87,3 +88,15 @@ async def test_retrieval_filters_expiry_and_explicit_personal_scope(monkeypatch:
 
     monkeypatch.setattr(retrieval, "embed", lambda text: [1.0])
     await retrieval.retrieve_memories(uuid4(), uuid4(), "preference", ScopeDb(), namespace="project", include_personal=True)
+
+
+def test_memory_context_matches_proxy_injection() -> None:
+    from api.services.proxy import build_memory_context, inject_memories
+
+    memories = [{"content": "User prefers FastAPI"}, {"content": "User works in IST"}]
+    context = build_memory_context(memories)
+    body = inject_memories({"messages": [{"role": "user", "content": "hi"}]}, memories)
+
+    assert build_memory_context([]) == ""
+    assert "- User prefers FastAPI\n- User works in IST" in context
+    assert body["messages"][0] == {"role": "system", "content": context}

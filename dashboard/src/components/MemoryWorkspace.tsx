@@ -4,7 +4,6 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Clock,
   Download,
-  GitMerge,
   Plus,
   RefreshCw,
   ShieldCheck,
@@ -15,7 +14,6 @@ import { ChangeEvent, FormEvent, ReactNode, useState } from "react";
 
 import {
   api,
-  type MemoryConflictResolution,
   type MemorySourceResponse,
   type MemoryUpdatePayload,
   type SearchResponse,
@@ -27,7 +25,6 @@ import { RevisionInbox } from "./RevisionInbox";
 import { ProductDialog } from "./ProductDialog";
 
 import { MemoryCard } from "./MemoryCard";
-import { MemoryConflictReview } from "./MemoryConflictReview";
 import { MemoryTable } from "./MemoryTable";
 import { ProductPageHeader } from "./ProductPageHeader";
 import { SearchBar } from "./SearchBar";
@@ -63,17 +60,6 @@ export function MemoryWorkspace() {
     enabled: Boolean(apiKey),
     queryFn: () => api.memories.review({ limit: 8, offset: 0 }),
   });
-  const conflictQuery = useQuery({
-    queryKey: ["memories", "conflicts", apiKey, namespace],
-    enabled: Boolean(apiKey),
-    queryFn: () => api.memories.conflicts({ limit: 8, offset: 0 }),
-  });
-  const conflictHistoryQuery = useQuery({
-    queryKey: ["memories", "conflicts", "resolved", apiKey, namespace],
-    enabled: Boolean(apiKey),
-    queryFn: () =>
-      api.memories.conflicts({ limit: 5, offset: 0, status: "resolved" }),
-  });
   const clientsQuery = useQuery({
     queryKey: ["logs", "clients", apiKey, namespace],
     enabled: Boolean(apiKey),
@@ -83,11 +69,6 @@ export function MemoryWorkspace() {
     queryKey: ["memories", "timeline", apiKey, namespace],
     enabled: Boolean(apiKey),
     queryFn: () => api.memories.timeline(10),
-  });
-  const mergeQuery = useQuery({
-    queryKey: ["memories", "merge-suggestions", apiKey, namespace],
-    enabled: Boolean(apiKey),
-    queryFn: () => api.memories.mergeSuggestions(4),
   });
   const bulkMutation = useMutation({
     mutationFn: (nextStatus: "approved" | "rejected") =>
@@ -123,41 +104,15 @@ export function MemoryWorkspace() {
     mutationFn: (id: string) => api.memories.source(id),
     onSuccess: setSourceDetails,
   });
-  const mergeMutation = useMutation({
-    mutationFn: ({
-      primaryId,
-      duplicateId,
-    }: {
-      primaryId: string;
-      duplicateId: string;
-    }) =>
-      api.memories.merge({ primary_id: primaryId, duplicate_id: duplicateId }),
-    onSuccess: () => void invalidateMemoryViews(),
-  });
-  const decayMutation = useMutation({
-    mutationFn: () => api.memories.decay(),
-    onSuccess: () => void invalidateMemoryViews(),
-  });
   const importMutation = useMutation({
     mutationFn: (
       items: Array<{ content: string; category?: string; pinned?: boolean }>,
     ) => api.memories.importMany(items),
     onSuccess: () => void invalidateMemoryViews(),
   });
-  const resolveConflictMutation = useMutation({
-    mutationFn: ({
-      id,
-      resolution,
-    }: {
-      id: string;
-      resolution: MemoryConflictResolution;
-    }) => api.memories.resolveConflict(id, resolution),
-    onSuccess: () => void invalidateMemoryViews(),
-  });
 
   function invalidateMemoryViews() {
     void queryClient.invalidateQueries({ queryKey: ["memories"] });
-    void queryClient.invalidateQueries({ queryKey: ["memories", "conflicts"] });
     void queryClient.invalidateQueries({ queryKey: ["dashboard"] });
     void queryClient.invalidateQueries({ queryKey: ["connections"] });
     void queryClient.invalidateQueries({
@@ -237,14 +192,7 @@ export function MemoryWorkspace() {
   }
 
   const memories = memoriesQuery.data?.memories ?? [];
-  const conflicts = conflictQuery.data?.conflicts ?? [];
-  const resolvedConflicts = conflictHistoryQuery.data?.conflicts ?? [];
-  const conflictProposalIds = new Set(
-    conflicts.map((conflict) => conflict.proposed_memory.id),
-  );
-  const pendingMemories = (reviewQuery.data?.memories ?? []).filter(
-    (memory) => !conflictProposalIds.has(memory.id),
-  );
+  const pendingMemories = reviewQuery.data?.memories ?? [];
   const pendingReviewTotal = reviewQuery.data?.total ?? 0;
   const total = memoriesQuery.data?.total ?? 0;
   const hasNextPage = (page + 1) * PAGE_SIZE < total;
@@ -265,7 +213,7 @@ export function MemoryWorkspace() {
         title="Memories"
         description={
           <>
-            {total.toLocaleString()} entries · browse, search, edit, merge, and
+            {total.toLocaleString()} entries · browse, search, edit, and
             approve everything Engram has captured.
           </>
         }
@@ -303,22 +251,6 @@ export function MemoryWorkspace() {
             </label>
             <button
               type="button"
-              onClick={() => {
-                if (
-                  window.confirm(
-                    `Recalculate confidence for memories in project ${namespace}?`,
-                  )
-                )
-                  decayMutation.mutate();
-              }}
-              disabled={decayMutation.isPending}
-              className="inline-flex min-h-10 items-center gap-2 rounded-sm border border-line px-4 font-sans text-xs font-medium text-muted transition hover:border-signal hover:text-signal active:translate-y-px disabled:opacity-50"
-            >
-              <Clock size={16} aria-hidden="true" />
-              Decay
-            </button>
-            <button
-              type="button"
               onClick={() => setIsAddOpen(true)}
               className="inline-flex min-h-10 items-center gap-2 rounded-sm bg-signal px-4 font-sans text-xs font-semibold text-paper transition hover:bg-ink active:translate-y-px"
             >
@@ -331,82 +263,9 @@ export function MemoryWorkspace() {
         <SearchBar onResults={setSearchResults} />
       </div>
 
-      {(conflictQuery.isLoading ||
-        conflicts.length > 0 ||
-        resolvedConflicts.length > 0 ||
-        conflictQuery.isError ||
-        conflictHistoryQuery.isError ||
-        resolveConflictMutation.isError) && (
-        <section className="border-y border-line">
-          <div className="flex flex-col gap-2 border-b border-line py-5 sm:flex-row sm:items-end sm:justify-between">
-            <div>
-              <p className="font-sans text-xs font-medium text-muted">
-                Review queue
-              </p>
-              <h2 className="mt-2 text-3xl font-normal text-ink">
-                Resolve conflicting memories
-              </h2>
-            </div>
-            <span className="font-sans text-xs text-muted">
-              {conflictQuery.data?.total ?? 0} open
-            </span>
-          </div>
-          {conflictQuery.isLoading && (
-            <p className="py-6 text-base text-muted">
-              Loading conflicts...
-            </p>
-          )}
-          {conflictQuery.isError && (
-            <p className="py-6 text-base text-fault">
-              Could not load memory conflicts.
-            </p>
-          )}
-          {conflictHistoryQuery.isError && (
-            <p role="alert" className="py-6 text-base text-fault">
-              Could not load resolved memory conflicts.
-            </p>
-          )}
-          {resolveConflictMutation.isError && (
-            <p className="py-4 text-base text-fault">
-              The conflict could not be resolved. Refresh and try again.
-            </p>
-          )}
-          {conflicts.map((conflict) => (
-            <MemoryConflictReview
-              key={conflict.id}
-              conflict={conflict}
-              disabled={resolveConflictMutation.isPending}
-              onResolve={(id, resolution) =>
-                resolveConflictMutation.mutate({ id, resolution })
-              }
-            />
-          ))}
-          {resolvedConflicts.length > 0 && (
-            <div className="border-t border-line py-5">
-              <p className="font-sans text-xs font-medium text-muted">
-                Recently resolved
-              </p>
-              <div className="mt-3 space-y-3">
-                {resolvedConflicts.map((conflict) => (
-                  <div
-                    key={conflict.id}
-                    className="flex flex-col gap-1 border-l-2 border-signal/50 pl-3 sm:flex-row sm:items-baseline sm:justify-between sm:gap-4"
-                  >
-                    <p className="line-clamp-2 text-base leading-6 text-ink">
-                      {conflict.proposed_memory.content}
-                    </p>
-                    <p className="shrink-0 font-sans text-xs text-muted">
-                      {conflict.resolution?.replace("_", " ")}
-                    </p>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </section>
-      )}
+      <RevisionInbox />
 
-      <div className="grid gap-5 lg:grid-cols-4">
+      <div className="grid gap-5 lg:grid-cols-3">
         <LedgerPanel
           icon={<ShieldCheck size={16} aria-hidden="true" />}
           title="Review Queue"
@@ -432,32 +291,6 @@ export function MemoryWorkspace() {
               meta={`${client.conversations} chats · ${client.memories_extracted} memories`}
             />
           ))}
-        </LedgerPanel>
-        <LedgerPanel
-          icon={<GitMerge size={16} aria-hidden="true" />}
-          title="Merge"
-          value={`${mergeQuery.data?.suggestions.length ?? 0} pairs`}
-        >
-          {(mergeQuery.data?.suggestions ?? [])
-            .slice(0, 2)
-            .map((suggestion) => (
-              <button
-                key={`${suggestion.primary.id}-${suggestion.duplicate.id}`}
-                type="button"
-                onClick={() =>
-                  mergeMutation.mutate({
-                    primaryId: suggestion.primary.id,
-                    duplicateId: suggestion.duplicate.id,
-                  })
-                }
-                className="block w-full text-left"
-              >
-                <PanelRow
-                  text={suggestion.primary.content}
-                  meta="merge duplicate"
-                />
-              </button>
-            ))}
         </LedgerPanel>
         <LedgerPanel
           icon={<Clock size={16} aria-hidden="true" />}
@@ -573,7 +406,6 @@ export function MemoryWorkspace() {
             Reject selected
           </button>
         </div>
-        {status === "pending" && <RevisionInbox />}
       </div>
       {[
         fileError,
@@ -581,8 +413,6 @@ export function MemoryWorkspace() {
         updateMutation.error?.message,
         deleteMutation.error?.message,
         sourceMutation.error?.message,
-        mergeMutation.error?.message,
-        decayMutation.error?.message,
         importMutation.error?.message,
         bulkMutation.error?.message,
       ]

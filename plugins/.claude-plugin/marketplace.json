@@ -8,6 +8,11 @@
       "name": "engram",
       "source": "./claude",
       "description": "Recall project memories and deliberately capture exchanges for review."
+    },
+    {
+      "name": "engram-auto",
+      "source": "./claude-auto",
+      "description": "Optional hooks: automatic recall before each prompt and capture after each reply, held for review."
     }
   ],
   "description": "Local Engram recall and deliberate capture workflows"

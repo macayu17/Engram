@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFile, access, readdir } from "node:fs/promises";
 import { dirname, resolve, relative } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "../plugins");
 async function json(path) {
@@ -42,9 +42,28 @@ const claudeCatalog = await json(".claude-plugin/marketplace.json");
 assert.ok(claudeCatalog.owner.name);
 for (const plugin of claudeCatalog.plugins) {
   const path = contained(root, plugin.source);
-  await access(resolve(path, ".claude-plugin/plugin.json"));
-  assert.equal(plugin.name, claude.name);
+  const manifest = JSON.parse(await readFile(resolve(path, ".claude-plugin/plugin.json"), "utf8"));
+  assert.equal(plugin.name, manifest.name);
 }
+assert.deepEqual(claudeCatalog.plugins.map((plugin) => plugin.name), ["engram", "engram-auto"]);
+const autoHooks = (await json("claude-auto/hooks/hooks.json")).hooks;
+assert.deepEqual(Object.keys(autoHooks).sort(), ["Stop", "UserPromptSubmit"]);
+for (const [event, mode] of [["UserPromptSubmit", "recall"], ["Stop", "capture"]]) {
+  assert.ok(autoHooks[event][0].hooks[0].command.endsWith(`engram-hook.mjs" ${mode}`));
+}
+const { lastExchange } = await import(pathToFileURL(resolve(root, "claude-auto/hooks/engram-hook.mjs")).href);
+const transcript = [
+  { type: "user", message: { content: "old prompt" } },
+  { type: "assistant", message: { content: [{ type: "text", text: "old reply" }] } },
+  { type: "user", message: { content: "Use pnpm in this repo" } },
+  { type: "assistant", message: { content: [{ type: "thinking", thinking: "x" }, { type: "text", text: "Noted," }] } },
+  { type: "user", message: { content: [{ type: "tool_result", content: "ok" }] } },
+  { type: "user", isMeta: true, message: { content: "meta" } },
+  { type: "user", message: { content: "<system-reminder>skip</system-reminder>" } },
+  { type: "assistant", message: { content: [{ type: "text", text: "switched to pnpm." }] } },
+].map((entry) => JSON.stringify(entry)).concat(["not json", ""]);
+assert.deepEqual(lastExchange(transcript), { user_message: "Use pnpm in this repo", assistant_response: "Noted,\nswitched to pnpm." });
+assert.equal(lastExchange(transcript.slice(0, 3)), null);
 const codexCatalog = await json(".agents/plugins/marketplace.json");
 for (const plugin of codexCatalog.plugins) {
   assert.equal(plugin.source.source, "local");

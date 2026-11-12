@@ -1,0 +1,9 @@
+{
+  "name": "engram-auto",
+  "version": "0.1.0",
+  "description": "Automatic Engram recall before each prompt and capture after each reply, with captured facts held for review.",
+  "author": {
+    "name": "Engram contributors"
+  },
+  "license": "MIT"
+}

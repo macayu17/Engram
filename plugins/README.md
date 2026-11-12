@@ -1,6 +1,6 @@
 # Engram plugins
 
-These local packages provide recall, deliberate capture, review guidance and project handoffs. They do not intercept host conversations. Captured facts enter pending review. No package is published or listed in a public directory.
+These local packages provide recall, deliberate capture, review guidance and project handoffs. The base `engram` plugin never intercepts host conversations. The optional `engram-auto` plugin for Claude Code does, but only once installed. Captured facts enter pending review. No package is published or listed in a public directory.
 
 ## Local setup
 
@@ -37,13 +37,26 @@ Codex's catalog is in `plugins/.agents/plugins/marketplace.json`; the portable p
 
 The same `plugins` directory can be distributed as a standalone Git repository or copied into a team marketplace. After a maintainer actually publishes it to a Git host, substitute that repository URL for the local marketplace path. No Git URL in these instructions claims that an unpushed package is already available.
 
+## Automatic memory for Claude Code (optional)
+
+`engram-auto` adds two hooks and nothing else. Install it alongside `engram` only if you want every conversation remembered without asking:
+
+```text
+claude plugin install engram-auto@engram-local
+```
+
+- **Before each prompt** (`UserPromptSubmit`) it searches approved memories in `ENGRAM_NAMESPACE` with your prompt and adds the matches to Claude's context.
+- **After each reply** (`Stop`) it sends your last typed prompt and Claude's reply to `/memories/capture` with source `claude_code`. Extracted facts land in the review queue as pending and are recalled only after you approve them.
+
+It reads `ENGRAM_API_KEY`, `ENGRAM_API_URL` and `ENGRAM_NAMESPACE` from the environment, needs Node 18 or newer, and does nothing when no key is set. API errors and timeouts are written to stderr and never block Claude. Every exchange in the session is sent to your Engram API, so avoid pasting secrets while it is enabled, and use a project namespace per repository. Remove it with `claude plugin uninstall engram-auto`.
+
 ## Using the workflows
 
 Use the recall skill for prior project decisions, capture when you deliberately want an exchange remembered, review to inspect pending candidates, and project-handoff to resume or save a concise handoff. Review approval, revision comparison and history live in the Engram dashboard. The review skill does not pretend to have an approval tool.
 
 Tools accept `namespace`; stdio/API-key connections default to `ENGRAM_NAMESPACE`. Personal retrieval requires explicit `include_personal: true` on search with an API-key connection. OAuth connections are bound to one project and cannot include personal scope or override it.
 
-Capture accepts `source` (for example `claude_code` or `codex`) and optional `session_id`. Supply a real client session identifier only when available. These fields track deliberate captures; they do not enable transcript interception, hooks or background host access.
+Capture accepts `source` (for example `claude_code` or `codex`) and optional `session_id`. Supply a real client session identifier only when available. These fields track captures; the MCP tools themselves do not read transcripts. Only `engram-auto` hooks capture automatically.
 
 ## Remote deployment templates
 

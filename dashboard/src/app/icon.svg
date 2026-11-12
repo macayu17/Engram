@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <rect width="32" height="32" rx="7" fill="oklch(0.947 0.013 86.8)"/>
+  <polyline points="7,19 16,10 25,19" fill="none" stroke="oklch(0.366 0.156 270)" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="7" cy="19" r="3" fill="oklch(0.366 0.156 270)"/>
+  <circle cx="16" cy="10" r="3" fill="oklch(0.366 0.156 270)"/>
+  <circle cx="25" cy="19" r="4" fill="oklch(0.682 0.24 353.6)"/>
+  <circle cx="16" cy="25" r="1.6" fill="oklch(0.366 0.156 270)" opacity="0.35"/>
+</svg>

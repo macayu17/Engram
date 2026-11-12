@@ -3,44 +3,76 @@
 @tailwind utilities;
 
 :root {
-  color-scheme: dark;
+  color-scheme: light;
   --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
-  --color-paper: 0.155 0.004 75;
-  --color-panel: 0.185 0.005 75;
-  --color-ink: 0.95 0.006 85;
-  --color-muted: 0.7 0.01 80;
-  --color-line: 0.29 0.006 75;
-  --color-tag: 0.22 0.006 75;
-  --color-signal: 0.8 0.125 68;
-  --color-caution: 0.84 0.11 90;
-  --color-fault: 0.72 0.14 28;
-  --color-high: 0.78 0.1 150;
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 10px;
+  --radius-pill: 999px;
+  --color-paper: 0.947 0.013 86.8;
+  --color-card: 0.977 0.009 84.6;
+  --color-ink: 0.366 0.156 270;
+  --color-ink-muted: 0.487 0.115 275.3;
+  --color-line: 0.85 0.024 296.7;
+  --color-hot: 0.682 0.24 353.6;
+  --color-hot-ink: 0.546 0.214 358.7;
+  --color-hot-fill: 0.56 0.221 0;
+  --color-on-hot: 1 0 0;
+  --color-button: 0.366 0.156 270;
+  --color-on-button: 0.947 0.013 86.8;
+  --color-tint: 0.937 0.04 345.4;
+  --color-scene: 0.366 0.156 270;
+  --color-scene-line: 0.366 0.156 270;
+  --color-scene-dim: 0.492 0.156 272.4;
+  --color-scene-muted: 0.771 0.084 277.4;
+  --color-scene-ink: 0.947 0.013 86.8;
+  --color-scene-hot: 0.783 0.157 346.8;
+  --color-approved: 0.515 0.109 158.1;
+  --color-forgotten: 0.546 0.214 358.7;
+  --color-caution: 0.58 0.11 80;
+  --color-panel: var(--color-card);
+  --color-muted: var(--color-ink-muted);
+  --color-tag: var(--color-tint);
+  --color-signal: var(--color-hot-ink);
+  --color-high: var(--color-approved);
+  --color-fault: var(--color-forgotten);
   --clerk-font-family: var(--font-sans), system-ui, sans-serif;
   --clerk-font-family-buttons: var(--font-sans), system-ui, sans-serif;
   --clerk-font-family-mono: var(--font-mono), ui-monospace, monospace;
   --clerk-color-primary: oklch(var(--color-signal));
-  --clerk-color-primary-foreground: oklch(var(--color-paper));
+  --clerk-color-primary-foreground: oklch(var(--color-on-hot));
   --clerk-color-foreground: oklch(var(--color-ink));
-  --clerk-color-background: oklch(var(--color-panel));
-  --clerk-color-muted: oklch(var(--color-tag));
-  --clerk-color-muted-foreground: oklch(var(--color-muted));
-  --clerk-color-neutral: oklch(var(--color-muted));
-  --clerk-color-danger: oklch(var(--color-fault));
-  --clerk-border-radius: 0.25rem;
+  --clerk-color-background: oklch(var(--color-card));
+  --clerk-color-muted: oklch(var(--color-tint));
+  --clerk-color-muted-foreground: oklch(var(--color-ink-muted));
+  --clerk-color-neutral: oklch(var(--color-ink-muted));
+  --clerk-color-danger: oklch(var(--color-forgotten));
+  --clerk-border-radius: var(--radius-md);
 }
 
-:root[data-theme="light"] {
-  color-scheme: light;
-  --color-paper: 0.975 0.004 85;
-  --color-panel: 0.99 0.002 85;
-  --color-ink: 0.2 0.008 75;
-  --color-muted: 0.48 0.012 75;
-  --color-line: 0.89 0.006 80;
-  --color-tag: 0.945 0.006 80;
-  --color-signal: 0.58 0.15 55;
-  --color-caution: 0.58 0.11 80;
-  --color-fault: 0.53 0.17 28;
-  --color-high: 0.52 0.1 150;
+:root[data-theme="cobalt"] {
+  color-scheme: dark;
+  --color-paper: 0.467 0.275 266.4;
+  --color-card: 0.481 0.269 267.2;
+  --color-ink: 0.972 0.013 277.1;
+  --color-ink-muted: 0.852 0.074 278.8;
+  --color-line: 0.559 0.229 272;
+  --color-hot: 0.909 0.165 97.6;
+  --color-hot-ink: 0.909 0.165 97.6;
+  --color-hot-fill: 0.909 0.165 97.6;
+  --color-on-hot: 0.271 0.144 269.5;
+  --color-button: 0.972 0.013 277.1;
+  --color-on-button: 0.467 0.275 266.4;
+  --color-tint: 0.523 0.248 269.9;
+  --color-scene: 0.353 0.214 266.1;
+  --color-scene-line: 0.52 0.268 269.1;
+  --color-scene-dim: 0.495 0.215 270.7;
+  --color-scene-muted: 0.775 0.115 276.8;
+  --color-scene-ink: 0.972 0.013 277.1;
+  --color-scene-hot: 0.909 0.165 97.6;
+  --color-approved: 0.88 0.121 157.4;
+  --color-forgotten: 0.829 0.096 31.9;
+  --color-caution: 0.909 0.165 97.6;
 }
 
 html {
@@ -65,7 +97,7 @@ p {
 }
 
 ::selection {
-  background: oklch(var(--color-signal) / 0.2);
+  background: oklch(var(--color-tint));
   color: oklch(var(--color-ink));
 }
 
@@ -97,6 +129,23 @@ button:not(:disabled),
 button:not(:disabled):active,
 .press:active {
   transform: scale(0.97);
+}
+
+@keyframes trace-draw {
+  0% { stroke-dashoffset: 24; }
+  40%, 86% { stroke-dashoffset: 0; opacity: 1; }
+  100% { stroke-dashoffset: 0; opacity: 0; }
+}
+
+@keyframes trace-hit {
+  0%, 36% { transform: scale(0.45); opacity: 0.3; }
+  46% { transform: scale(1.3); opacity: 1; }
+  54%, 86% { transform: scale(1); opacity: 1; }
+  100% { transform: scale(0.45); opacity: 0.3; }
+}
+
+@keyframes rise {
+  from { opacity: 0; transform: translateY(4px); }
 }
 
 @media (prefers-reduced-motion: reduce) {

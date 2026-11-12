@@ -21,7 +21,6 @@ import {
 import { useActiveApiKey } from "@/lib/useActiveApiKey";
 import { useNamespace } from "@/lib/useNamespace";
 import { MemoryInspector } from "./MemoryInspector";
-import { RevisionInbox } from "./RevisionInbox";
 import { ProductDialog } from "./ProductDialog";
 
 import { MemoryCard } from "./MemoryCard";
@@ -262,8 +261,6 @@ export function MemoryWorkspace() {
 
         <SearchBar onResults={setSearchResults} />
       </div>
-
-      <RevisionInbox />
 
       <div className="grid gap-5 lg:grid-cols-3">
         <LedgerPanel

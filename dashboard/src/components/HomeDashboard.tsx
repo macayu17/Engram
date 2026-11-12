@@ -96,7 +96,7 @@ export function HomeDashboard() {
             label: "Proposed changes",
             value: revisions.data?.revisions.length,
             loading: revisions.isLoading,
-            href: "/memories",
+            href: "/review",
           },
           {
             label: "Approved memories",
@@ -108,7 +108,7 @@ export function HomeDashboard() {
             label: "Pending review",
             value: pending.data?.total,
             loading: pending.isLoading,
-            href: "/memories",
+            href: "/review",
           },
           {
             label: "Retrieval events",

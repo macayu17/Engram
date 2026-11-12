@@ -7,14 +7,24 @@ const config: Config = {
   future: { hoverOnlyWhenSupported: true },
   theme: {
     extend: {
-      borderRadius: { lg: "4px", xl: "4px", "2xl": "6px", "3xl": "6px" },
+      borderRadius: { sm: "var(--radius-sm)", md: "var(--radius-md)", lg: "var(--radius-lg)", xl: "var(--radius-lg)", "2xl": "var(--radius-lg)", "3xl": "var(--radius-lg)" },
       fontFamily: {
         sans: ["var(--font-sans)", "system-ui", "sans-serif"],
         mono: ["var(--font-mono)", "ui-monospace", "monospace"],
+        display: ["var(--font-display)", "Iowan Old Style", "Georgia", "serif"],
       },
       colors: Object.fromEntries(
-        ["paper", "ink", "panel", "muted", "line", "tag", "signal", "caution", "fault", "high"].map((name) => [name, token(name)]),
+        [
+          "paper", "card", "ink", "ink-muted", "line", "hot", "hot-ink", "hot-fill", "on-hot", "button", "on-button", "tint",
+          "scene", "scene-line", "scene-dim", "scene-muted", "scene-ink", "scene-hot", "approved", "forgotten", "caution",
+          "panel", "muted", "tag", "signal", "high", "fault",
+        ].map((name) => [name, token(name)]),
       ),
+      animation: {
+        "trace-draw": "trace-draw 3.6s cubic-bezier(0.23, 1, 0.32, 1) infinite",
+        "trace-hit": "trace-hit 3.6s cubic-bezier(0.23, 1, 0.32, 1) infinite",
+        rise: "rise 0.4s cubic-bezier(0.23, 1, 0.32, 1) both",
+      },
     },
   },
   plugins: [],

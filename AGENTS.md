@@ -30,8 +30,8 @@ api/                 FastAPI service
   test_*.py          pytest suite (DB tests need ENGRAM_TEST_DATABASE_URL)
 mcp/src/             MCP server: index.ts, auth.ts, client.ts, tools/*
 dashboard/src/       Next.js App Router console + public landing page
-  app/               routes: / (landing), overview, memories, chat, connections,
-                     logs, docs, settings, api/* (server bridges)
+  app/               routes: / (landing), about, docs, overview, review, memories, chat, connections,
+                     logs, settings, api/* (server bridges)
   components/        UI components
   lib/api.ts         the only place the dashboard calls the Engram API
 plugins/             Claude and Codex plugin packages (MCP config + skills)
@@ -65,10 +65,10 @@ docs/                intent, plans, specs
 
 ### Dashboard (`dashboard/`)
 
-- Next.js App Router, TypeScript only, Tailwind utilities only (no inline styles, CSS modules or CSS-in-JS).
+- Next.js App Router, TypeScript only, Tailwind utilities only (no CSS modules or CSS-in-JS). Inline `style` is allowed only for geometry computed at runtime (positions, widths, fitted font sizes) that no utility class can express.
 - All API calls go through `src/lib/api.ts`. The browser API key lives in `localStorage` under `engram_api_key`.
-- Design tokens are OKLCH triplets in `src/app/globals.css` (`--color-paper`, `ink`, `panel`, `muted`, `line`, `tag`, `signal`, …) exposed as Tailwind colors. Dark is the default; `data-theme="light"` switches. Use tokens, never raw hex, except in canvas code (`MemoryGraph`, `MemoryField`).
-- Visual language: near-black canvas, hairline borders, square corners, Geist Mono for display headings, Hanken Grotesk for text, one warm amber signal color. Motion stays calm: `.settle` entrance, `scale(0.97)` press feedback, reduced-motion fallbacks. No scroll-jacking libraries.
+- Design tokens follow the Engram design system's `tokens.json`: OKLCH triplets in `src/app/globals.css` (`--color-paper`, `card`, `ink`, `ink-muted`, `line`, `hot`, `hot-ink`, `hot-fill`, `on-hot`, `button`, `tint`, `scene-*`, …) exposed as Tailwind colors. Riso is the default; `data-theme="cobalt"` on `<html>` switches, saved as `engram_theme`. The older names (`panel`, `muted`, `tag`, `signal`, `high`, `fault`) alias the new tokens for screens not yet rebuilt. Use tokens, never raw hex; canvas code reads the CSS variables.
+- Visual language: a two-ink risograph print. Blue `ink` on warm `paper`, solid `scene` blocks for code and ASCII scenes, and `hot` pink only for recall. Never set text in `hot` on Riso; use `hot-ink` for accent text and `hot-fill` for the main button. Newsreader for display headings, Hanken Grotesk for text, Geist Mono for data, links and code. Shared pieces live in `src/components/site/` (NeuralBrain, AsciiScene, RequestTrace, RankingTuner, ReconcileFlow, ArchitectureMap, CodeBlock, SiteChrome, RouteLoader) and `src/lib/site-styles.ts`. Every animation has a reduced-motion still state, and every loop, observer and timer is cleaned up on unmount. Marketing pages show the mechanism: no feature grids, three-column step strips, label/value spec tables or stat tiles.
 
 ## Behaviour that must hold
 

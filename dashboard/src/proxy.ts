@@ -9,6 +9,7 @@ function passThroughMiddleware() {
 
 const isProductRoute = createRouteMatcher([
   "/overview(.*)",
+  "/review(.*)",
   "/memories(.*)",
   "/chat(.*)",
   "/connections(.*)",

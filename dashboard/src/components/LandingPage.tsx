@@ -1,223 +1,175 @@
-import { ArrowUpRight } from "lucide-react";
 import Link from "next/link";
 
-import { CopyCommand, DocsCodeBlock } from "@/components/DocsCodeBlock";
-import { EngramLogo } from "@/components/EngramLogo";
-import { MemoryField } from "@/components/MemoryField";
-import { ThemeToggle } from "@/components/ThemeToggle";
+import { ArchitectureMap } from "@/components/site/ArchitectureMap";
+import { AsciiScene } from "@/components/site/AsciiScene";
+import { CodeBlock, InstallChip } from "@/components/site/CodeBlock";
+import { NeuralBrain } from "@/components/site/NeuralBrain";
+import { RankingTuner } from "@/components/site/RankingTuner";
+import { ReconcileFlow } from "@/components/site/ReconcileFlow";
+import { RequestTrace } from "@/components/site/RequestTrace";
+import { SiteFooter, SiteHeader } from "@/components/site/SiteChrome";
+import { band, button, displayLg, displayXl, eyebrow, focusRing, highlight, lead, pageWrap } from "@/lib/site-styles";
 
-const github = "https://github.com/macayu17/Engram";
+const split = "grid items-center gap-12 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] lg:gap-14 [&>*]:min-w-0";
+const splitReverse = "grid items-center gap-12 lg:grid-cols-[minmax(0,7fr)_minmax(0,5fr)] lg:gap-14 [&>*]:min-w-0";
 
-const steps = [
-  { name: "Recall", text: "The latest message is embedded locally and matched against approved memories in Postgres. Weak matches stay out." },
-  { name: "Answer", text: "The few facts that matter go quietly at the top of the system prompt, and the request continues to your provider." },
-  { name: "Learn", text: "After the reply, durable facts are drawn from the exchange in the background and wait for your approval." },
+const ways = [
+  {
+    name: "Proxy",
+    text: "Point any OpenAI-compatible client at Engram. Same request body, now with memory.",
+    title: "POST /v1/chat",
+    accent: '"X-Engram-Key: ek_…"',
+    code: `curl localhost:8000/v1/chat \\
+  -H "X-Engram-Key: ek_…" \\
+  -H "X-Engram-Provider: openai" \\
+  -d '{"model": "gpt-4o-mini",
+       "messages": […]}'`,
+  },
+  {
+    name: "REST API",
+    text: "Add, search, edit and forget memories directly. Search returns the exact block the proxy would inject.",
+    title: "PATCH /memories/{id}",
+    accent: "mem_8f2c",
+    code: `curl -X PATCH \\
+  localhost:8000/memories/mem_8f2c \\
+  -H "X-Engram-Key: ek_…" \\
+  -d '{"status": "approved"}'`,
+  },
+  {
+    name: "MCP",
+    text: "Seven memory tools for Claude, Codex and any MCP client, scoped to one project at a time.",
+    title: "npx engramd",
+    accent: "capture_conversation",
+    code: `# tools
+search_memories   add_memory
+list_memories     update_memory
+delete_memory     capture_conversation
+get_retrieval_log`,
+  },
 ];
 
-const recalled = [
-  { text: "Prefers FastAPI for Python backends", score: "0.91", width: "w-[91%]" },
-  { text: "Building a market simulator called Sentinel", score: "0.84", width: "w-[84%]" },
-  { text: "Likes concise answers without filler", score: "0.72", width: "w-[72%]" },
-  { text: "Asked about the weather once", score: "0.41", width: "w-[41%]", rejected: true },
-];
+const selfHost = `# 1. configure
+cp .env.example .env
 
-const interfaces = [
-  { name: "Proxy", text: "Point any OpenAI-compatible client at Engram. Same request body, now with memory.", tech: "POST /v1/chat/completions" },
-  { name: "REST API", text: "Add, search, edit and forget memories directly. Every retrieval is logged and explainable.", tech: "POST /memories/search" },
-  { name: "MCP", text: "Seven memory tools for Claude, Codex and any MCP client, scoped to one project at a time.", tech: "search_memories · capture_conversation" },
-];
-
-const specification = [
-  ["Runtime", "Docker Compose"],
-  ["Storage", "PostgreSQL + pgvector"],
-  ["Embeddings", "Local · bge-small-en-v1.5"],
-  ["Providers", "OpenAI · Anthropic · Gemini · Ollama"],
-  ["Review", "Pending inbox · revisions · history"],
-  ["License", "MIT"],
-];
-
-const quickstart = `cp .env.example .env
+# 2. start the stack
 docker compose up -d
 
+# 3. create a user (the key is shown once)
 curl -X POST localhost:8000/users \\
   -H "Content-Type: application/json" \\
   -d '{"external_id": "me"}'`;
 
-const focusRing = "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-signal";
-const sectionTitle = "font-mono text-[clamp(1.6rem,2.6vw,2.25rem)] leading-tight tracking-[-0.04em]";
-const cell = "border-line px-5 py-10 sm:px-10 [&:not(:first-child)]:border-t md:[&:not(:first-child)]:border-l md:[&:not(:first-child)]:border-t-0";
-
 export function LandingPage() {
   return (
-    <div className="min-h-screen overflow-x-clip">
-      <a href="#main-content" className="sr-only bg-signal px-4 py-2 text-paper focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-50">
+    <div className="min-h-screen bg-paper text-[15px] leading-[1.55] text-ink">
+      <a href="#main-content" className={`sr-only fixed left-4 top-4 z-50 rounded-md bg-hot-fill px-4 py-2 text-sm font-medium text-on-hot focus:not-sr-only ${focusRing}`}>
         Skip to content
       </a>
-
-      <div className="border-b border-line">
-        <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-5 py-2.5 text-[13px] sm:px-8">
-          <p className="flex items-center gap-2.5">
-            <span className="h-1.5 w-1.5 bg-signal" aria-hidden="true" />
-            Engram is open source and MIT licensed
-          </p>
-          <a href={github} className={`hidden items-center gap-1 text-muted transition-colors hover:text-ink sm:inline-flex ${focusRing}`}>
-            View on GitHub <ArrowUpRight size={13} aria-hidden="true" />
-          </a>
-        </div>
-      </div>
-
-      <header className="border-b border-line">
-        <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-5 py-4 sm:px-8">
-          <Link href="/" className={focusRing}>
-            <EngramLogo />
-          </Link>
-          <nav className="flex items-center gap-1 text-sm sm:gap-2">
-            <a href="#how" className={`hidden px-3 py-2 text-muted transition-colors hover:text-ink md:inline-flex ${focusRing}`}>
-              How it works
-            </a>
-            <Link href="/docs" className={`hidden px-3 py-2 text-muted transition-colors hover:text-ink sm:inline-flex ${focusRing}`}>
-              Docs
-            </Link>
-            <ThemeToggle />
-            <Link href="/overview" className={`ml-1 bg-signal px-4 py-2 press font-medium text-paper hover:opacity-90 ${focusRing}`}>
-              Open dashboard
-            </Link>
-          </nav>
-        </div>
-      </header>
-
+      <SiteHeader />
       <main id="main-content" tabIndex={-1} className="outline-none">
-        <section className="border-b border-line">
-          <div className="mx-auto grid max-w-6xl items-center lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-            <div className="relative z-10 px-5 pb-8 pt-20 sm:px-10 lg:py-32">
-              <h1 className="settle font-mono text-[clamp(2.4rem,5.2vw,4rem)] leading-[1.05] tracking-[-0.045em]">
-                Memory for
-                <br />
-                every model.
+        <div className={pageWrap}>
+          <section className="grid items-center gap-12 pb-[72px] pt-10 lg:grid-cols-[minmax(0,420px)_minmax(0,1fr)] [&>*]:min-w-0">
+            <div>
+              <span className={eyebrow}>open source · mit · self-hostable</span>
+              <h1 className={displayXl}>
+                Memory for <em>every</em> model.
               </h1>
-              <p className="settle mt-7 max-w-lg text-[clamp(1.15rem,1.6vw,1.4rem)] leading-snug [animation-delay:70ms]">
-                Give stateless LLMs a memory <span className="text-muted">you can read, review and run on your own machine.</span>
+              <p className={lead}>
+                <b>Give stateless LLMs a memory</b> you can <span className={highlight}>read, review</span> and run on your own machine.
               </p>
-              <div className="settle mt-10 flex flex-wrap gap-3 [animation-delay:140ms]">
-                <Link href="/overview" className={`bg-signal px-5 py-3 press font-medium text-paper hover:opacity-90 ${focusRing}`}>
+              <div className="mb-5 flex flex-wrap gap-2.5">
+                <Link href="/docs" className={button.hot}>
                   Start building
                 </Link>
-                <a href="#start" className={`bg-ink px-5 py-3 press font-medium text-paper hover:opacity-90 ${focusRing}`}>
+                <a href="#selfhost" className={button.line}>
                   Self-host it
                 </a>
               </div>
-              <div className="settle mt-5 [animation-delay:210ms]">
-                <CopyCommand command="npx engramd" />
+              <InstallChip command="npx engramd" />
+            </div>
+            <NeuralBrain />
+          </section>
+        </div>
+
+        <section id="how" className={band}>
+          <div className={pageWrap}>
+            <div className={split}>
+              <div>
+                <span className={eyebrow}>how it works</span>
+                <h2 className={displayLg}>Three quiet steps around every request.</h2>
+                <p className={lead}>
+                  Engram sits between your app and the model. It recalls before the request, steps aside while the model answers, and learns after the reply.
+                </p>
               </div>
+              <AsciiScene scene="synapse" label="A request wired through memory neurons to the prompt and the model." />
             </div>
-            <div className="relative h-[21rem] sm:h-[30rem] lg:h-[40rem]">
-              <MemoryField className="settle absolute inset-0 [animation-delay:120ms] [animation-duration:1800ms] [mask-image:radial-gradient(closest-side,black_70%,transparent)] lg:-inset-x-16" />
-            </div>
+            <RequestTrace />
           </div>
         </section>
 
-        <section id="how" className="scroll-mt-4 border-b border-line">
-          <div className="mx-auto max-w-6xl border-x border-line">
-            <div className="px-5 py-16 sm:px-10">
-              <h2 className={sectionTitle}>Three quiet steps around every request.</h2>
-            </div>
-            <ol className="grid border-t border-line md:grid-cols-3">
-              {steps.map((step, index) => (
-                <li key={step.name} className={cell}>
-                  <p className="font-mono text-xs text-muted">0{index + 1}</p>
-                  <h3 className="mt-6 text-xl">{step.name}</h3>
-                  <p className="mt-3 leading-7 text-muted">{step.text}</p>
-                </li>
-              ))}
-            </ol>
-          </div>
-        </section>
-
-        <section className="border-b border-line">
-          <div className="mx-auto grid max-w-6xl border-x border-line lg:grid-cols-2">
-            <div className="px-5 py-16 sm:px-10 lg:py-24">
-              <h2 className={sectionTitle}>Only what matters reaches the model.</h2>
-              <p className="mt-6 max-w-md leading-8 text-muted">
-                Each memory is scored against the new message. Anything below the threshold is left out, and every retrieval is logged so you can see exactly why a fact was used.
+        <section id="retrieval" className={band}>
+          <div className={`${pageWrap} ${splitReverse}`}>
+            <AsciiScene
+              scene="vectors"
+              label="A query dropping into embedding space; a search radius recalls neighbouring memories with scores."
+              className="order-2 lg:order-none"
+            />
+            <div>
+              <span className={eyebrow}>retrieval</span>
+              <h2 className={displayLg}>Only what matters reaches the model.</h2>
+              <p className={lead}>
+                Each memory is scored against the new message. Anything weak stays out, and every retrieval is logged so you can see why a fact was used.
               </p>
+              <RankingTuner />
             </div>
-            <figure className="border-t border-line px-5 py-12 sm:px-10 lg:border-l lg:border-t-0 lg:py-24">
-              <figcaption className="font-mono text-xs text-muted">query</figcaption>
-              <p className="mt-2 text-lg">What backend should I use for this project?</p>
-              <ul className="mt-8 space-y-5">
-                {recalled.map((memory) => (
-                  <li key={memory.text} className={memory.rejected ? "opacity-50" : undefined}>
-                    <div className="flex items-baseline justify-between gap-4">
-                      <span className="text-[0.95rem] leading-6">{memory.text}</span>
-                      <span className="shrink-0 font-mono text-xs text-muted">{memory.rejected ? "below 0.50" : memory.score}</span>
-                    </div>
-                    <div className="mt-2 h-[3px] bg-tag">
-                      <div className={`h-full ${memory.width} ${memory.rejected ? "bg-muted" : "bg-signal"}`} />
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            </figure>
           </div>
         </section>
 
-        <section className="border-b border-line">
-          <div className="mx-auto max-w-6xl border-x border-line">
-            <div className="px-5 py-16 sm:px-10">
-              <h2 className={sectionTitle}>One memory, three ways in.</h2>
+        <section id="learn" className={band}>
+          <div className={`${pageWrap} ${split}`}>
+            <div>
+              <span className={eyebrow}>learn</span>
+              <h2 className={displayLg}>It remembers what lasts, and asks first.</h2>
+              <p className={lead}>
+                After the reply, Engram pulls durable facts out of the conversation, rewrites relative dates as absolute ones, and checks them against what it already knows.
+              </p>
+              <ReconcileFlow />
             </div>
-            <ul className="border-t border-line">
-              {interfaces.map((item) => (
-                <li
-                  key={item.name}
-                  className="grid gap-3 border-b border-line px-5 py-8 transition-colors last:border-b-0 hover:bg-panel/60 sm:px-10 md:grid-cols-[10rem_minmax(0,1fr)_16rem] md:items-baseline md:gap-10"
-                >
-                  <h3 className="font-mono text-lg tracking-[-0.03em]">{item.name}</h3>
-                  <p className="max-w-xl leading-7 text-muted">{item.text}</p>
-                  <p className="font-mono text-xs text-signal md:text-right">{item.tech}</p>
-                </li>
+            <AsciiScene scene="extract" label="Durable facts lifting out of a chat into memory cards; small talk is skipped." />
+          </div>
+        </section>
+
+        <section id="ways" className={band}>
+          <div className={pageWrap}>
+            <span className={eyebrow}>three ways in</span>
+            <h2 className={displayLg}>One memory, three ways in.</h2>
+            <div className="mt-9 grid gap-5 lg:grid-cols-3">
+              {ways.map((way) => (
+                <div key={way.name} className="flex min-w-0 flex-col gap-2.5 rounded-lg border border-line bg-card p-[22px]">
+                  <h3 className="m-0 font-display text-[21px] font-medium leading-[1.27]">{way.name}</h3>
+                  <p className="m-0 text-sm text-ink-muted">{way.text}</p>
+                  <CodeBlock title={way.title} code={way.code} accent={way.accent} className="mt-auto" />
+                </div>
               ))}
-            </ul>
+            </div>
           </div>
         </section>
 
-        <section id="start" className="scroll-mt-4 border-b border-line">
-          <div className="mx-auto grid max-w-6xl border-x border-line lg:grid-cols-2">
-            <div className="px-5 py-16 sm:px-10 lg:py-24">
-              <h2 className={sectionTitle}>Yours to run.</h2>
-              <dl className="mt-10 border-t border-line">
-                {specification.map(([label, value]) => (
-                  <div key={label} className="flex justify-between gap-6 border-b border-line py-3 text-sm">
-                    <dt className="font-mono text-muted">{label}</dt>
-                    <dd className="text-right">{value}</dd>
-                  </div>
-                ))}
-              </dl>
+        <section id="selfhost" className={`${band} scroll-mt-16`}>
+          <div className={`${pageWrap} ${split}`}>
+            <div>
+              <span className={eyebrow}>self-host</span>
+              <h2 className={displayLg}>Yours to run.</h2>
+              <p className={lead}>Four services in one Docker Compose file. Bring your own provider key; Engram encrypts it and never falls back to one of its own.</p>
             </div>
-            <div className="border-t border-line px-5 py-16 sm:px-10 lg:border-l lg:border-t-0 lg:py-24">
-              <DocsCodeBlock>{quickstart}</DocsCodeBlock>
-              <div className="mt-6 flex flex-wrap gap-6 text-sm">
-                <Link href="/docs" className={`inline-flex items-center gap-1 text-signal hover:underline hover:underline-offset-4 ${focusRing}`}>
-                  Read the docs <ArrowUpRight size={14} aria-hidden="true" />
-                </Link>
-                <a href={github} className={`inline-flex items-center gap-1 text-signal hover:underline hover:underline-offset-4 ${focusRing}`}>
-                  View the source <ArrowUpRight size={14} aria-hidden="true" />
-                </a>
-              </div>
-            </div>
+            <CodeBlock code={selfHost} accent='"me"' />
+          </div>
+          <div className={pageWrap}>
+            <ArchitectureMap />
           </div>
         </section>
       </main>
-
-      <footer>
-        <div className="mx-auto max-w-6xl border-x border-line px-5 pb-10 pt-24 sm:px-10">
-          <p className="text-center font-mono text-sm tracking-[0.3em] text-muted">models forget · engram remembers</p>
-          <div className="mt-24 flex flex-wrap items-center justify-between gap-4 border-t border-line pt-6 text-sm text-muted">
-            <EngramLogo />
-            <p>MIT licensed · © 2026 Ayush</p>
-          </div>
-        </div>
-      </footer>
+      <SiteFooter />
     </div>
   );
 }
